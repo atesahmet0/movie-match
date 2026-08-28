@@ -604,28 +604,46 @@ class LetterboxdScraper:
         from selectolax.parser import HTMLParser
 
         encoded = urllib.parse.quote(clean_q)
-        url = f"https://letterboxd.com/s/search/films/{encoded}/"
-        response = await self.client.get(url)
+        url = f"https://letterboxd.com/s/search/{encoded}/"
+        headers = {
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": f"https://letterboxd.com/search/{encoded}/",
+        }
+        response = await self.client.get(url, headers=headers)
         if not response or response.status_code != 200:
             return []
 
         tree = HTMLParser(response.text)
         films: List[Dict[str, Any]] = []
-        for li in tree.css("li.search-result.-production"):
-            fig = li.css_first(".react-component.figure")
-            slug = fig.attributes.get("data-item-slug") if fig else None
+        seen_slugs = set()
 
-            title_a = li.css_first("h2 a, .film-title-wrapper a")
-            title = title_a.text(strip=True) if title_a else (fig.attributes.get("data-item-name", "") if fig else "")
+        for li in tree.css("li.search-result"):
+            fig = li.css_first(".react-component.figure, [data-item-slug], div[data-film-slug]")
+            slug = fig.attributes.get("data-item-slug") or fig.attributes.get("data-film-slug") if fig else None
 
-            year_a = li.css_first("small.metadata a, .metadata a")
+            if not slug:
+                for a in li.css('a[href^="/film/"]'):
+                    href = a.attributes.get("href", "")
+                    parts = [p for p in href.strip("/").split("/") if p]
+                    if len(parts) >= 2 and parts[0] == "film":
+                        slug = parts[1]
+                        break
+
+            if not slug or slug in seen_slugs:
+                continue
+
+            title_a = li.css_first("h2 a, .film-title-wrapper a, span.prettify a, h2 span a")
+            title = title_a.text(strip=True) if title_a else ""
+
+            year_a = li.css_first("small.metadata a, .metadata a, p.metadata a")
             year_text = year_a.text(strip=True) if year_a else None
             year = int(year_text) if year_text and year_text.isdigit() else None
 
-            director_a = li.css_first('p.film-metadata a[href*="/director/"]')
+            director_a = li.css_first('p.film-metadata a[href*="/director/"], p.metadata a[href*="/director/"]')
             director = director_a.text(strip=True) if director_a else None
 
-            if slug and title:
+            if title:
+                seen_slugs.add(slug)
                 films.append({
                     "slug": slug,
                     "title": title,

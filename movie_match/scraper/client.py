@@ -1,9 +1,16 @@
 """Anti-bot HTTP client using curl_cffi for modern TLS/HTTP2 browser impersonation."""
 
 import asyncio
+import os
 import random
 from typing import Dict, List, Optional
 from curl_cffi.requests import AsyncSession, Response
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 BROWSER_IMPERSONATIONS = ["chrome124", "chrome120", "safari17_0", "edge101"]
@@ -20,7 +27,7 @@ DEFAULT_HEADERS = {
 
 
 class AntiBotHttpClient:
-    """High-performance HTTP client resilient against bot detection and rate limits."""
+    """High-performance HTTP client resilient against bot detection, proxies, and rate limits."""
 
     def __init__(
         self,
@@ -29,12 +36,14 @@ class AntiBotHttpClient:
         max_retries: int = 3,
         timeout: int = 15,
         base_delay: float = 0.05,
+        proxy_url: Optional[str] = None,
     ):
         self.impersonate = impersonate
         self.semaphore = asyncio.Semaphore(concurrency)
         self.max_retries = max_retries
         self.timeout = timeout
         self.base_delay = base_delay
+        self.proxy_url = proxy_url or os.getenv("PROXY_URL") or os.getenv("HTTP_PROXY")
         self._session: Optional[AsyncSession] = None
 
     async def __aenter__(self):
@@ -46,9 +55,15 @@ class AntiBotHttpClient:
 
     async def start(self):
         if not self._session:
+            proxies = (
+                {"http": self.proxy_url, "https": self.proxy_url}
+                if self.proxy_url
+                else None
+            )
             self._session = AsyncSession(
                 impersonate=self.impersonate,
                 headers=DEFAULT_HEADERS,
+                proxies=proxies,
             )
 
     async def close(self):
