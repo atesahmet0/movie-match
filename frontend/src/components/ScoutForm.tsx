@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Search,
   Loader2,
+  Clapperboard,
   Film,
   Sparkles,
   MapPin,
@@ -13,6 +14,8 @@ import {
   Users,
   Layers,
   ChevronDown,
+  Plus,
+  X,
 } from "lucide-react";
 import { searchFilms } from "@/lib/api";
 import { FilmSearchResult } from "@/lib/types";
@@ -26,17 +29,75 @@ interface ScoutFormProps {
   initialIncludeBio: boolean;
 }
 
-const PRESET_LOCATIONS = ["Anywhere", "Turkey", "USA", "UK", "Germany"];
+const PRESET_LOCATIONS = [
+  "Anywhere",
+  "Turkey",
+  "Ankara",
+  "Istanbul",
+  "USA",
+  "UK",
+  "Germany",
+  "Berlin",
+  "London",
+];
 
 const POPULAR_SUGGESTIONS: FilmSearchResult[] = [
-  { slug: "vampire-hunter-d-bloodlust", title: "Vampire Hunter D: Bloodlust", year: 2000, director: "Yoshiaki Kawajiri", film_url: "https://letterboxd.com/film/vampire-hunter-d-bloodlust/" },
-  { slug: "alien", title: "Alien", year: 1979, director: "Ridley Scott", film_url: "https://letterboxd.com/film/alien/" },
-  { slug: "interstellar", title: "Interstellar", year: 2014, director: "Christopher Nolan", film_url: "https://letterboxd.com/film/interstellar/" },
-  { slug: "the-substance", title: "The Substance", year: 2024, director: "Coralie Fargeat", film_url: "https://letterboxd.com/film/the-substance/" },
-  { slug: "fight-club", title: "Fight Club", year: 1999, director: "David Fincher", film_url: "https://letterboxd.com/film/fight-club/" },
-  { slug: "dune-part-two", title: "Dune: Part Two", year: 2024, director: "Denis Villeneuve", film_url: "https://letterboxd.com/film/dune-part-two/" },
-  { slug: "spirited-away", title: "Spirited Away", year: 2001, director: "Hayao Miyazaki", film_url: "https://letterboxd.com/film/spirited-away/" },
-  { slug: "parasite-2019", title: "Parasite", year: 2019, director: "Bong Joon-ho", film_url: "https://letterboxd.com/film/parasite-2019/" },
+  {
+    slug: "vampire-hunter-d-bloodlust",
+    title: "Vampire Hunter D: Bloodlust",
+    year: 2000,
+    director: "Yoshiaki Kawajiri",
+    film_url: "https://letterboxd.com/film/vampire-hunter-d-bloodlust/",
+  },
+  {
+    slug: "alien",
+    title: "Alien",
+    year: 1979,
+    director: "Ridley Scott",
+    film_url: "https://letterboxd.com/film/alien/",
+  },
+  {
+    slug: "interstellar",
+    title: "Interstellar",
+    year: 2014,
+    director: "Christopher Nolan",
+    film_url: "https://letterboxd.com/film/interstellar/",
+  },
+  {
+    slug: "the-substance",
+    title: "The Substance",
+    year: 2024,
+    director: "Coralie Fargeat",
+    film_url: "https://letterboxd.com/film/the-substance/",
+  },
+  {
+    slug: "fight-club",
+    title: "Fight Club",
+    year: 1999,
+    director: "David Fincher",
+    film_url: "https://letterboxd.com/film/fight-club/",
+  },
+  {
+    slug: "dune-part-two",
+    title: "Dune: Part Two",
+    year: 2024,
+    director: "Denis Villeneuve",
+    film_url: "https://letterboxd.com/film/dune-part-two/",
+  },
+  {
+    slug: "spirited-away",
+    title: "Spirited Away",
+    year: 2001,
+    director: "Hayao Miyazaki",
+    film_url: "https://letterboxd.com/film/spirited-away/",
+  },
+  {
+    slug: "parasite-2019",
+    title: "Parasite",
+    year: 2019,
+    director: "Bong Joon-ho",
+    film_url: "https://letterboxd.com/film/parasite-2019/",
+  },
 ];
 
 export default function ScoutForm({
@@ -51,7 +112,21 @@ export default function ScoutForm({
   const [isPending, startTransition] = useTransition();
 
   const [film, setFilm] = useState(initialFilm || "vampire-hunter-d-bloodlust");
-  const [location, setLocation] = useState(initialLocation || "Anywhere");
+
+  // Multi-location chips state
+  const parseInitialLocations = (raw: string): string[] => {
+    const split = (raw || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return split.length > 0 ? split : ["Anywhere"];
+  };
+
+  const [locations, setLocations] = useState<string[]>(
+    parseInitialLocations(initialLocation)
+  );
+  const [locationInput, setLocationInput] = useState("");
+
   const [sentiment, setSentiment] = useState(initialSentiment || "liked");
   const [maxPages, setMaxPages] = useState(initialPages || 3);
   const [limit, setLimit] = useState(initialLimit || 50);
@@ -151,10 +226,86 @@ export default function ScoutForm({
     }
   };
 
+  // Location chip handlers
+  const handleAddLocation = (locName: string) => {
+    const clean = locName.trim().replace(/^[,]+|[,]+$/g, "");
+    if (!clean) return;
+
+    if (clean.toLowerCase() === "anywhere") {
+      setLocations(["Anywhere"]);
+      setLocationInput("");
+      return;
+    }
+
+    setLocations((prev) => {
+      const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
+      if (filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
+        return filtered;
+      }
+      return [...filtered, clean];
+    });
+    setLocationInput("");
+  };
+
+  const handleRemoveLocation = (locName: string) => {
+    setLocations((prev) => {
+      const updated = prev.filter((l) => l !== locName);
+      return updated.length > 0 ? updated : ["Anywhere"];
+    });
+  };
+
+  const handleTogglePresetLocation = (preset: string) => {
+    if (preset.toLowerCase() === "anywhere") {
+      setLocations(["Anywhere"]);
+      return;
+    }
+
+    setLocations((prev) => {
+      const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
+      const exists = filtered.some((l) => l.toLowerCase() === preset.toLowerCase());
+      if (exists) {
+        const next = filtered.filter((l) => l.toLowerCase() !== preset.toLowerCase());
+        return next.length > 0 ? next : ["Anywhere"];
+      } else {
+        return [...filtered, preset];
+      }
+    });
+  };
+
+  const isPresetActive = (preset: string) => {
+    return locations.some((l) => l.toLowerCase() === preset.toLowerCase());
+  };
+
+  const handleLocationInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      handleAddLocation(locationInput);
+    } else if (e.key === "Backspace" && !locationInput && locations.length > 0) {
+      // Remove last chip on backspace if input is empty
+      handleRemoveLocation(locations[locations.length - 1]);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!film.trim()) return;
     setIsDropdownOpen(false);
+
+    // If user has un-added text in location input, add it first
+    let finalLocations = [...locations];
+    if (locationInput.trim()) {
+      const clean = locationInput.trim();
+      if (clean.toLowerCase() === "anywhere") {
+        finalLocations = ["Anywhere"];
+      } else {
+        const filtered = finalLocations.filter((l) => l.toLowerCase() !== "anywhere");
+        if (!filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
+          finalLocations = [...filtered, clean];
+        }
+      }
+      setLocations(finalLocations);
+      setLocationInput("");
+    }
 
     startTransition(() => {
       const cleanSlug = film
@@ -163,9 +314,11 @@ export default function ScoutForm({
         .replace(/\/$/, "")
         .trim();
 
+      const locationParam = finalLocations.join(",");
+
       const params = new URLSearchParams();
       params.set("film", cleanSlug);
-      params.set("location", location.trim() || "Anywhere");
+      params.set("location", locationParam || "Anywhere");
       params.set("sentiment", sentiment);
       params.set("max_pages", String(maxPages));
       params.set("limit", String(limit));
@@ -195,8 +348,9 @@ export default function ScoutForm({
                 <button
                   type="button"
                   onClick={() => setIsDropdownOpen((prev) => !prev)}
-                  className="text-[10px] text-brand-green hover:underline flex items-center space-x-0.5 cursor-pointer"
+                  className="text-[10px] text-brand-green hover:underline flex items-center space-x-1 cursor-pointer"
                 >
+                  <Clapperboard className="w-3 h-3" />
                   <span>Popular films</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
@@ -214,15 +368,15 @@ export default function ScoutForm({
                   onFocus={() => setIsDropdownOpen(true)}
                   onKeyDown={handleKeyDown}
                   required
-                  placeholder="e.g. alien, interstellar, vampire-hunter-d..."
-                  className="w-full bg-brand-darker border border-brand-border rounded-xl px-4 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus text-sm font-medium pr-9"
+                  placeholder="e.g. alien, interstellar, the-substance..."
+                  className="w-full bg-brand-darker border border-brand-border rounded-xl px-4 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus text-sm font-medium pr-10"
                   autoComplete="off"
                 />
-                <div className="absolute right-3 top-3 text-brand-muted pointer-events-none">
+                <div className="absolute right-3 top-3 text-brand-green pointer-events-none flex items-center justify-center">
                   {isSearchingFilms ? (
                     <Loader2 className="w-4 h-4 animate-spin text-brand-green" />
                   ) : (
-                    <Film className="w-4 h-4" />
+                    <Clapperboard className="w-4 h-4 opacity-80" />
                   )}
                 </div>
               </div>
@@ -231,9 +385,10 @@ export default function ScoutForm({
               {isDropdownOpen && (
                 <div className="absolute z-50 left-0 right-0 mt-1.5 bg-brand-card border border-brand-borderLight rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto animate-in fade-in-50 duration-100">
                   <div className="p-2 border-b border-brand-border bg-brand-darker/60 flex items-center justify-between text-[11px] text-brand-muted px-3">
-                    <span className="font-semibold">
+                    <span className="font-semibold flex items-center gap-1.5 text-gray-300">
+                      <Clapperboard className="w-3.5 h-3.5 text-brand-green" />
                       {suggestions.length > 0
-                        ? `Matching Letterboxd Films (${suggestions.length})`
+                        ? `Matching Films (${suggestions.length})`
                         : "Popular & Suggested Films"}
                     </span>
                     <span className="text-[10px] font-mono">Use ↑↓ & Enter</span>
@@ -252,22 +407,25 @@ export default function ScoutForm({
                               : "text-gray-300 hover:bg-brand-darker hover:text-white"
                           }`}
                         >
-                          <div className="min-w-0 flex-1 pr-2">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-bold text-xs text-white truncate">
-                                {item.title}
-                              </span>
-                              {item.year && (
-                                <span className="text-[10px] font-mono px-1.5 py-0.2 bg-brand-darker text-brand-subtext rounded border border-brand-border">
-                                  {item.year}
+                          <div className="min-w-0 flex-1 pr-2 flex items-start space-x-2">
+                            <Clapperboard className="w-4 h-4 text-brand-green/70 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-bold text-xs text-white truncate">
+                                  {item.title}
                                 </span>
+                                {item.year && (
+                                  <span className="text-[10px] font-mono px-1.5 py-0.2 bg-brand-darker text-brand-subtext rounded border border-brand-border">
+                                    {item.year}
+                                  </span>
+                                )}
+                              </div>
+                              {item.director && (
+                                <p className="text-[11px] text-brand-subtext truncate mt-0.5">
+                                  dir. {item.director}
+                                </p>
                               )}
                             </div>
-                            {item.director && (
-                              <p className="text-[11px] text-brand-subtext truncate mt-0.5">
-                                dir. {item.director}
-                              </p>
-                            )}
                           </div>
                           <span className="text-[10px] font-mono text-brand-green opacity-80 shrink-0">
                             /{item.slug}
@@ -286,42 +444,105 @@ export default function ScoutForm({
               )}
             </div>
 
-            {/* Target Location Field */}
+            {/* Target Location Field with Multiple Chips */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-gray-300">
-                  Location Query
+                  Target Locations ({locations.length})
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setLocation("Anywhere")}
-                  className="text-[10px] text-brand-green hover:underline cursor-pointer"
-                >
-                  Set Anywhere
-                </button>
-              </div>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. Anywhere, Turkey, Ankara, Berlin..."
-                className="w-full bg-brand-darker border border-brand-border rounded-xl px-4 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus text-sm"
-              />
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {PRESET_LOCATIONS.map((loc) => (
+                <div className="flex items-center space-x-2">
                   <button
-                    key={loc}
                     type="button"
-                    onClick={() => setLocation(loc)}
-                    className={`px-2 py-0.5 rounded border text-[10px] transition cursor-pointer ${
-                      location.toLowerCase() === loc.toLowerCase()
-                        ? "bg-brand-green text-black font-bold border-brand-green"
-                        : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white"
+                    onClick={() => setLocations(["Anywhere"])}
+                    className="text-[10px] text-brand-green hover:underline cursor-pointer"
+                  >
+                    Set Anywhere
+                  </button>
+                  {locations.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setLocations(["Anywhere"])}
+                      className="text-[10px] text-brand-muted hover:text-red-400 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Chips Input Box */}
+              <div className="min-h-[42px] p-2 bg-brand-darker border border-brand-border rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green transition">
+                {locations.map((loc) => (
+                  <span
+                    key={loc}
+                    className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                      loc.toLowerCase() === "anywhere"
+                        ? "bg-brand-card text-brand-blue border-brand-blue/30"
+                        : "bg-brand-card text-brand-green border-brand-green/30"
                     }`}
                   >
-                    {loc}
-                  </button>
+                    {loc.toLowerCase() === "anywhere" ? (
+                      <Globe className="w-3 h-3 text-brand-blue shrink-0" />
+                    ) : (
+                      <MapPin className="w-3 h-3 text-brand-green shrink-0" />
+                    )}
+                    <span>{loc}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLocation(loc)}
+                      className="text-brand-muted hover:text-red-400 ml-0.5 p-0.5 rounded transition cursor-pointer"
+                      title={`Remove ${loc}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
                 ))}
+
+                <input
+                  type="text"
+                  value={locationInput}
+                  onChange={(e) => setLocationInput(e.target.value)}
+                  onKeyDown={handleLocationInputKeyDown}
+                  placeholder={
+                    locations.length === 0
+                      ? "Add location (e.g. Ankara, Berlin)..."
+                      : "+ Add location..."
+                  }
+                  className="flex-grow min-w-[110px] bg-transparent text-xs text-white placeholder-brand-muted focus:outline-none py-1 px-1 font-medium"
+                />
+
+                {locationInput.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddLocation(locationInput)}
+                    className="px-2 py-0.5 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded text-[10px] text-brand-green font-bold flex items-center space-x-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap gap-1 mt-2">
+                {PRESET_LOCATIONS.map((loc) => {
+                  const active = isPresetActive(loc);
+                  return (
+                    <button
+                      key={loc}
+                      type="button"
+                      onClick={() => handleTogglePresetLocation(loc)}
+                      className={`px-2 py-0.5 rounded border text-[10px] transition cursor-pointer flex items-center space-x-1 ${
+                        active
+                          ? "bg-brand-green text-black font-bold border-brand-green"
+                          : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white"
+                      }`}
+                    >
+                      <span>{loc}</span>
+                      {active && <CheckCircle2 className="w-2.5 h-2.5 text-black" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -420,11 +641,11 @@ export default function ScoutForm({
                 <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
                   <span>Scouting Letterboxd</span>
                   <span className="text-xs font-mono text-brand-green">
-                    &bull; {film} in &quot;{location}&quot;
+                    &bull; {film} in {locations.join(", ")}
                   </span>
                 </h4>
                 <p className="text-[11px] text-brand-subtext">
-                  Bypassing anti-bot verification & scanning member network
+                  Bypassing anti-bot verification & scanning member network across {locations.length} target locations
                 </p>
               </div>
             </div>
@@ -491,7 +712,10 @@ export default function ScoutForm({
               )}
               <div className="min-w-0">
                 <span className="block font-semibold truncate text-[11px]">3. Member Profiles</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Matching {location}</span>
+                <span className="text-[10px] text-brand-subtext block truncate">
+                  Matching {locations.slice(0, 2).join(", ")}
+                  {locations.length > 2 ? ` +${locations.length - 2}` : ""}
+                </span>
               </div>
             </div>
 

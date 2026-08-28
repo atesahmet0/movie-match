@@ -81,3 +81,18 @@ def test_anywhere_location_matcher():
         assert matcher.match("", "Some bio without location")[0] is True
         assert matcher.match("Tokyo, Japan")[2] == "Tokyo, Japan"
         assert matcher.match("")[2] == "Worldwide"
+
+
+def test_multiple_locations_matcher():
+    matcher = LocationMatcher("Ankara, Berlin, London", include_bio=True)
+    assert matcher.is_anywhere is False
+    # Matches any of the specified locations
+    assert matcher.match("Ankara, Turkey")[0] is True
+    assert matcher.match("Çankaya")[0] is True
+    assert matcher.match("Berlin, Germany")[0] is True
+    assert matcher.match("London, UK")[0] is True
+    # Negative match
+    assert matcher.match("Tokyo, Japan")[0] is False
+    assert matcher.match("Paris, France")[0] is False
+    assert matcher.match("New York")[0] is False
+

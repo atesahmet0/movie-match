@@ -131,14 +131,23 @@ class LocationMatcher:
     def __init__(self, query: str = "Anywhere", include_bio: bool = True):
         self.raw_query = (query or "").strip()
         self.include_bio = include_bio
-        self.normalized_query = normalize_text(self.raw_query)
-        self.is_anywhere = (
-            not self.normalized_query
-            or self.normalized_query in ANYWHERE_KEYWORDS
+
+        # Parse sub-queries for multiple locations (comma-separated)
+        sub_queries = [q.strip() for q in self.raw_query.split(",") if q.strip()]
+        if not sub_queries:
+            sub_queries = ["Anywhere"]
+
+        self.sub_queries = sub_queries
+        self.is_anywhere = any(
+            normalize_text(q) in ANYWHERE_KEYWORDS or not normalize_text(q)
+            for q in sub_queries
         )
 
         if not self.is_anywhere:
-            self.location_tokens: Set[str] = self._build_target_tokens()
+            self.location_tokens: Set[str] = set()
+            for sq in sub_queries:
+                self.location_tokens.update(self._build_target_tokens_for_single(normalize_text(sq)))
+
             # For bio matching, exclude short 2-letter abbreviations that collide with common words
             self.bio_tokens: Set[str] = {t for t in self.location_tokens if len(t) > 2 and t not in SHORT_ABBREVIATIONS}
             self.loc_pattern = self._compile_pattern(self.location_tokens)
@@ -149,20 +158,20 @@ class LocationMatcher:
             self.loc_pattern = None
             self.bio_pattern = None
 
-    def _build_target_tokens(self) -> Set[str]:
-        tokens: Set[str] = {self.normalized_query}
+    def _build_target_tokens_for_single(self, norm_query: str) -> Set[str]:
+        tokens: Set[str] = {norm_query}
         # Check if query matches known geo key (e.g. turkey, ankara, istanbul, usa, etc.)
         for key, aliases in GEO_ALIASES.items():
             norm_key = normalize_text(key)
-            if self.normalized_query == norm_key or self.normalized_query in {normalize_text(a) for a in aliases}:
+            if norm_query == norm_key or norm_query in {normalize_text(a) for a in aliases}:
                 # If searching for country, include all its cities/aliases
-                if self.normalized_query == norm_key:
+                if norm_query == norm_key:
                     tokens.update(normalize_text(a) for a in aliases)
                 else:
                     # If searching for specific city/district, add its exact aliases
-                    tokens.add(self.normalized_query)
-                    if self.normalized_query in GEO_ALIASES:
-                        tokens.update(normalize_text(a) for a in GEO_ALIASES[self.normalized_query])
+                    tokens.add(norm_query)
+                    if norm_query in GEO_ALIASES:
+                        tokens.update(normalize_text(a) for a in GEO_ALIASES[norm_query])
         return {t for t in tokens if t}
 
     def _compile_pattern(self, tokens: Set[str]) -> Optional[re.Pattern]:

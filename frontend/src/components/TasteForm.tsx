@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Clapperboard,
   Film,
   Plus,
   X,
@@ -12,6 +13,7 @@ import {
   Layers,
   Users,
   CheckCircle2,
+  MapPin,
 } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { fetchFilmInfo, searchFilms } from "@/lib/api";
@@ -24,7 +26,17 @@ interface TasteFormProps {
   initialPages: number;
 }
 
-const PRESET_LOCATIONS = ["Anywhere", "Turkey", "USA", "UK", "Germany"];
+const PRESET_LOCATIONS = [
+  "Anywhere",
+  "Turkey",
+  "Ankara",
+  "Istanbul",
+  "USA",
+  "UK",
+  "Germany",
+  "Berlin",
+  "London",
+];
 
 const POPULAR_SUGGESTIONS: FilmSearchResult[] = [
   { slug: "alien", title: "Alien", year: 1979, director: "Ridley Scott", film_url: "https://letterboxd.com/film/alien/" },
@@ -47,7 +59,21 @@ export default function TasteForm({
 
   const [manualInput, setManualInput] = useState("");
   const [isAddingFilm, setIsAddingFilm] = useState(false);
-  const [location, setLocation] = useState(initialLocation || "Anywhere");
+
+  // Multi-location chips state
+  const parseInitialLocations = (raw: string): string[] => {
+    const split = (raw || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return split.length > 0 ? split : ["Anywhere"];
+  };
+
+  const [locations, setLocations] = useState<string[]>(
+    parseInitialLocations(initialLocation)
+  );
+  const [locationInput, setLocationInput] = useState("");
+
   const [minShared, setMinShared] = useState(initialMinShared || 1);
   const [maxPages, setMaxPages] = useState(initialPages || 2);
 
@@ -179,17 +205,92 @@ export default function TasteForm({
     setIsAddingFilm(false);
   };
 
+  // Location chip handlers
+  const handleAddLocation = (locName: string) => {
+    const clean = locName.trim().replace(/^[,]+|[,]+$/g, "");
+    if (!clean) return;
+
+    if (clean.toLowerCase() === "anywhere") {
+      setLocations(["Anywhere"]);
+      setLocationInput("");
+      return;
+    }
+
+    setLocations((prev) => {
+      const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
+      if (filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
+        return filtered;
+      }
+      return [...filtered, clean];
+    });
+    setLocationInput("");
+  };
+
+  const handleRemoveLocation = (locName: string) => {
+    setLocations((prev) => {
+      const updated = prev.filter((l) => l !== locName);
+      return updated.length > 0 ? updated : ["Anywhere"];
+    });
+  };
+
+  const handleTogglePresetLocation = (preset: string) => {
+    if (preset.toLowerCase() === "anywhere") {
+      setLocations(["Anywhere"]);
+      return;
+    }
+
+    setLocations((prev) => {
+      const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
+      const exists = filtered.some((l) => l.toLowerCase() === preset.toLowerCase());
+      if (exists) {
+        const next = filtered.filter((l) => l.toLowerCase() !== preset.toLowerCase());
+        return next.length > 0 ? next : ["Anywhere"];
+      } else {
+        return [...filtered, preset];
+      }
+    });
+  };
+
+  const isPresetActive = (preset: string) => {
+    return locations.some((l) => l.toLowerCase() === preset.toLowerCase());
+  };
+
+  const handleLocationInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      handleAddLocation(locationInput);
+    } else if (e.key === "Backspace" && !locationInput && locations.length > 0) {
+      handleRemoveLocation(locations[locations.length - 1]);
+    }
+  };
+
   const handleRunMatch = () => {
     if (selectedFilms.length === 0) {
       alert("Please select at least 1 film.");
       return;
     }
 
+    let finalLocations = [...locations];
+    if (locationInput.trim()) {
+      const clean = locationInput.trim();
+      if (clean.toLowerCase() === "anywhere") {
+        finalLocations = ["Anywhere"];
+      } else {
+        const filtered = finalLocations.filter((l) => l.toLowerCase() !== "anywhere");
+        if (!filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
+          finalLocations = [...filtered, clean];
+        }
+      }
+      setLocations(finalLocations);
+      setLocationInput("");
+    }
+
     startTransition(() => {
       const filmsParam = selectedFilms.map((f) => f.slug).join(",");
+      const locationParam = finalLocations.join(",");
       const params = new URLSearchParams();
       params.set("films", filmsParam);
-      params.set("location", location.trim() || "Anywhere");
+      params.set("location", locationParam || "Anywhere");
       params.set("minShared", String(minShared));
       params.set("maxPages", String(maxPages));
       router.push(`/taste?${params.toString()}`);
@@ -225,7 +326,7 @@ export default function TasteForm({
                 key={film.slug}
                 className="inline-flex items-center space-x-1.5 px-3 py-1 bg-brand-card rounded-lg border border-brand-border text-xs text-white"
               >
-                <Film className="w-3 h-3 text-brand-green" />
+                <Clapperboard className="w-3.5 h-3.5 text-brand-green" />
                 <span className="font-semibold">{film.title}</span>
                 <button
                   type="button"
@@ -262,12 +363,14 @@ export default function TasteForm({
                     }
                   }}
                   placeholder="Search film title or slug (e.g. alien, sunshine-2007)..."
-                  className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2 text-white placeholder-brand-muted focus:outline-none glow-focus pr-8"
+                  className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2 text-white placeholder-brand-muted focus:outline-none glow-focus pr-8 font-medium"
                 />
-                <div className="absolute right-2.5 top-2.5 text-brand-muted pointer-events-none">
+                <div className="absolute right-2.5 top-2.5 text-brand-green pointer-events-none">
                   {isSearchingFilms ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-green" />
-                  ) : null}
+                  ) : (
+                    <Clapperboard className="w-3.5 h-3.5 opacity-80" />
+                  )}
                 </div>
               </div>
 
@@ -290,7 +393,8 @@ export default function TasteForm({
             {isDropdownOpen && (
               <div className="absolute z-50 left-0 right-16 mt-1 bg-brand-card border border-brand-borderLight rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
                 <div className="p-2 border-b border-brand-border bg-brand-darker/60 flex items-center justify-between text-[11px] text-brand-muted px-3">
-                  <span className="font-semibold">
+                  <span className="font-semibold flex items-center gap-1 text-gray-300">
+                    <Clapperboard className="w-3 h-3 text-brand-green" />
                     {suggestions.length > 0
                       ? `Matching Films (${suggestions.length})`
                       : "Suggested Films"}
@@ -304,15 +408,16 @@ export default function TasteForm({
                         onClick={() => handleAddFilmFromSuggestion(item)}
                         className="w-full text-left px-3.5 py-2 flex items-center justify-between hover:bg-brand-darker text-gray-300 hover:text-white transition cursor-pointer text-xs"
                       >
-                        <div className="truncate pr-2">
-                          <span className="font-bold text-white mr-1.5">{item.title}</span>
+                        <div className="truncate pr-2 flex items-center space-x-2">
+                          <Clapperboard className="w-3.5 h-3.5 text-brand-green/70 shrink-0" />
+                          <span className="font-bold text-white mr-1 truncate">{item.title}</span>
                           {item.year && (
                             <span className="text-[10px] text-brand-subtext font-mono">
                               ({item.year})
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] font-mono text-brand-green">
+                        <span className="text-[10px] font-mono text-brand-green shrink-0">
                           + Add
                         </span>
                       </button>
@@ -326,39 +431,104 @@ export default function TasteForm({
 
         {/* Query Parameters */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-brand-border">
+          {/* Target Location Field with Multiple Chips */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-gray-300">Target Location</label>
-              <button
-                type="button"
-                onClick={() => setLocation("Anywhere")}
-                className="text-[10px] text-brand-green hover:underline cursor-pointer"
-              >
-                Set Anywhere
-              </button>
-            </div>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Anywhere, Turkey, Berlin..."
-              className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus"
-            />
-            <div className="flex flex-wrap gap-1 mt-1.5">
-              {PRESET_LOCATIONS.map((loc) => (
+              <label className="block text-xs font-semibold text-gray-300">
+                Target Locations ({locations.length})
+              </label>
+              <div className="flex items-center space-x-2">
                 <button
-                  key={loc}
                   type="button"
-                  onClick={() => setLocation(loc)}
-                  className={`px-2 py-0.5 rounded border text-[10px] transition cursor-pointer ${
-                    location.toLowerCase() === loc.toLowerCase()
-                      ? "bg-brand-green text-black font-bold border-brand-green"
-                      : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white"
+                  onClick={() => setLocations(["Anywhere"])}
+                  className="text-[10px] text-brand-green hover:underline cursor-pointer"
+                >
+                  Set Anywhere
+                </button>
+                {locations.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setLocations(["Anywhere"])}
+                    className="text-[10px] text-brand-muted hover:text-red-400 cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Chips Box */}
+            <div className="min-h-[42px] p-2 bg-brand-darker border border-brand-border rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green transition">
+              {locations.map((loc) => (
+                <span
+                  key={loc}
+                  className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                    loc.toLowerCase() === "anywhere"
+                      ? "bg-brand-card text-brand-blue border-brand-blue/30"
+                      : "bg-brand-card text-brand-green border-brand-green/30"
                   }`}
                 >
-                  {loc}
-                </button>
+                  {loc.toLowerCase() === "anywhere" ? (
+                    <Globe className="w-3 h-3 text-brand-blue shrink-0" />
+                  ) : (
+                    <MapPin className="w-3 h-3 text-brand-green shrink-0" />
+                  )}
+                  <span>{loc}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLocation(loc)}
+                    className="text-brand-muted hover:text-red-400 ml-0.5 p-0.5 rounded transition cursor-pointer"
+                    title={`Remove ${loc}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
               ))}
+
+              <input
+                type="text"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                onKeyDown={handleLocationInputKeyDown}
+                placeholder={
+                  locations.length === 0
+                    ? "Add location..."
+                    : "+ Add..."
+                }
+                className="flex-grow min-w-[90px] bg-transparent text-xs text-white placeholder-brand-muted focus:outline-none py-1 px-1 font-medium"
+              />
+
+              {locationInput.trim() && (
+                <button
+                  type="button"
+                  onClick={() => handleAddLocation(locationInput)}
+                  className="px-2 py-0.5 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded text-[10px] text-brand-green font-bold flex items-center space-x-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-1 mt-2">
+              {PRESET_LOCATIONS.map((loc) => {
+                const active = isPresetActive(loc);
+                return (
+                  <button
+                    key={loc}
+                    type="button"
+                    onClick={() => handleTogglePresetLocation(loc)}
+                    className={`px-2 py-0.5 rounded border text-[10px] transition cursor-pointer flex items-center space-x-1 ${
+                      active
+                        ? "bg-brand-green text-black font-bold border-brand-green"
+                        : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white"
+                    }`}
+                  >
+                    <span>{loc}</span>
+                    {active && <CheckCircle2 className="w-2.5 h-2.5 text-black" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -423,7 +593,7 @@ export default function TasteForm({
                 <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
                   <span>Calculating Multi-Film Taste Overlap</span>
                   <span className="text-xs font-mono text-brand-green">
-                    &bull; {selectedFilms.length} films in &quot;{location}&quot;
+                    &bull; {selectedFilms.length} films in {locations.join(", ")}
                   </span>
                 </h4>
                 <p className="text-[11px] text-brand-subtext">
@@ -493,7 +663,7 @@ export default function TasteForm({
               )}
               <div className="min-w-0">
                 <span className="block font-semibold truncate text-[11px]">3. Geo Matching</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Filtering {location}</span>
+                <span className="text-[10px] text-brand-subtext block truncate">Filtering {locations.slice(0, 2).join(", ")}</span>
               </div>
             </div>
 
