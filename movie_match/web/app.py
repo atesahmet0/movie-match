@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from movie_match.cache.db import CacheDB
-from movie_match.models import SearchQuery, SentimentType
+from movie_match.models import MultiFilmMatchQuery, SearchQuery, SentimentType
 from movie_match.scraper.letterboxd import LetterboxdScraper
 from movie_match.scraper.parser import extract_slug_from_input
 
@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app = FastAPI(
     title="Letterboxd Movie Matcher",
     description="Find Letterboxd users from specific locations who liked or disliked movies.",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -84,6 +84,67 @@ async def api_search(
     }
 
 
+@app.post("/api/taste-match")
+async def api_taste_match(query: MultiFilmMatchQuery):
+    """Search for users in target location matching multiple films (taste overlap)."""
+    if not query.films:
+        raise HTTPException(status_code=400, detail="At least one film must be provided")
+
+    async with LetterboxdScraper() as scraper:
+        matches, stats = await scraper.find_taste_matches(query)
+        matches_serialized = [m.model_dump() for m in matches]
+
+    return {
+        "status": "success",
+        "films": query.films,
+        "stats": stats.model_dump(),
+        "matches_count": len(matches),
+        "matches": matches_serialized,
+    }
+
+
+@app.get("/api/user/{username}")
+async def api_user_profile(username: str):
+    """Retrieve full Letterboxd user profile, stats, favorite films, and recent watches."""
+    clean_user = username.strip().lstrip("@")
+    if not clean_user:
+        raise HTTPException(status_code=400, detail="Username is required")
+
+    async with LetterboxdScraper() as scraper:
+        profile = await scraper.get_user_full_profile(clean_user, include_films=True)
+        if not profile:
+            raise HTTPException(status_code=404, detail=f"Letterboxd user '{clean_user}' not found")
+
+    return {
+        "status": "success",
+        "profile": profile.model_dump(),
+    }
+
+
+@app.get("/api/user/{username}/films")
+async def api_user_films(
+    username: str,
+    category: str = Query("films", description="Category: films, top_rated, likes, watchlist"),
+    page: int = Query(1, ge=1, le=50),
+):
+    """Retrieve paginated films for a specific user category."""
+    clean_user = username.strip().lstrip("@")
+    if not clean_user:
+        raise HTTPException(status_code=400, detail="Username is required")
+
+    async with LetterboxdScraper() as scraper:
+        films = await scraper.get_user_films_category(clean_user, category=category, page=page)
+
+    return {
+        "status": "success",
+        "username": clean_user,
+        "category": category,
+        "page": page,
+        "films_count": len(films),
+        "films": [f.model_dump() for f in films],
+    }
+
+
 @app.get("/api/history")
 async def api_history(limit: int = Query(50, ge=1, le=100)):
     """Retrieve list of previous search summaries."""
@@ -122,3 +183,4 @@ async def api_film_info(film: str = Query(...)):
     async with LetterboxdScraper() as scraper:
         meta = await scraper.get_film_info(slug)
     return meta.model_dump()
+

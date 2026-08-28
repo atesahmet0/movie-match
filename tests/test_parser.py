@@ -106,3 +106,74 @@ def test_parse_user_profile():
     assert profile.location == "Ankara, Turkey"
     assert profile.bio == "Filmmaker & Anime Enthusiast"
     assert profile.is_pro is True
+
+
+def test_parse_user_profile_detail():
+    mock_html = """
+    <div class="profile-header">
+      <div class="profile-summary">
+        <h1 class="person-display-name"><span class="label">Cinephile Dev</span></h1>
+        <div class="profile-metadata"><div class="metadatum"><span class="label">Berlin, Germany</span></div></div>
+      </div>
+      <section class="profile-stats">
+        <div class="profile-statistic"><span class="value">350</span><span class="definition">Films</span></div>
+        <div class="profile-statistic"><span class="value">42</span><span class="definition">This year</span></div>
+      </section>
+      <section id="favourites">
+        <div class="react-component" data-component-class="LazyPoster" data-item-name="Alien (1979)" data-item-slug="alien" data-target-link="/cinephile/film/alien/">
+          <div class="poster film-poster"><img src="https://img.ltrbxd.com/alien.jpg" alt="Alien" /></div>
+        </div>
+        <div class="react-component" data-component-class="LazyPoster" data-item-name="Interstellar (2014)" data-item-slug="interstellar">
+          <div class="poster film-poster"><img src="https://img.ltrbxd.com/interstellar.jpg" alt="Interstellar" /></div>
+        </div>
+      </section>
+    </div>
+    """
+    from movie_match.scraper.parser import parse_user_profile_detail
+    prof_detail = parse_user_profile_detail(mock_html, "cinephile")
+    assert prof_detail.username == "cinephile"
+    assert prof_detail.display_name == "Cinephile Dev"
+    assert prof_detail.location == "Berlin, Germany"
+    assert prof_detail.stats.get("films") == "350"
+    assert len(prof_detail.favorite_films) == 2
+    assert prof_detail.favorite_films[0].slug == "alien"
+    assert prof_detail.favorite_films[0].title == "Alien"
+    assert prof_detail.favorite_films[0].year == 1979
+    assert prof_detail.favorite_films[1].slug == "interstellar"
+
+
+def test_parse_user_films_page():
+    mock_html = """
+    <ul class="poster-list">
+      <li class="poster-container">
+        <div class="react-component" data-component-class="LazyPoster" data-item-name="The Odyssey (2026)" data-item-slug="the-odyssey-2026">
+          <div class="poster film-poster"><img src="https://img.ltrbxd.com/odyssey.jpg" alt="The Odyssey" /></div>
+        </div>
+        <p class="poster-viewingdata">
+          <span class="rating rated-8">★★★★</span>
+          <span class="like has-liked">Liked</span>
+        </p>
+      </li>
+      <li class="poster-container">
+        <div class="react-component" data-component-class="LazyPoster" data-item-name="Arrival (2016)" data-item-slug="arrival">
+          <div class="poster film-poster"><img src="https://img.ltrbxd.com/arrival.jpg" alt="Arrival" /></div>
+        </div>
+        <p class="poster-viewingdata">
+          <span class="rating rated-10">★★★★★</span>
+        </p>
+      </li>
+    </ul>
+    """
+    from movie_match.scraper.parser import parse_user_films_page
+    films = parse_user_films_page(mock_html)
+    assert len(films) == 2
+    assert films[0].slug == "the-odyssey-2026"
+    assert films[0].title == "The Odyssey"
+    assert films[0].year == 2026
+    assert films[0].user_rating == 4.0
+    assert films[0].user_liked is True
+
+    assert films[1].slug == "arrival"
+    assert films[1].user_rating == 5.0
+    assert films[1].user_liked is False
+

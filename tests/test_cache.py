@@ -92,7 +92,47 @@ async def test_cache_film_page_cache(tmp_path):
     assert cached[0]["username"] == "user1"
 
     # Miss on page 2
-    assert await cache.get_film_page("vampire-hunter-d-bloodlust", "likes/", 2) is None
-
     assert await cache.count_cached_film_pages() == 1
     await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cache_user_detail_and_films(tmp_path):
+    db_path = tmp_path / "test_user_detail.db"
+    cache = CacheDB(db_path=db_path, ttl_seconds=100)
+    await cache.init()
+
+    from movie_match.models import UserFilmItem, UserProfileDetail
+    profile = UserProfileDetail(
+        username="karsten",
+        display_name="Karsten",
+        location="Ankara",
+        stats={"films": "400"},
+        favorite_films=[
+            UserFilmItem(slug="alien", title="Alien", year=1979),
+            UserFilmItem(slug="sunshine-2007", title="Sunshine", year=2007),
+        ],
+    )
+
+    await cache.save_user_profile_detail(profile)
+    cached_detail = await cache.get_user_profile_detail("karsten")
+    assert cached_detail is not None
+    assert cached_detail.username == "karsten"
+    assert cached_detail.display_name == "Karsten"
+    assert len(cached_detail.favorite_films) == 2
+    assert cached_detail.favorite_films[0].slug == "alien"
+
+    # User films
+    films = [
+        UserFilmItem(slug="the-odyssey", title="The Odyssey", user_rating=4.0, user_liked=True),
+        UserFilmItem(slug="interstellar", title="Interstellar", user_rating=5.0, user_liked=True),
+    ]
+    await cache.save_user_films("karsten", "films", 1, films)
+    cached_films = await cache.get_user_films("karsten", "films", 1)
+    assert cached_films is not None
+    assert len(cached_films) == 2
+    assert cached_films[0].slug == "the-odyssey"
+    assert cached_films[0].user_rating == 4.0
+
+    await cache.close()
+

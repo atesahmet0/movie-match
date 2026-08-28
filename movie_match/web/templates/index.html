@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Letterboxd Movie Matcher | Find Movie Fans by Location</title>
-  <meta name="description" content="Discover Letterboxd users in your city or country who loved or hated specific movies." />
+  <title>Letterboxd Movie Matcher | Profile & Film Taste Scout</title>
+  <meta name="description" content="Login with your Letterboxd username and discover people in your city who love the same movies as you." />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -26,6 +26,7 @@
               dark: '#14181c',
               darker: '#0d1114',
               card: '#1b2228',
+              cardHover: '#222b33',
               border: '#2c3440',
             }
           }
@@ -40,8 +41,8 @@
       font-family: 'Outfit', sans-serif;
     }
     .glass-card {
-      background: rgba(27, 34, 40, 0.85);
-      backdrop-filter: blur(12px);
+      background: rgba(27, 34, 40, 0.88);
+      backdrop-filter: blur(14px);
       border: 1px solid #2c3440;
     }
     .glow-green:focus {
@@ -54,70 +55,458 @@
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .line-clamp-3 {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0d1114;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2c3440;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #00e054;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between selection:bg-brand-500 selection:text-black">
 
-  <!-- Header -->
-  <header class="border-b border-brand-border bg-brand-darker/80 backdrop-blur sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
+  <!-- Top Header Navigation -->
+  <header class="border-b border-brand-border bg-brand-darker/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('profile')">
         <div class="flex space-x-1">
-          <span class="w-3.5 h-3.5 rounded-full bg-brand-orange"></span>
-          <span class="w-3.5 h-3.5 rounded-full bg-brand-500"></span>
-          <span class="w-3.5 h-3.5 rounded-full bg-brand-blue"></span>
+          <span class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-brand-orange"></span>
+          <span class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-brand-500"></span>
+          <span class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-brand-blue"></span>
         </div>
-        <span class="text-xl font-extrabold tracking-tight text-white">Movie<span class="text-brand-500">Match</span></span>
-        <span class="text-xs bg-brand-border text-gray-300 font-mono px-2 py-0.5 rounded">Letterboxd Geo Scout</span>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+          <span class="text-lg sm:text-xl font-extrabold tracking-tight text-white">Movie<span class="text-brand-500">Match</span></span>
+          <span class="hidden md:inline-block text-[10px] bg-brand-border text-gray-300 font-mono px-2 py-0.5 rounded">Letterboxd Taste Scout</span>
+        </div>
       </div>
 
       <!-- Navigation Tabs -->
-      <div class="flex items-center space-x-2 bg-brand-card p-1 rounded-xl border border-brand-border">
+      <nav class="flex items-center space-x-1 sm:space-x-2 bg-brand-card p-1 rounded-xl border border-brand-border text-xs">
+        <button 
+          id="tab-profile-btn" 
+          class="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-semibold bg-brand-500 text-black transition duration-200"
+          onclick="switchTab('profile')"
+        >
+          <span>👤</span>
+          <span class="hidden sm:inline">My Profile & Films</span>
+          <span class="sm:hidden">Profile</span>
+        </button>
+
+        <button 
+          id="tab-taste-btn" 
+          class="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200"
+          onclick="switchTab('taste')"
+        >
+          <span>🔮</span>
+          <span class="hidden sm:inline">Taste Soulmates</span>
+          <span class="sm:hidden">Soulmates</span>
+          <span id="selected-badge" class="hidden ml-1 px-1.5 py-0.2 bg-brand-orange text-black font-bold rounded-full text-[10px]">0</span>
+        </button>
+
         <button 
           id="tab-search-btn" 
-          class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition duration-200"
+          class="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200"
           onclick="switchTab('search')"
         >
           <span>🔍</span>
-          <span>Scout Movies</span>
+          <span class="hidden sm:inline">Scout Any Film</span>
+          <span class="sm:hidden">Scout</span>
         </button>
+
         <button 
           id="tab-history-btn" 
-          class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200"
+          class="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200"
           onclick="switchTab('history')"
         >
           <span>🕒</span>
-          <span>Previous Searches</span>
-          <span id="history-badge" class="ml-1 px-1.5 py-0.2 bg-brand-border text-gray-400 rounded-full text-[10px] font-mono">0</span>
+          <span class="hidden md:inline">History</span>
+          <span id="history-badge" class="ml-0.5 px-1.5 py-0.2 bg-brand-border text-gray-400 rounded-full text-[10px] font-mono">0</span>
         </button>
+      </nav>
+
+      <!-- User Profile Header Status Pill -->
+      <div id="header-user-status" class="hidden sm:flex items-center">
+        <!-- Will be populated by JS -->
       </div>
     </div>
   </header>
 
   <!-- Main Container -->
-  <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+  <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
     
-    <!-- SEARCH TAB CONTENT -->
-    <div id="search-tab-content">
+    <!-- ==================== TAB 1: MY PROFILE & MOVIES ==================== -->
+    <div id="tab-profile-content" class="space-y-8">
       
-      <!-- Hero Section -->
-      <div class="text-center max-w-3xl mx-auto mb-8">
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
-          Find Film Lovers In <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 via-brand-blue to-brand-orange">Your City</span>
+      <!-- 1A: Connect Profile Box (Shown when NOT logged in) -->
+      <div id="login-section" class="glass-card rounded-2xl p-6 sm:p-10 max-w-2xl mx-auto text-center shadow-2xl border-brand-border">
+        <div class="w-16 h-16 rounded-full bg-brand-500/10 border border-brand-500/30 flex items-center justify-center mx-auto mb-4 text-2xl">
+          🎬
+        </div>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-2">Connect Your Letterboxd Profile</h2>
+        <p class="text-gray-400 text-sm mb-6 max-w-md mx-auto">
+          No password needed! Simply enter your public Letterboxd username to load your favorite movies, watched films, and scout locals who share your taste.
+        </p>
+
+        <form id="profile-login-form" class="space-y-4 max-w-md mx-auto">
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-500 font-mono text-sm">@</span>
+            <input 
+              type="text" 
+              id="username-input" 
+              name="username" 
+              required
+              placeholder="e.g. karsten or your username"
+              class="w-full pl-8 pr-4 py-3 bg-[#111518] border border-brand-border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200 text-sm font-medium"
+            />
+          </div>
+          <button 
+            type="submit" 
+            id="login-submit-btn"
+            class="w-full bg-brand-500 hover:bg-brand-600 text-black font-bold py-3 px-6 rounded-xl transition duration-200 shadow-lg shadow-brand-500/20 flex items-center justify-center space-x-2 text-sm"
+          >
+            <span id="login-btn-icon">⚡</span>
+            <span id="login-btn-text">Load My Movies & Profile</span>
+          </button>
+        </form>
+
+        <div class="mt-6 pt-6 border-t border-brand-border/60">
+          <p class="text-xs text-gray-500 mb-2">Or try a sample Letterboxd profile:</p>
+          <div class="flex flex-wrap justify-center gap-2">
+            <button onclick="loginWithUsername('karsten')" class="text-xs px-3 py-1 bg-[#111518] border border-brand-border rounded-lg text-gray-300 hover:text-brand-500 hover:border-brand-500 transition">
+              @karsten
+            </button>
+            <button onclick="loginWithUsername('davidehrlich')" class="text-xs px-3 py-1 bg-[#111518] border border-brand-border rounded-lg text-gray-300 hover:text-brand-500 hover:border-brand-500 transition">
+              @davidehrlich
+            </button>
+            <button onclick="loginWithUsername('letterboxd')" class="text-xs px-3 py-1 bg-[#111518] border border-brand-border rounded-lg text-gray-300 hover:text-brand-500 hover:border-brand-500 transition">
+              @letterboxd
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1B: Active Profile Dashboard (Shown when logged in) -->
+      <div id="profile-dashboard" class="hidden space-y-8">
+        
+        <!-- User Profile Hero Header -->
+        <div class="glass-card rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+          <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-brand-500/5 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <!-- Avatar & Details -->
+            <div class="flex items-start sm:items-center space-x-4 sm:space-x-5">
+              <div class="relative flex-shrink-0">
+                <img 
+                  id="prof-avatar" 
+                  src="https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png" 
+                  alt="Avatar" 
+                  class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-brand-500 shadow-lg shadow-brand-500/20"
+                />
+                <span id="prof-badge" class="hidden absolute -bottom-2 -right-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-orange text-black uppercase tracking-wider shadow">PRO</span>
+              </div>
+
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <h1 id="prof-name" class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Username</h1>
+                  <a id="prof-link" href="#" target="_blank" class="text-xs font-mono text-brand-blue hover:underline">@username ↗</a>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 mt-1.5">
+                  <!-- Location Chip -->
+                  <div id="prof-loc-container" class="inline-flex items-center space-x-1.5 text-xs bg-[#111518] px-3 py-1 rounded-lg border border-brand-border">
+                    <span>📍</span>
+                    <span id="prof-location" class="text-gray-300 font-medium">Location not set</span>
+                    <button 
+                      id="btn-use-location" 
+                      onclick="useProfileLocation()" 
+                      class="ml-1 text-[10px] text-brand-500 hover:text-white underline font-semibold"
+                      title="Set as target scout location"
+                    >
+                      Use as Search Target
+                    </button>
+                  </div>
+                </div>
+
+                <p id="prof-bio" class="text-xs sm:text-sm text-gray-400 mt-2 max-w-2xl line-clamp-2">Bio text...</p>
+              </div>
+            </div>
+
+            <!-- Stats & Quick Actions -->
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <!-- Stats Pills -->
+              <div id="prof-stats-container" class="flex items-center gap-3 bg-[#111518] p-3 rounded-xl border border-brand-border">
+                <div class="text-center px-2">
+                  <span id="stat-films-val" class="block text-base font-bold text-brand-500 font-mono">0</span>
+                  <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Films</span>
+                </div>
+                <div class="h-6 w-px bg-brand-border"></div>
+                <div class="text-center px-2">
+                  <span id="stat-year-val" class="block text-base font-bold text-white font-mono">0</span>
+                  <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">This Year</span>
+                </div>
+                <div class="h-6 w-px bg-brand-border"></div>
+                <div class="text-center px-2">
+                  <span id="stat-followers-val" class="block text-base font-bold text-brand-blue font-mono">0</span>
+                  <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Followers</span>
+                </div>
+              </div>
+
+              <!-- Switch Button -->
+              <button 
+                onclick="logoutProfile()" 
+                class="px-3.5 py-2 rounded-xl bg-brand-card hover:bg-[#28323c] border border-brand-border text-xs text-gray-300 hover:text-white transition flex items-center space-x-1"
+              >
+                <span>🔄</span>
+                <span>Switch User</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🌟 User's 4 Favorite Films Showcase -->
+        <section class="space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="text-lg">⭐</span>
+                <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight">Your 4 Letterboxd Favorites</h2>
+              </div>
+              <p class="text-xs text-gray-400">Click <strong>"Scout Fans"</strong> to find people near you who love this film, or select multiple for taste matching.</p>
+            </div>
+            
+            <button 
+              onclick="scoutAllFavorites()" 
+              class="self-start sm:self-auto px-4 py-2 rounded-xl bg-gradient-to-r from-brand-500 to-brand-blue text-black font-bold text-xs shadow-lg hover:opacity-90 transition flex items-center space-x-1.5"
+            >
+              <span>🔮</span>
+              <span>Scout All 4 Favorites Combined</span>
+            </button>
+          </div>
+
+          <div id="fav-films-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Populated by JS -->
+          </div>
+        </section>
+
+        <!-- 🎞️ User's Watched, Liked, and Rated Films Explorer -->
+        <section class="glass-card rounded-2xl p-6 shadow-xl border-brand-border space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-brand-border/80 pb-4">
+            <!-- Category Tabs -->
+            <div class="flex flex-wrap items-center gap-1.5 bg-[#111518] p-1.5 rounded-xl border border-brand-border">
+              <button 
+                id="cat-films-btn"
+                onclick="loadUserFilmsCategory('films')" 
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition"
+              >
+                🎬 Recently Watched
+              </button>
+              <button 
+                id="cat-top-btn"
+                onclick="loadUserFilmsCategory('top_rated')" 
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition"
+              >
+                ⭐ Top Rated (4★ - 5★)
+              </button>
+              <button 
+                id="cat-likes-btn"
+                onclick="loadUserFilmsCategory('likes')" 
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition"
+              >
+                ❤️ Liked Films
+              </button>
+              <button 
+                id="cat-watchlist-btn"
+                onclick="loadUserFilmsCategory('watchlist')" 
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition"
+              >
+                📋 Watchlist
+              </button>
+            </div>
+
+            <!-- Search Filter for User's Movies -->
+            <div class="relative min-w-[220px]">
+              <input 
+                type="text" 
+                id="film-filter-input" 
+                oninput="filterCurrentFilmsList()"
+                placeholder="Filter films in this list..." 
+                class="w-full text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition"
+              />
+            </div>
+          </div>
+
+          <!-- Films Grid -->
+          <div id="user-films-loading" class="hidden text-center py-12">
+            <div class="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin-fast mx-auto mb-2"></div>
+            <p class="text-xs text-gray-400 font-mono">Fetching your movie library from Letterboxd...</p>
+          </div>
+
+          <div id="user-films-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+            <!-- Populated by JS -->
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- ==================== TAB 2: TASTE SOULMATES (MULTI-FILM MATCH) ==================== -->
+    <div id="tab-taste-content" class="hidden space-y-8">
+      
+      <!-- Hero Intro -->
+      <div class="text-center max-w-3xl mx-auto mb-6">
+        <h1 class="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
+          Find Your <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 via-brand-blue to-brand-orange">Movie Soulmates</span>
         </h1>
-        <p class="text-gray-400 text-sm sm:text-base">
-          Filter Letterboxd members by movie, location (e.g. Turkey, Ankara, Berlin), and sentiment (liked vs disliked).
+        <p class="text-gray-400 text-xs sm:text-sm">
+          Select multiple movies you love. We'll scan members in your target city to find people who share your specific taste across multiple films with a Taste Compatibility score!
         </p>
       </div>
 
-      <!-- Search Form Card -->
-      <div class="glass-card rounded-2xl p-6 sm:p-8 mb-8 shadow-2xl">
+      <!-- Taste Match Configuration Card -->
+      <div class="glass-card rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+        
+        <!-- Selected Films Container -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-xs sm:text-sm font-semibold text-gray-200">
+              🎬 Selected Films for Compatibility Matching (<span id="selected-count-label">0</span> films)
+            </label>
+            <button onclick="clearSelectedFilms()" class="text-xs text-gray-400 hover:text-red-400 transition">
+              Clear All
+            </button>
+          </div>
+
+          <div id="selected-films-chips" class="min-h-[52px] p-3 bg-[#111518] border border-brand-border rounded-xl flex flex-wrap items-center gap-2">
+            <span class="text-xs text-gray-500 italic">No films selected yet. Pick from your Profile or add below.</span>
+          </div>
+
+          <!-- Add Film Input Form -->
+          <div class="mt-3 flex gap-2">
+            <input 
+              type="text" 
+              id="manual-add-film-input" 
+              placeholder="Add film title, slug, or Letterboxd URL (e.g. sunshine-2007, alien)..." 
+              class="flex-grow text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition"
+              onkeydown="if(event.key==='Enter'){event.preventDefault(); addManualFilm();}"
+            />
+            <button 
+              type="button" 
+              onclick="addManualFilm()" 
+              class="px-4 py-2 bg-brand-card hover:bg-brand-border border border-brand-border rounded-xl text-xs font-semibold text-white transition"
+            >
+              + Add Film
+            </button>
+          </div>
+        </div>
+
+        <!-- Location & Match Options -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-brand-border/60">
+          <div>
+            <label for="taste-loc-input" class="block text-xs font-semibold text-gray-300 mb-1.5">📍 Target Location</label>
+            <input 
+              type="text" 
+              id="taste-loc-input" 
+              required
+              placeholder="e.g. Turkey, Ankara, London, Berlin..." 
+              value="Turkey"
+              class="w-full text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition"
+            />
+          </div>
+
+          <div>
+            <label for="taste-min-shared" class="block text-xs font-semibold text-gray-300 mb-1.5">🎯 Min Shared Films</label>
+            <select id="taste-min-shared" class="w-full text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-brand-500 transition">
+              <option value="1">Match at least 1 film</option>
+              <option value="2" selected>Match at least 2 films (Overlap)</option>
+              <option value="3">Match at least 3 films</option>
+              <option value="4">Match all 4 films</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="taste-pages-select" class="block text-xs font-semibold text-gray-300 mb-1.5">⚡ Scan Depth per Film</label>
+            <select id="taste-pages-select" class="w-full text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-brand-500 transition">
+              <option value="2">Quick (2 pages / ~150 users)</option>
+              <option value="3" selected>Balanced (3 pages / ~225 users)</option>
+              <option value="5">Deep (5 pages / ~375 users)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Run Button -->
+        <button 
+          id="taste-run-btn"
+          onclick="runTasteMatch()" 
+          class="w-full bg-gradient-to-r from-brand-500 via-brand-blue to-brand-orange hover:opacity-95 text-black font-extrabold py-3.5 px-6 rounded-xl transition duration-200 shadow-xl shadow-brand-500/20 flex items-center justify-center space-x-2 text-sm"
+        >
+          <span id="taste-btn-icon">🔮</span>
+          <span id="taste-btn-text">Discover Taste Soulmates</span>
+        </button>
+      </div>
+
+      <!-- Taste Results Status Bar -->
+      <div id="taste-stats-bar" class="hidden glass-card rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h3 id="taste-status-title" class="text-sm font-bold text-white">Scouting taste soulmates...</h3>
+          <p id="taste-status-desc" class="text-xs text-gray-400">Comparing member interactions...</p>
+        </div>
+        <div class="flex items-center space-x-4 text-xs font-mono">
+          <div>Scanned: <span id="taste-stat-scanned" class="font-bold text-brand-blue">0</span></div>
+          <div>Found Soulmates: <span id="taste-stat-matches" class="font-bold text-brand-500">0</span></div>
+          <div>Time: <span id="taste-stat-time" class="text-gray-400">0.0s</span></div>
+        </div>
+      </div>
+
+      <!-- Taste Match Results Grid -->
+      <div id="taste-results-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- ==================== TAB 3: SCOUT ANY FILM (SINGLE SEARCH) ==================== -->
+    <div id="tab-search-content" class="hidden space-y-8">
+      
+      <!-- Hero -->
+      <div class="text-center max-w-3xl mx-auto mb-6">
+        <h1 class="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
+          Scout Film Lovers In <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 via-brand-blue to-brand-orange">Your Location</span>
+        </h1>
+        <p class="text-gray-400 text-xs sm:text-sm">
+          Find Letterboxd members by movie, target location (e.g. Turkey, Ankara, Berlin), and sentiment (liked vs disliked).
+        </p>
+      </div>
+
+      <!-- Single Search Form Card -->
+      <div class="glass-card rounded-2xl p-6 sm:p-8 shadow-2xl">
         <form id="search-form" class="space-y-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             <!-- Movie Input -->
             <div>
-              <label for="film-input" class="block text-sm font-semibold text-gray-200 mb-2">
+              <label for="film-input" class="block text-xs sm:text-sm font-semibold text-gray-200 mb-2">
                 🎬 Film URL or Slug
               </label>
               <input 
@@ -125,15 +514,15 @@
                 id="film-input" 
                 name="film" 
                 required
-                placeholder="e.g. https://letterboxd.com/film/vampire-hunter-d-bloodlust/ or vampire-hunter-d-bloodlust"
-                class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200"
+                placeholder="e.g. https://letterboxd.com/film/vampire-hunter-d-bloodlust/ or sunshine-2007"
+                class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200 text-sm"
                 value="https://letterboxd.com/film/vampire-hunter-d-bloodlust/"
               />
             </div>
 
             <!-- Location Input -->
             <div>
-              <label for="location-input" class="block text-sm font-semibold text-gray-200 mb-2">
+              <label for="location-input" class="block text-xs sm:text-sm font-semibold text-gray-200 mb-2">
                 📍 Location Query
               </label>
               <input 
@@ -141,392 +530,726 @@
                 id="location-input" 
                 name="location" 
                 required
-                placeholder="e.g. Turkey, Ankara, Istanbul, Germany, Austin..."
-                class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200"
+                placeholder="e.g. Turkey, Ankara, Istanbul, Germany, London..."
+                class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200 text-sm"
                 value="Turkey"
               />
             </div>
           </div>
 
-          <!-- Filters Row -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-            
-            <!-- Sentiment -->
+          <!-- Options Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-brand-border/60">
             <div>
-              <label for="sentiment-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                Sentiment Filter
-              </label>
-              <select 
-                id="sentiment-select" 
-                name="sentiment"
-                class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
-              >
-                <option value="liked" selected>❤️ Liked (4-5 Stars / Likes / Fans)</option>
-                <option value="disliked">💔 Disliked (0.5 - 2.0 Stars)</option>
-                <option value="all">🌐 All Interactions</option>
+              <label for="sentiment-select" class="block text-xs font-semibold text-gray-300 mb-1.5">Sentiment Filter</label>
+              <select id="sentiment-select" name="sentiment" class="w-full text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-brand-500 transition">
+                <option value="liked" selected>Liked / High Rating (4-5 ★ & Likes)</option>
+                <option value="disliked">Disliked / Low Rating (0.5-2 ★)</option>
+                <option value="all">All Members (Fans, Likes, Ratings)</option>
               </select>
             </div>
 
-            <!-- Max Pages -->
             <div>
-              <label for="pages-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                Scan Depth
-              </label>
-              <select 
-                id="pages-select" 
-                name="max_pages"
-                class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
-              >
-                <option value="2">Quick Scan (2 Pages ~1000 users)</option>
-                <option value="5" selected>Standard Scan (5 Pages ~2500 users)</option>
-                <option value="10">Deep Scan (10 Pages ~5000 users)</option>
+              <label for="pages-select" class="block text-xs font-semibold text-gray-300 mb-1.5">Scan Depth</label>
+              <select id="pages-select" name="max_pages" class="w-full text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-brand-500 transition">
+                <option value="2">2 Pages (~150 candidates)</option>
+                <option value="3" selected>3 Pages (~225 candidates)</option>
+                <option value="5">5 Pages (~375 candidates)</option>
+                <option value="10">10 Pages (~750 candidates)</option>
               </select>
             </div>
 
-            <!-- Limit Matches -->
             <div>
-              <label for="limit-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                Match Limit
-              </label>
-              <select 
-                id="limit-select" 
-                name="limit"
-                class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
-              >
-                <option value="10">10 Matches</option>
-                <option value="25">25 Matches</option>
-                <option value="50" selected>50 Matches</option>
-                <option value="100">100 Matches</option>
+              <label for="limit-select" class="block text-xs font-semibold text-gray-300 mb-1.5">Matches Limit</label>
+              <select id="limit-select" name="limit" class="w-full text-xs bg-[#111518] border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-brand-500 transition">
+                <option value="25">Stop at 25 Matches</option>
+                <option value="50" selected>Stop at 50 Matches</option>
+                <option value="100">Stop at 100 Matches</option>
               </select>
             </div>
           </div>
 
-          <!-- Submit Button -->
-          <div class="flex items-center justify-between pt-2">
-            <label class="inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="include-bio" checked class="sr-only peer">
-              <div class="relative w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
-              <span class="ms-3 text-xs font-medium text-gray-400">Search Profile Bio as fallback</span>
+          <div class="flex items-center space-x-2">
+            <input type="checkbox" id="include-bio" name="include_bio" checked class="rounded bg-[#111518] border-brand-border text-brand-500 focus:ring-0 w-4 h-4 cursor-pointer" />
+            <label for="include-bio" class="text-xs text-gray-300 cursor-pointer">
+              Search member profile bio in addition to location field (Recommended)
             </label>
-
-            <button 
-              type="submit" 
-              id="submit-btn"
-              class="inline-flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-black font-bold px-6 py-3 rounded-xl transition duration-200 shadow-lg hover:shadow-brand-500/20 active:scale-95"
-            >
-              <span id="btn-icon">🔍</span>
-              <span id="btn-text">Start Scout</span>
-            </button>
           </div>
+
+          <button 
+            type="submit" 
+            id="submit-btn"
+            class="w-full bg-brand-500 hover:bg-brand-600 text-black font-bold py-3.5 px-6 rounded-xl transition duration-200 shadow-xl shadow-brand-500/20 flex items-center justify-center space-x-2 text-sm"
+          >
+            <span id="btn-icon">🔍</span>
+            <span id="btn-text">Start Scout</span>
+          </button>
         </form>
       </div>
 
-      <!-- Status & Live Stats Bar -->
-      <div id="stats-bar" class="hidden glass-card rounded-xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-brand-500">
-        <div class="flex items-center space-x-3">
-          <div id="loading-spinner" class="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin-fast"></div>
-          <div>
-            <h2 id="status-title" class="text-sm font-bold text-white">Scanning Letterboxd...</h2>
-            <p id="status-desc" class="text-xs text-gray-400 font-mono">Connecting with Chrome 124 TLS signature</p>
-          </div>
+      <!-- Single Search Stats Bar -->
+      <div id="stats-bar" class="hidden glass-card rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h3 id="status-title" class="text-sm font-bold text-white">Scouting Letterboxd...</h3>
+          <p id="status-desc" class="text-xs text-gray-400">Verifying member locations...</p>
         </div>
-        <div class="flex items-center space-x-6 text-xs font-mono">
-          <div>Candidates: <span id="stat-candidates" class="font-bold text-brand-orange">0</span></div>
+        <div class="flex items-center space-x-4 text-xs font-mono">
+          <div>Candidates: <span id="stat-candidates" class="font-bold text-brand-blue">0</span></div>
           <div>Matches: <span id="stat-matches" class="font-bold text-brand-500">0</span></div>
-          <div>Time: <span id="stat-time" class="text-gray-300">0.0s</span></div>
-        </div>
-        <div class="flex items-center space-x-2">
-          <button id="export-json-btn" class="hidden bg-[#242b32] hover:bg-[#2e3740] text-gray-200 text-xs px-3 py-1.5 rounded-lg border border-brand-border transition">Export JSON</button>
-          <button id="export-csv-btn" class="hidden bg-[#242b32] hover:bg-[#2e3740] text-gray-200 text-xs px-3 py-1.5 rounded-lg border border-brand-border transition">Export CSV</button>
+          <div>Time: <span id="stat-time" class="text-gray-400">0.0s</span></div>
         </div>
       </div>
 
-      <!-- Results Grid -->
-      <div id="results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- User cards populated by JS -->
+      <!-- Export Actions -->
+      <div class="flex justify-end space-x-2">
+        <button id="export-json-btn" class="hidden px-3.5 py-1.5 rounded-lg bg-brand-card hover:bg-[#28323c] border border-brand-border text-xs text-brand-500 font-mono transition">
+          ⬇ Export JSON
+        </button>
+        <button id="export-csv-btn" class="hidden px-3.5 py-1.5 rounded-lg bg-brand-card hover:bg-[#28323c] border border-brand-border text-xs text-brand-blue font-mono transition">
+          ⬇ Export CSV
+        </button>
       </div>
 
-      <!-- Empty / Welcome state -->
-      <div id="empty-state" class="text-center py-16 text-gray-500">
-        <div class="text-5xl mb-3">🍿</div>
-        <p class="text-sm">Enter a Letterboxd movie and target location to discover matching members.</p>
+      <!-- Single Search Results Grid -->
+      <div id="results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Populated by JS -->
       </div>
-
     </div>
 
-    <!-- HISTORY TAB CONTENT -->
-    <div id="history-tab-content" class="hidden">
-      <div class="flex items-center justify-between mb-6">
+    <!-- ==================== TAB 4: PREVIOUS SEARCHES HISTORY ==================== -->
+    <div id="tab-history-content" class="hidden space-y-6">
+      <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-2xl font-bold text-white tracking-tight">Previous Searches</h2>
-          <p class="text-gray-400 text-xs sm:text-sm">Re-visit or re-scout your historical queries instantly.</p>
+          <h2 class="text-2xl font-extrabold text-white">Previous Searches</h2>
+          <p class="text-xs text-gray-400">Review and re-inspect your historical scans.</p>
         </div>
         <button 
-          id="clear-history-btn" 
           onclick="clearAllHistory()" 
-          class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold px-4 py-2 rounded-xl border border-red-500/30 transition duration-200"
+          class="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold transition"
         >
           Clear History
         </button>
       </div>
 
-      <div id="history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Populated via JS -->
-      </div>
-
-      <div id="history-empty" class="hidden text-center py-16 text-gray-500 glass-card rounded-2xl">
-        <div class="text-4xl mb-2">📜</div>
-        <p class="font-semibold text-white">No previous searches recorded yet.</p>
-        <p class="text-xs text-gray-500 mt-1">Run a search from the Scout tab to build your search history.</p>
+      <div id="history-container" class="space-y-3">
+        <!-- Populated by JS -->
       </div>
     </div>
 
   </main>
 
   <!-- Footer -->
-  <footer class="border-t border-brand-border py-6 bg-brand-darker text-center text-xs text-gray-500">
-    Built with Python, curl_cffi, selectolax, and FastAPI &bull; Not affiliated with Letterboxd Limited
+  <footer class="border-t border-brand-border/60 bg-brand-darker py-6 mt-12 text-center text-xs text-gray-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>MovieMatch Letterboxd Scout &bull; Built with FastAPI & curl_cffi</div>
+      <div class="font-mono text-[11px] text-gray-600">Letterboxd is a registered trademark of Letterboxd Limited.</div>
+    </div>
   </footer>
 
+  <!-- JavaScript Client Application -->
   <script>
+    // State management
+    let activeTab = 'profile';
+    let currentUserProfile = null;
+    let currentUserFilms = [];
+    let selectedFilmsForTaste = new Map(); // slug -> {title, year, poster_url}
     let currentMatches = [];
-    let currentStats = null;
-    let searchHistoryList = [];
+    let currentStats = {};
 
-    const form = document.getElementById('search-form');
-    const submitBtn = document.getElementById('submit-btn');
-    const btnText = document.getElementById('btn-text');
-    const btnIcon = document.getElementById('btn-icon');
-    const statsBar = document.getElementById('stats-bar');
-    const statusTitle = document.getElementById('status-title');
-    const statusDesc = document.getElementById('status-desc');
-    const statCandidates = document.getElementById('stat-candidates');
-    const statMatches = document.getElementById('stat-matches');
-    const statTime = document.getElementById('stat-time');
-    const loadingSpinner = document.getElementById('loading-spinner');
-    const resultsContainer = document.getElementById('results-container');
-    const emptyState = document.getElementById('empty-state');
-    const exportJsonBtn = document.getElementById('export-json-btn');
-    const exportCsvBtn = document.getElementById('export-csv-btn');
-    const historyBadge = document.getElementById('history-badge');
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      updateHistoryBadge();
+      loadSavedProfile();
+    });
 
-    // Tab switcher
+    // Tab Switching
     function switchTab(tab) {
-      const searchTab = document.getElementById('search-tab-content');
-      const historyTab = document.getElementById('history-tab-content');
-      const searchBtn = document.getElementById('tab-search-btn');
-      const historyBtn = document.getElementById('tab-history-btn');
-
-      if (tab === 'search') {
-        searchTab.classList.remove('hidden');
-        historyTab.classList.add('hidden');
-        searchBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition duration-200';
-        historyBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200';
-      } else {
-        searchTab.classList.add('hidden');
-        historyTab.classList.remove('hidden');
-        historyBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition duration-200';
-        searchBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200';
-        loadSearchHistory();
-      }
-    }
-
-    // Load history count on boot
-    async function updateHistoryBadge() {
-      try {
-        const resp = await fetch('/api/history?limit=100');
-        const data = await resp.json();
-        if (data.status === 'success') {
-          searchHistoryList = data.history;
-          historyBadge.innerText = data.history.length;
-        }
-      } catch (e) {
-        console.error('Failed to load history count', e);
-      }
-    }
-    updateHistoryBadge();
-
-    // Render search history tab
-    async function loadSearchHistory() {
-      const container = document.getElementById('history-list');
-      const emptyEl = document.getElementById('history-empty');
-      container.innerHTML = '<div class="col-span-full text-center py-8 text-gray-400">Loading history...</div>';
-
-      try {
-        const resp = await fetch('/api/history?limit=50');
-        const data = await resp.json();
-        if (data.status === 'success' && data.history.length > 0) {
-          emptyEl.classList.add('hidden');
-          searchHistoryList = data.history;
-          historyBadge.innerText = data.history.length;
-          
-          container.innerHTML = data.history.map(item => {
-            const timeAgo = formatTimeAgo(item.created_at);
-            const sentimentBadge = item.sentiment === 'disliked'
-              ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">💔 Disliked</span>'
-              : (item.sentiment === 'liked' 
-                  ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-brand-500/10 text-brand-500 border border-brand-500/20">❤️ Liked</span>'
-                  : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">🌐 All</span>');
-
-            return `
-              <div class="glass-card rounded-xl p-5 hover:border-brand-500/50 transition duration-300 flex flex-col justify-between">
-                <div>
-                  <div class="flex items-start justify-between mb-2">
-                    <h3 class="font-bold text-white text-base truncate flex-1 pr-2">${item.film_title || item.film_slug}</h3>
-                    <span class="text-[11px] font-mono text-gray-400 flex-shrink-0">${timeAgo}</span>
-                  </div>
-                  <p class="text-xs font-mono text-gray-400 mb-3 truncate">film/${item.film_slug}</p>
-                  <div class="flex flex-wrap items-center gap-2 mb-4">
-                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#252e37] text-gray-200 border border-brand-border">📍 ${item.location_query}</span>
-                    ${sentimentBadge}
-                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">🎯 ${item.matches_count} matches</span>
-                  </div>
-                </div>
-
-                <div class="pt-3 border-t border-brand-border/60 flex items-center justify-between gap-2">
-                  <button 
-                    onclick="loadPreviousResult(${item.id})"
-                    class="flex-1 bg-brand-500/10 hover:bg-brand-500 hover:text-black text-brand-500 text-xs font-semibold py-2 px-3 rounded-lg border border-brand-500/30 transition duration-200"
-                  >
-                    View Results
-                  </button>
-                  <button 
-                    onclick="reScoutQuery('${item.film_slug}', '${item.location_query}', '${item.sentiment}')"
-                    class="bg-[#242b32] hover:bg-[#2e3740] text-gray-300 text-xs font-semibold py-2 px-3 rounded-lg border border-brand-border transition duration-200"
-                    title="Re-run search"
-                  >
-                    🔄 Re-Scout
-                  </button>
-                </div>
-              </div>
-            `;
-          }).join('');
+      activeTab = tab;
+      const tabs = ['profile', 'taste', 'search', 'history'];
+      tabs.forEach(t => {
+        const content = document.getElementById(`tab-${t}-content`);
+        const btn = document.getElementById(`tab-${t}-btn`);
+        if (t === tab) {
+          content.classList.remove('hidden');
+          btn.className = 'flex items-center space-x-1 px-3 py-1.5 rounded-lg font-semibold bg-brand-500 text-black transition duration-200';
         } else {
-          container.innerHTML = '';
-          emptyEl.classList.remove('hidden');
-          historyBadge.innerText = '0';
+          content.classList.add('hidden');
+          btn.className = 'flex items-center space-x-1 px-3 py-1.5 rounded-lg font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200';
+        }
+      });
+
+      if (tab === 'history') {
+        loadHistoryList();
+      }
+    }
+
+    // ==================== USER PROFILE LOGIN & MANAGEMENT ====================
+
+    function loadSavedProfile() {
+      const savedUser = localStorage.getItem('mm_username');
+      if (savedUser) {
+        fetchUserProfile(savedUser);
+      }
+    }
+
+    async function loginWithUsername(username) {
+      document.getElementById('username-input').value = username;
+      await fetchUserProfile(username);
+    }
+
+    document.getElementById('profile-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username-input').value.trim();
+      if (username) {
+        await fetchUserProfile(username);
+      }
+    });
+
+    async function fetchUserProfile(username) {
+      const cleanUser = username.trim().replace(/^@/, '');
+      const submitBtn = document.getElementById('login-submit-btn');
+      const btnText = document.getElementById('login-btn-text');
+      const btnIcon = document.getElementById('login-btn-icon');
+
+      submitBtn.disabled = true;
+      btnText.innerText = 'Connecting Letterboxd...';
+      btnIcon.innerText = '⏳';
+
+      try {
+        const res = await fetch(`/api/user/${encodeURIComponent(cleanUser)}`);
+        const data = await res.json();
+
+        submitBtn.disabled = false;
+        btnText.innerText = 'Load My Movies & Profile';
+        btnIcon.innerText = '⚡';
+
+        if (data.status === 'success' && data.profile) {
+          currentUserProfile = data.profile;
+          localStorage.setItem('mm_username', cleanUser);
+          renderUserProfile(data.profile);
+        } else {
+          alert(`Letterboxd user '@${cleanUser}' could not be loaded. Please check the username.`);
         }
       } catch (err) {
-        container.innerHTML = `<div class="col-span-full text-center py-8 text-red-400">Failed to load history: ${err.message}</div>`;
+        submitBtn.disabled = false;
+        btnText.innerText = 'Load My Movies & Profile';
+        btnIcon.innerText = '⚡';
+        alert('Network error connecting to server: ' + err.message);
       }
     }
 
-    // Load full historical result
-    async function loadPreviousResult(historyId) {
-      try {
-        const resp = await fetch(`/api/history/${historyId}`);
-        const data = await resp.json();
-        if (data.status === 'success') {
-          const item = data.item;
-          switchTab('search');
+    function renderUserProfile(profile) {
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('profile-dashboard').classList.remove('hidden');
 
-          // Populate form fields
-          document.getElementById('film-input').value = `https://letterboxd.com/film/${item.film_slug}/`;
-          document.getElementById('location-input').value = item.location_query;
-          document.getElementById('sentiment-select').value = item.sentiment;
+      // Update Header Status Pill
+      const headerStatus = document.getElementById('header-user-status');
+      headerStatus.classList.remove('hidden');
+      headerStatus.innerHTML = `
+        <div class="flex items-center space-x-2 bg-brand-card px-3 py-1 rounded-xl border border-brand-border">
+          <img src="${profile.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'}" class="w-6 h-6 rounded-full border border-brand-500" />
+          <span class="text-xs font-bold text-white">@${profile.username}</span>
+          <button onclick="logoutProfile()" class="text-[10px] text-gray-400 hover:text-red-400 ml-1">✕</button>
+        </div>
+      `;
 
-          currentMatches = item.results || [];
-          currentStats = {
-            film_title: item.film_title,
-            film_slug: item.film_slug,
-            total_pages_scanned: '-',
-            total_users_discovered: '-',
-            elapsed_seconds: 0,
-          };
+      // Profile details
+      document.getElementById('prof-avatar').src = profile.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png';
+      document.getElementById('prof-name').innerText = profile.display_name || profile.username;
+      document.getElementById('prof-link').innerText = `@${profile.username} ↗`;
+      document.getElementById('prof-link').href = profile.profile_url;
+      document.getElementById('prof-bio').innerText = profile.bio || 'Letterboxd film enthusiast.';
 
-          // Update stats bar
-          statsBar.classList.remove('hidden');
-          loadingSpinner.classList.add('hidden');
-          statusTitle.innerText = `Loaded saved search: "${item.film_title}" in ${item.location_query}`;
-          statusDesc.innerText = `Saved search from history with ${item.matches_count} matching members.`;
-          statCandidates.innerText = '-';
-          statMatches.innerText = item.matches_count;
-          statTime.innerText = 'Cached';
-          emptyState.classList.add('hidden');
+      if (profile.is_pro || profile.is_patron) {
+        const badgeEl = document.getElementById('prof-badge');
+        badgeEl.classList.remove('hidden');
+        badgeEl.innerText = profile.is_patron ? 'PATRON' : 'PRO';
+      }
 
-          if (currentMatches.length > 0) {
-            exportJsonBtn.classList.remove('hidden');
-            exportCsvBtn.classList.remove('hidden');
-            renderCards(currentMatches);
+      // Location
+      const locText = profile.location ? profile.location : 'Location not set in bio';
+      document.getElementById('prof-location').innerText = locText;
+      if (profile.location) {
+        document.getElementById('location-input').value = profile.location;
+        document.getElementById('taste-loc-input').value = profile.location;
+      }
+
+      // Stats
+      if (profile.stats) {
+        document.getElementById('stat-films-val').innerText = profile.stats.films || profile.recent_films?.length || '0';
+        document.getElementById('stat-year-val').innerText = profile.stats.this_year || '0';
+        document.getElementById('stat-followers-val').innerText = profile.stats.followers || '0';
+      }
+
+      // 4 Favorites
+      renderFavoriteFilms(profile.favorite_films || []);
+
+      // Auto-select favorites into Taste Match
+      if (profile.favorite_films && profile.favorite_films.length > 0) {
+        profile.favorite_films.forEach(f => {
+          selectedFilmsForTaste.set(f.slug, { title: f.title, year: f.year, poster_url: f.poster_url });
+        });
+        updateSelectedChips();
+      }
+
+      // Load Recent Watched films
+      currentUserFilms = profile.recent_films || [];
+      renderUserFilmsGrid(currentUserFilms);
+    }
+
+    function logoutProfile() {
+      localStorage.removeItem('mm_username');
+      currentUserProfile = null;
+      currentUserFilms = [];
+      document.getElementById('login-section').classList.remove('hidden');
+      document.getElementById('profile-dashboard').classList.add('hidden');
+      document.getElementById('header-user-status').classList.add('hidden');
+    }
+
+    function useProfileLocation() {
+      if (currentUserProfile && currentUserProfile.location) {
+        document.getElementById('location-input').value = currentUserProfile.location;
+        document.getElementById('taste-loc-input').value = currentUserProfile.location;
+        alert(`Search target location set to "${currentUserProfile.location}"`);
+      } else {
+        alert('No location is specified on this Letterboxd profile. You can manually type your location.');
+      }
+    }
+
+    // ==================== FAVORITE FILMS SHOWCASE ====================
+
+    function renderFavoriteFilms(favs) {
+      const grid = document.getElementById('fav-films-grid');
+      if (!favs || favs.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full text-center py-6 text-gray-400 glass-card rounded-xl">
+            <p class="text-xs">No pinned favorite films found on this Letterboxd profile.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = favs.map(f => {
+        const isSelected = selectedFilmsForTaste.has(f.slug);
+        return `
+          <div class="glass-card rounded-xl p-4 hover:border-brand-500/60 transition duration-300 flex flex-col justify-between group relative overflow-hidden">
+            <div class="flex items-start space-x-3 mb-3">
+              <div class="w-14 h-20 rounded-lg bg-brand-dark flex-shrink-0 overflow-hidden border border-brand-border flex items-center justify-center">
+                ${f.poster_url ? `<img src="${f.poster_url}" class="w-full h-full object-cover" />` : `<span class="text-2xl">🎬</span>`}
+              </div>
+              <div class="min-w-0 flex-1">
+                <a href="${f.film_url}" target="_blank" class="font-bold text-white text-sm hover:text-brand-500 transition line-clamp-2" title="${f.title}">
+                  ${f.title}
+                </a>
+                <span class="text-xs text-gray-400 font-mono">${f.year || ''}</span>
+                <div class="mt-1 flex items-center space-x-1 text-[11px] text-amber-400 font-bold">
+                  <span>★</span>
+                  <span>Favorite</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-brand-border/60 flex items-center justify-between gap-2">
+              <button 
+                onclick="scoutSingleFilm('${f.slug}', '${f.title.replace(/'/g, "\\'")}')" 
+                class="flex-1 py-1.5 px-2 bg-brand-500 hover:bg-brand-600 text-black font-bold text-xs rounded-lg transition shadow flex items-center justify-center space-x-1"
+              >
+                <span>🔍</span>
+                <span>Scout Fans</span>
+              </button>
+              
+              <button 
+                onclick="toggleFilmSelection('${f.slug}', '${f.title.replace(/'/g, "\\'")}', ${f.year || 'null'})" 
+                class="p-1.5 rounded-lg border ${isSelected ? 'bg-brand-orange text-black border-brand-orange' : 'bg-brand-card text-gray-400 border-brand-border hover:text-white'} text-xs font-semibold transition"
+                title="${isSelected ? 'Remove from Soulmate Match' : 'Add to Soulmate Match'}"
+              >
+                ${isSelected ? '✓ In Taste' : '+ Taste'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==================== USER FILMS BROWSER ====================
+
+    async function loadUserFilmsCategory(category) {
+      if (!currentUserProfile) return;
+
+      const tabs = ['films', 'top_rated', 'likes', 'watchlist'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`cat-${t === 'films' ? 'films' : t === 'top_rated' ? 'top' : t === 'likes' ? 'likes' : 'watchlist'}-btn`);
+        if (btn) {
+          if (t === category) {
+            btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition';
           } else {
-            resultsContainer.innerHTML = `<div class="col-span-full text-center py-12 text-gray-400 glass-card rounded-2xl">No members matched this search.</div>`;
+            btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition';
           }
         }
-      } catch (e) {
-        alert('Failed to load search result: ' + e.message);
-      }
-    }
+      });
 
-    // Re-run search
-    function reScoutQuery(slug, location, sentiment) {
-      switchTab('search');
-      document.getElementById('film-input').value = `https://letterboxd.com/film/${slug}/`;
-      document.getElementById('location-input').value = location;
-      document.getElementById('sentiment-select').value = sentiment;
-      form.dispatchEvent(new Event('submit'));
-    }
+      const loading = document.getElementById('user-films-loading');
+      const grid = document.getElementById('user-films-grid');
+      loading.classList.remove('hidden');
+      grid.innerHTML = '';
 
-    // Clear history
-    async function clearAllHistory() {
-      if (!confirm('Are you sure you want to clear your search history?')) return;
       try {
-        await fetch('/api/history', { method: 'DELETE' });
-        loadSearchHistory();
-        historyBadge.innerText = '0';
-      } catch (e) {
-        alert('Failed to clear history: ' + e.message);
+        const res = await fetch(`/api/user/${encodeURIComponent(currentUserProfile.username)}/films?category=${category}&page=1`);
+        const data = await res.json();
+        loading.classList.add('hidden');
+
+        if (data.status === 'success') {
+          currentUserFilms = data.films || [];
+          renderUserFilmsGrid(currentUserFilms);
+        } else {
+          grid.innerHTML = `<div class="col-span-full text-center py-6 text-gray-500 text-xs">No films found in this category.</div>`;
+        }
+      } catch (err) {
+        loading.classList.add('hidden');
+        grid.innerHTML = `<div class="col-span-full text-center py-6 text-red-400 text-xs">Error loading category: ${err.message}</div>`;
       }
     }
 
-    function formatTimeAgo(epochSeconds) {
-      if (!epochSeconds) return '';
-      const seconds = Math.floor(Date.now() / 1000 - epochSeconds);
-      if (seconds < 60) return 'Just now';
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes}m ago`;
-      const hours = Math.floor(minutes / 60);
-      if (hours < 24) return `${hours}h ago`;
-      const days = Math.floor(hours / 24);
-      return `${days}d ago`;
+    function renderUserFilmsGrid(films) {
+      const grid = document.getElementById('user-films-grid');
+      if (!films || films.length === 0) {
+        grid.innerHTML = `<div class="col-span-full text-center py-8 text-gray-500 text-xs">No films available.</div>`;
+        return;
+      }
+
+      grid.innerHTML = films.map(f => {
+        const isSelected = selectedFilmsForTaste.has(f.slug);
+        const ratingStr = f.user_rating_stars || '';
+        return `
+          <div class="glass-card rounded-xl p-3 hover:border-brand-500/50 transition duration-200 flex flex-col justify-between group">
+            <div>
+              <div class="w-full aspect-[2/3] rounded-lg bg-brand-dark mb-2 overflow-hidden border border-brand-border flex items-center justify-center relative">
+                ${f.poster_url ? `<img src="${f.poster_url}" class="w-full h-full object-cover" />` : `<span class="text-3xl">🎬</span>`}
+                ${f.user_liked ? `<span class="absolute top-1.5 right-1.5 text-xs bg-red-500/90 text-white rounded-full px-1.5 py-0.5 shadow">❤️</span>` : ''}
+              </div>
+
+              <a href="${f.film_url}" target="_blank" class="font-bold text-white text-xs hover:text-brand-500 transition line-clamp-1 block" title="${f.title}">
+                ${f.title}
+              </a>
+              
+              <div class="flex items-center justify-between text-[11px] text-gray-400 font-mono mt-0.5">
+                <span>${f.year || ''}</span>
+                <span class="text-amber-400 font-bold">${ratingStr}</span>
+              </div>
+            </div>
+
+            <div class="mt-2.5 pt-2 border-t border-brand-border/60 flex items-center justify-between gap-1">
+              <button 
+                onclick="scoutSingleFilm('${f.slug}', '${f.title.replace(/'/g, "\\'")}')" 
+                class="flex-1 py-1 px-1.5 bg-brand-card hover:bg-brand-500 hover:text-black border border-brand-border text-[11px] font-semibold rounded text-gray-300 transition text-center"
+                title="Find people who liked this"
+              >
+                Scout
+              </button>
+              <button 
+                onclick="toggleFilmSelection('${f.slug}', '${f.title.replace(/'/g, "\\'")}', ${f.year || 'null'})" 
+                class="p-1 px-1.5 rounded border ${isSelected ? 'bg-brand-orange text-black border-brand-orange' : 'bg-brand-dark text-gray-400 border-brand-border hover:text-white'} text-[11px] font-bold transition"
+                title="${isSelected ? 'Remove from Taste Match' : 'Add to Taste Match'}"
+              >
+                ${isSelected ? '✓' : '+'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
-    // Search submit handler
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    function filterCurrentFilmsList() {
+      const q = document.getElementById('film-filter-input').value.toLowerCase().trim();
+      if (!q) {
+        renderUserFilmsGrid(currentUserFilms);
+        return;
+      }
+      const filtered = currentUserFilms.filter(f => f.title.toLowerCase().includes(q) || f.slug.toLowerCase().includes(q));
+      renderUserFilmsGrid(filtered);
+    }
+
+    // ==================== TASTE MATCHING / SOULMATES ====================
+
+    function toggleFilmSelection(slug, title, year) {
+      if (selectedFilmsForTaste.has(slug)) {
+        selectedFilmsForTaste.delete(slug);
+      } else {
+        selectedFilmsForTaste.set(slug, { title: title || slug, year: year, poster_url: null });
+      }
+      updateSelectedChips();
+      if (activeTab === 'profile') {
+        renderFavoriteFilms(currentUserProfile?.favorite_films || []);
+        renderUserFilmsGrid(currentUserFilms);
+      }
+    }
+
+    function addManualFilm() {
+      const input = document.getElementById('manual-add-film-input');
+      const val = input.value.trim();
+      if (!val) return;
       
-      const film = document.getElementById('film-input').value;
-      const location = document.getElementById('location-input').value;
+      let slug = val.toLowerCase().replace(/https?:\/\/letterboxd\.com\/film\//, '').replace(/\/$/, '').trim();
+      const title = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      selectedFilmsForTaste.set(slug, { title: title, year: null, poster_url: null });
+      input.value = '';
+      updateSelectedChips();
+    }
+
+    function clearSelectedFilms() {
+      selectedFilmsForTaste.clear();
+      updateSelectedChips();
+      if (activeTab === 'profile') {
+        renderFavoriteFilms(currentUserProfile?.favorite_films || []);
+        renderUserFilmsGrid(currentUserFilms);
+      }
+    }
+
+    function updateSelectedChips() {
+      const container = document.getElementById('selected-films-chips');
+      const countLabel = document.getElementById('selected-count-label');
+      const badge = document.getElementById('selected-badge');
+      const count = selectedFilmsForTaste.size;
+
+      countLabel.innerText = count;
+      if (count > 0) {
+        badge.classList.remove('hidden');
+        badge.innerText = count;
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      if (count === 0) {
+        container.innerHTML = `<span class="text-xs text-gray-500 italic">No films selected yet. Pick from your Profile or add below.</span>`;
+        return;
+      }
+
+      container.innerHTML = Array.from(selectedFilmsForTaste.entries()).map(([slug, data]) => {
+        return `
+          <span class="inline-flex items-center space-x-1.5 px-3 py-1 bg-brand-dark rounded-lg border border-brand-border text-xs text-white">
+            <span>🎬</span>
+            <span class="font-semibold">${data.title}</span>
+            <button onclick="toggleFilmSelection('${slug}', '', null)" class="text-gray-400 hover:text-red-400 font-bold ml-1">✕</button>
+          </span>
+        `;
+      }).join('');
+    }
+
+    function scoutAllFavorites() {
+      if (!currentUserProfile || !currentUserProfile.favorite_films || currentUserProfile.favorite_films.length === 0) {
+        alert('No favorite films found on this profile.');
+        return;
+      }
+      selectedFilmsForTaste.clear();
+      currentUserProfile.favorite_films.forEach(f => {
+        selectedFilmsForTaste.set(f.slug, { title: f.title, year: f.year, poster_url: f.poster_url });
+      });
+      updateSelectedChips();
+      switchTab('taste');
+    }
+
+    async function runTasteMatch() {
+      if (selectedFilmsForTaste.size === 0) {
+        alert('Please select at least 1 film to find taste soulmates.');
+        return;
+      }
+
+      const films = Array.from(selectedFilmsForTaste.keys());
+      const location = document.getElementById('taste-loc-input').value.trim() || (currentUserProfile?.location || 'Turkey');
+      const minShared = parseInt(document.getElementById('taste-min-shared').value) || 1;
+      const maxPages = parseInt(document.getElementById('taste-pages-select').value) || 3;
+
+      const runBtn = document.getElementById('taste-run-btn');
+      const btnText = document.getElementById('taste-btn-text');
+      const btnIcon = document.getElementById('taste-btn-icon');
+      const statsBar = document.getElementById('taste-stats-bar');
+      const resultsGrid = document.getElementById('taste-results-grid');
+
+      runBtn.disabled = true;
+      btnText.innerText = 'Scanning Letterboxd Members...';
+      btnIcon.innerText = '⏳';
+      statsBar.classList.remove('hidden');
+      resultsGrid.innerHTML = '';
+
+      const startTime = performance.now();
+      const timer = setInterval(() => {
+        const el = ((performance.now() - startTime) / 1000).toFixed(1);
+        document.getElementById('taste-stat-time').innerText = `${el}s`;
+      }, 100);
+
+      try {
+        const response = await fetch('/api/taste-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            films: films,
+            location_query: location,
+            min_shared_films: minShared,
+            max_pages_per_film: maxPages,
+            limit_matches: 50,
+          })
+        });
+
+        const data = await response.json();
+        clearInterval(timer);
+        runBtn.disabled = false;
+        btnText.innerText = 'Discover Taste Soulmates';
+        btnIcon.innerText = '🔮';
+
+        if (data.status === 'success') {
+          document.getElementById('taste-stat-scanned').innerText = data.stats.total_users_discovered;
+          document.getElementById('taste-stat-matches').innerText = data.matches_count;
+          document.getElementById('taste-stat-time').innerText = `${data.stats.elapsed_seconds.toFixed(2)}s`;
+          document.getElementById('taste-status-title').innerText = `Found ${data.matches_count} Taste Soulmates in "${location}"`;
+          document.getElementById('taste-status-desc').innerText = `Scanned ${data.stats.total_users_discovered} candidates across ${films.length} target films.`;
+
+          renderTasteResults(data.matches, films.length);
+        } else {
+          alert('Taste match failed: ' + (data.detail || 'Unknown error'));
+        }
+      } catch (err) {
+        clearInterval(timer);
+        runBtn.disabled = false;
+        btnText.innerText = 'Discover Taste Soulmates';
+        btnIcon.innerText = '🔮';
+        alert('Network error: ' + err.message);
+      }
+    }
+
+    function renderTasteResults(matches, totalTargetFilms) {
+      const grid = document.getElementById('taste-results-grid');
+      if (!matches || matches.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full text-center py-12 text-gray-400 glass-card rounded-2xl">
+            <div class="text-4xl mb-2">🔎</div>
+            <p class="font-semibold text-white">No taste soulmates found matching this exact overlap.</p>
+            <p class="text-xs text-gray-500 mt-1">Try lowering "Min Shared Films" to 1, or choosing broader location keywords.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = matches.map((m, idx) => {
+        const avatar = m.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png';
+        const matchBadge = m.location ? `📍 ${m.location}` : `👤 ${m.matched_location}`;
+        const score = m.compatibility_score || Math.round((m.shared_films_count / totalTargetFilms) * 100);
+
+        // Shared films badges
+        const sharedBadges = (m.shared_films || []).map(f => {
+          const stars = f.user_rating_stars ? ` ${f.user_rating_stars}` : '';
+          return `
+            <div class="text-xs bg-[#111518] px-2.5 py-1.5 rounded-lg border border-brand-border flex items-center justify-between gap-2">
+              <span class="font-semibold text-gray-200">🎬 ${f.film_title || f.film_slug}</span>
+              <span class="text-amber-400 font-mono text-[11px] font-bold">${stars}</span>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="glass-card rounded-2xl p-5 hover:border-brand-500/60 transition duration-300 flex flex-col justify-between group">
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center space-x-3">
+                  <a href="${m.profile_url}" target="_blank">
+                    <img src="${avatar}" alt="${m.username}" class="w-12 h-12 rounded-full object-cover border border-brand-border group-hover:border-brand-500 transition duration-200" />
+                  </a>
+                  <div>
+                    <a href="${m.profile_url}" target="_blank" class="font-bold text-white text-base hover:text-brand-500 hover:underline transition block">
+                      ${m.display_name}
+                    </a>
+                    <a href="${m.profile_url}" target="_blank" class="text-xs font-mono text-brand-blue hover:underline">
+                      @${m.username}
+                    </a>
+                  </div>
+                </div>
+
+                <!-- Compatibility Pill -->
+                <div class="text-right">
+                  <span class="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-brand-500 to-brand-blue text-black shadow">
+                    ${score}% Match
+                  </span>
+                  <span class="block text-[10px] text-gray-400 font-mono mt-0.5">${m.shared_films_count} of ${totalTargetFilms} Films</span>
+                </div>
+              </div>
+
+              <!-- Location Match Tag -->
+              <div class="mb-3">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-500/10 text-brand-500 border border-brand-500/20">
+                  ${matchBadge}
+                </span>
+              </div>
+
+              <!-- Shared Films List -->
+              <div class="space-y-1.5 mb-3">
+                <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Shared Movie Matches:</span>
+                ${sharedBadges}
+              </div>
+
+              ${m.bio ? `<p class="text-xs text-gray-400 line-clamp-2 mt-2 italic bg-[#111518]/60 p-2 rounded-lg border border-brand-border/40">"${m.bio}"</p>` : ''}
+            </div>
+
+            <div class="pt-4 mt-4 border-t border-brand-border/60 flex items-center justify-between">
+              <span class="text-xs font-mono text-gray-500">Letterboxd Match #${idx + 1}</span>
+              <a href="${m.profile_url}" target="_blank" class="inline-flex items-center space-x-1 text-xs font-semibold text-brand-500 hover:text-white transition">
+                <span>View Letterboxd Profile</span>
+                <span>&rarr;</span>
+              </a>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==================== SINGLE FILM SCOUT ====================
+
+    function scoutSingleFilm(slug, title) {
+      document.getElementById('film-input').value = `https://letterboxd.com/film/${slug}/`;
+      if (currentUserProfile && currentUserProfile.location) {
+        document.getElementById('location-input').value = currentUserProfile.location;
+      }
+      switchTab('search');
+      // Trigger search
+      document.getElementById('search-form').dispatchEvent(new Event('submit'));
+    }
+
+    document.getElementById('search-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const film = document.getElementById('film-input').value.trim();
+      const location = document.getElementById('location-input').value.trim();
       const sentiment = document.getElementById('sentiment-select').value;
       const maxPages = document.getElementById('pages-select').value;
       const limit = document.getElementById('limit-select').value;
       const includeBio = document.getElementById('include-bio').checked;
 
-      // UI state
+      const submitBtn = document.getElementById('submit-btn');
+      const btnText = document.getElementById('btn-text');
+      const btnIcon = document.getElementById('btn-icon');
+      const statsBar = document.getElementById('stats-bar');
+      const resultsContainer = document.getElementById('results-container');
+      const exportJsonBtn = document.getElementById('export-json-btn');
+      const exportCsvBtn = document.getElementById('export-csv-btn');
+
       submitBtn.disabled = true;
       btnText.innerText = 'Scouting...';
       btnIcon.innerText = '⏳';
       statsBar.classList.remove('hidden');
-      loadingSpinner.classList.remove('hidden');
-      statusTitle.innerText = `Searching Letterboxd for members in "${location}"...`;
-      statusDesc.innerText = 'Scanning film activity and verifying member locations...';
-      emptyState.classList.add('hidden');
+      document.getElementById('status-title').innerText = `Searching Letterboxd for members in "${location}"...`;
+      document.getElementById('status-desc').innerText = 'Scanning film activity and verifying member locations...';
       resultsContainer.innerHTML = '';
       exportJsonBtn.classList.add('hidden');
       exportCsvBtn.classList.add('hidden');
 
       const startTime = performance.now();
-      const timerInterval = setInterval(() => {
+      const timer = setInterval(() => {
         const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-        statTime.innerText = `${elapsed}s`;
+        document.getElementById('stat-time').innerText = `${elapsed}s`;
       }, 100);
 
       try {
         const url = `/api/search?film=${encodeURIComponent(film)}&location=${encodeURIComponent(location)}&sentiment=${encodeURIComponent(sentiment)}&max_pages=${maxPages}&limit=${limit}&include_bio=${includeBio}`;
-        const response = await fetch(url);
-        const data = await response.json();
+        const res = await fetch(url);
+        const data = await res.json();
 
-        clearInterval(timerInterval);
-        loadingSpinner.classList.add('hidden');
+        clearInterval(timer);
         submitBtn.disabled = false;
         btnText.innerText = 'Start Scout';
         btnIcon.innerText = '🔍';
@@ -536,22 +1259,22 @@
           currentStats = data.stats;
           updateHistoryBadge();
 
-          statCandidates.innerText = data.stats.total_users_discovered;
-          statMatches.innerText = data.matches_count;
-          statTime.innerText = `${data.stats.elapsed_seconds.toFixed(2)}s`;
-          statusTitle.innerText = `Found ${data.matches_count} matching users for "${data.film.title}"`;
-          statusDesc.innerText = `Scanned ${data.stats.total_users_discovered} candidates across ${data.stats.total_pages_scanned} pages.`;
+          document.getElementById('stat-candidates').innerText = data.stats.total_users_discovered;
+          document.getElementById('stat-matches').innerText = data.matches_count;
+          document.getElementById('stat-time').innerText = `${data.stats.elapsed_seconds.toFixed(2)}s`;
+          document.getElementById('status-title').innerText = `Found ${data.matches_count} matching users for "${data.film.title}"`;
+          document.getElementById('status-desc').innerText = `Scanned ${data.stats.total_users_discovered} candidates across ${data.stats.total_pages_scanned} pages.`;
 
           if (data.matches_count > 0) {
             exportJsonBtn.classList.remove('hidden');
             exportCsvBtn.classList.remove('hidden');
-            renderCards(data.matches);
+            renderSingleSearchResults(data.matches);
           } else {
             resultsContainer.innerHTML = `
               <div class="col-span-full text-center py-12 text-gray-400 glass-card rounded-2xl">
                 <div class="text-4xl mb-2">🔎</div>
                 <p class="font-semibold text-white">No members matched "${location}" for this criteria.</p>
-                <p class="text-xs text-gray-500 mt-1">Try expanding the scan depth or using broader location terms (e.g. Turkey instead of Ankara).</p>
+                <p class="text-xs text-gray-500 mt-1">Try broadening the location or increasing scan depth.</p>
               </div>
             `;
           }
@@ -559,8 +1282,7 @@
           alert('Search failed: ' + (data.message || 'Unknown error'));
         }
       } catch (err) {
-        clearInterval(timerInterval);
-        loadingSpinner.classList.add('hidden');
+        clearInterval(timer);
         submitBtn.disabled = false;
         btnText.innerText = 'Start Scout';
         btnIcon.innerText = '🔍';
@@ -568,9 +1290,9 @@
       }
     });
 
-    // Render User Cards with Clickable Titles, Avatars, and Usernames
-    function renderCards(matches) {
-      resultsContainer.innerHTML = matches.map(m => {
+    function renderSingleSearchResults(matches) {
+      const container = document.getElementById('results-container');
+      container.innerHTML = matches.map(m => {
         const avatar = m.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png';
         const stars = m.user_rating_stars || (m.user_liked ? '❤️ Liked' : '');
         const matchBadge = m.location ? `📍 ${m.location}` : `👤 ${m.matched_location}`;
@@ -582,16 +1304,14 @@
           <div class="glass-card rounded-xl p-5 hover:border-brand-500/50 transition duration-300 flex flex-col justify-between group">
             <div>
               <div class="flex items-center space-x-3.5 mb-3">
-                <a href="${m.profile_url}" target="_blank" rel="noopener noreferrer" class="flex-shrink-0">
+                <a href="${m.profile_url}" target="_blank" class="flex-shrink-0">
                   <img src="${avatar}" alt="${m.username}" class="w-12 h-12 rounded-full object-cover border border-brand-border group-hover:border-brand-500 transition duration-200" />
                 </a>
                 <div class="min-w-0 flex-1">
-                  <!-- Clickable User Card Title -->
-                  <a href="${m.profile_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-white text-base truncate hover:text-brand-500 hover:underline transition duration-150 block" title="Open @${m.username}'s Letterboxd profile">
+                  <a href="${m.profile_url}" target="_blank" class="font-bold text-white text-base truncate hover:text-brand-500 hover:underline transition block">
                     ${m.display_name}
                   </a>
-                  <!-- Clickable Username Link -->
-                  <a href="${m.profile_url}" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-brand-blue truncate hover:underline block">
+                  <a href="${m.profile_url}" target="_blank" class="text-xs font-mono text-brand-blue truncate hover:underline block">
                     @${m.username}
                   </a>
                 </div>
@@ -613,7 +1333,7 @@
 
             <div class="pt-4 mt-4 border-t border-brand-border/60 flex items-center justify-between">
               <span class="text-[11px] font-mono text-gray-500">${m.found_via || 'Letterboxd'}</span>
-              <a href="${m.profile_url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-1 text-xs font-semibold text-brand-500 hover:text-white transition">
+              <a href="${m.profile_url}" target="_blank" class="inline-flex items-center space-x-1 text-xs font-semibold text-brand-500 hover:text-white transition">
                 <span>View Profile</span>
                 <span>&rarr;</span>
               </a>
@@ -623,30 +1343,127 @@
       }).join('');
     }
 
+    // ==================== HISTORY MANAGEMENT ====================
+
+    async function updateHistoryBadge() {
+      try {
+        const res = await fetch('/api/history?limit=100');
+        const data = await res.json();
+        if (data.status === 'success' && data.history) {
+          document.getElementById('history-badge').innerText = data.history.length;
+        }
+      } catch (e) {}
+    }
+
+    async function loadHistoryList() {
+      const container = document.getElementById('history-container');
+      container.innerHTML = '<div class="text-center py-6 text-xs text-gray-400 font-mono">Loading history...</div>';
+
+      try {
+        const res = await fetch('/api/history?limit=50');
+        const data = await res.json();
+
+        if (data.status === 'success' && data.history && data.history.length > 0) {
+          container.innerHTML = data.history.map(item => {
+            const dateStr = new Date(item.created_at * 1000).toLocaleString();
+            return `
+              <div class="glass-card rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-brand-500/40 transition">
+                <div>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-base font-bold text-white">${item.film_title}</span>
+                    <span class="text-xs font-mono text-gray-400">(${item.film_slug})</span>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-400">
+                    <span>📍 ${item.location_query}</span>
+                    <span>&bull;</span>
+                    <span>Sentiment: <strong class="text-gray-300">${item.sentiment}</strong></span>
+                    <span>&bull;</span>
+                    <span>${dateStr}</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                  <span class="px-3 py-1 bg-brand-500/10 text-brand-500 border border-brand-500/20 rounded-lg text-xs font-bold font-mono">
+                    ${item.matches_count} Matches
+                  </span>
+                  <button 
+                    onclick="loadHistoricalSearch(${item.id})"
+                    class="px-3 py-1.5 rounded-lg bg-brand-card hover:bg-[#28323c] border border-brand-border text-xs text-white transition"
+                  >
+                    View Results
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          container.innerHTML = `<div class="text-center py-12 text-gray-500 text-xs glass-card rounded-xl">No previous searches recorded.</div>`;
+        }
+      } catch (err) {
+        container.innerHTML = `<div class="text-center py-6 text-red-400 text-xs">Error loading history: ${err.message}</div>`;
+      }
+    }
+
+    async function loadHistoricalSearch(historyId) {
+      try {
+        const res = await fetch(`/api/history/${historyId}`);
+        const data = await res.json();
+        if (data.status === 'success' && data.item) {
+          switchTab('search');
+          const item = data.item;
+          document.getElementById('film-input').value = `https://letterboxd.com/film/${item.film_slug}/`;
+          document.getElementById('location-input').value = item.location_query;
+          document.getElementById('sentiment-select').value = item.sentiment;
+
+          document.getElementById('stats-bar').classList.remove('hidden');
+          document.getElementById('stat-candidates').innerText = '-';
+          document.getElementById('stat-matches').innerText = item.matches_count;
+          document.getElementById('stat-time').innerText = 'Cached';
+          document.getElementById('status-title').innerText = `Historical: "${item.film_title}" in ${item.location_query}`;
+          document.getElementById('status-desc').innerText = `Loaded ${item.matches_count} matches from search history.`;
+
+          currentMatches = item.results;
+          currentStats = { film_slug: item.film_slug, film_title: item.film_title };
+          renderSingleSearchResults(item.results);
+        }
+      } catch (err) {
+        alert('Failed to load historical search: ' + err.message);
+      }
+    }
+
+    async function clearAllHistory() {
+      if (!confirm('Are you sure you want to clear all search history?')) return;
+      try {
+        await fetch('/api/history', { method: 'DELETE' });
+        updateHistoryBadge();
+        loadHistoryList();
+      } catch (err) {
+        alert('Failed to clear history: ' + err.message);
+      }
+    }
+
     // Export helpers
-    exportJsonBtn.addEventListener('click', () => {
+    document.getElementById('export-json-btn').addEventListener('click', () => {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ stats: currentStats, matches: currentMatches }, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `movie_matches_${currentStats.film_slug}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
+      const a = document.createElement('a');
+      a.setAttribute("href", dataStr);
+      a.setAttribute("download", `movie_matches_${currentStats.film_slug || 'export'}.json`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     });
 
-    exportCsvBtn.addEventListener('click', () => {
-      let csvContent = "data:text/csv;charset=utf-8,";
-      csvContent += "username,display_name,location,matched_location,rating,liked,profile_url\n";
+    document.getElementById('export-csv-btn').addEventListener('click', () => {
+      let csv = "data:text/csv;charset=utf-8,username,display_name,location,matched_location,rating,liked,profile_url\n";
       currentMatches.forEach(m => {
-        csvContent += `"${m.username}","${m.display_name}","${m.location}","${m.matched_location}","${m.user_rating || ''}","${m.user_liked || false}","${m.profile_url}"\n`;
+        csv += `"${m.username}","${m.display_name}","${m.location}","${m.matched_location}","${m.user_rating || ''}","${m.user_liked || false}","${m.profile_url}"\n`;
       });
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `movie_matches_${currentStats.film_slug}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const a = document.createElement("a");
+      a.setAttribute("href", encodeURI(csv));
+      a.setAttribute("download", `movie_matches_${currentStats.film_slug || 'export'}.csv`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     });
   </script>
 </body>

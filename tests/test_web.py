@@ -12,8 +12,8 @@ def test_home_page():
     response = client.get("/")
     assert response.status_code == 200
     assert "Letterboxd Movie Matcher" in response.text
-    assert "Letterboxd Geo Scout" in response.text
-    assert "Previous Searches" in response.text
+    assert "Letterboxd Taste Scout" in response.text
+    assert "My Profile & Films" in response.text
 
 
 def test_film_info_endpoint():
@@ -36,3 +36,20 @@ def test_history_endpoints():
     del_response = client.delete("/api/history")
     assert del_response.status_code == 200
     assert del_response.json()["status"] == "success"
+
+
+def test_user_endpoints_validation():
+    # Invalid user request
+    response = client.get("/api/user/%20")
+    assert response.status_code == 400
+
+    # Films invalid user
+    response_films = client.get("/api/user/%20/films")
+    assert response_films.status_code == 400
+
+
+def test_taste_match_validation():
+    # Empty films list
+    response = client.post("/api/taste-match", json={"films": [], "location_query": "Turkey"})
+    assert response.status_code == 400
+

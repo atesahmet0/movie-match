@@ -4,7 +4,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 from selectolax.parser import HTMLParser
 from movie_match.matcher.sentiment import parse_star_rating_from_class, rating_to_stars_text
-from movie_match.models import FilmMetadata, UserProfile
+from movie_match.models import FilmMetadata, UserFilmItem, UserProfile, UserProfileDetail
 
 
 def extract_slug_from_input(user_input: str) -> str:
@@ -170,14 +170,12 @@ def parse_user_profile_page(html: str, username: str) -> UserProfile:
     tree = HTMLParser(html)
 
     # Display name
-    name_el = tree.css_first("h1.person-display-name .label, .displayname .label, .profile-name h1")
+    name_el = tree.css_first("h1.person-display-name .label, .displayname .label, .profile-name h1, .title-1")
     display_name = name_el.text(strip=True) if name_el else username
 
-    # Location (Letterboxd puts location in .profile-metadata .metadatum)
+    # Location
     location = ""
-    # Look for metadatum containing location (span.label in metadatum)
-    for meta in tree.css(".profile-metadata .metadatum, .profile-metadata div, .person-summary .location"):
-        # Check if it has a website link or twitter icon; location is typically plain text div
+    for meta in tree.css(".profile-metadata .metadatum, .profile-metadata div, .person-summary .location, .has-icon .location"):
         if meta.css_first("a"):
             continue
         label_span = meta.css_first("span.label, span")
@@ -214,3 +212,150 @@ def parse_user_profile_page(html: str, username: str) -> UserProfile:
         is_pro=is_pro,
         is_patron=is_patron,
     )
+
+
+def parse_user_profile_detail(html: str, username: str) -> UserProfileDetail:
+    """Extract full user profile including 4 pinned favorite films and profile statistics."""
+    base_profile = parse_user_profile_page(html, username)
+    tree = HTMLParser(html)
+
+    # Stats
+    stats = {}
+    for stat_el in tree.css(".profile-stats .profile-statistic, .stats-list .profile-statistic"):
+        val_el = stat_el.css_first(".value")
+        desc_el = stat_el.css_first(".definition")
+        if val_el and desc_el:
+            val_txt = val_el.text(strip=True).replace(",", "")
+            desc_txt = desc_el.text(strip=True).lower().replace(" ", "_")
+            stats[desc_txt] = val_txt
+
+    # 4 Pinned Favorite Films
+    favorite_films: List[UserFilmItem] = []
+    seen_favs = set()
+    for item in tree.css("#favourites [data-component-class='LazyPoster'], section#favourites [data-component-class='LazyPoster'], #favourites .film-poster, .favourites .film-poster"):
+        slug = item.attributes.get("data-item-slug") or item.attributes.get("data-film-slug")
+        if not slug:
+            target = item.attributes.get("data-target-link", "")
+            m = re.search(r"/film/([^/?#]+)", target)
+            if m:
+                slug = m.group(1)
+        if not slug:
+            continue
+        slug = slug.lower().strip()
+        if slug in seen_favs:
+            continue
+        seen_favs.add(slug)
+
+        name = item.attributes.get("data-item-name", "")
+        img = item.css_first("img")
+        if not name and img:
+            name = img.attributes.get("alt", "")
+
+        title = name
+        year = None
+        m = re.match(r"^(.*?)(?:\s*\((\d{4})\))?$", name)
+        if m:
+            title = m.group(1).strip() or name
+            if m.group(2):
+                year = int(m.group(2))
+
+        poster_url = img.attributes.get("src", "") if img else ""
+        if "empty-poster" in poster_url:
+            poster_url = None
+
+        favorite_films.append(UserFilmItem(
+            slug=slug,
+            title=title or slug.replace("-", " ").title(),
+            year=year,
+            poster_url=poster_url,
+            user_liked=True,
+            film_url=f"https://letterboxd.com/film/{slug}/",
+        ))
+
+    return UserProfileDetail(
+        username=base_profile.username,
+        display_name=base_profile.display_name,
+        location=base_profile.location,
+        bio=base_profile.bio,
+        avatar_url=base_profile.avatar_url,
+        profile_url=base_profile.profile_url,
+        is_pro=base_profile.is_pro,
+        is_patron=base_profile.is_patron,
+        stats=stats,
+        favorite_films=favorite_films,
+    )
+
+
+def parse_user_films_page(html: str) -> List[UserFilmItem]:
+    """
+    Parse films from a user's films/likes/ratings/watchlist page.
+    Returns list of UserFilmItem with ratings and liked indicators.
+    """
+    tree = HTMLParser(html)
+    films: List[UserFilmItem] = []
+    seen = set()
+
+    for item in tree.css("[data-component-class='LazyPoster'], div[data-item-slug], div[data-film-slug]"):
+        slug = item.attributes.get("data-item-slug") or item.attributes.get("data-film-slug")
+        if not slug:
+            continue
+        slug = slug.lower().strip()
+        if slug in seen:
+            continue
+        seen.add(slug)
+
+        name = item.attributes.get("data-item-name", "")
+        img = item.css_first("img")
+        if not name and img:
+            name = img.attributes.get("alt", "")
+
+        title = name
+        year = None
+        m = re.match(r"^(.*?)(?:\s*\((\d{4})\))?$", name)
+        if m:
+            title = m.group(1).strip() or name
+            if m.group(2):
+                year = int(m.group(2))
+
+        poster_url = img.attributes.get("src", "") if img else ""
+        if "empty-poster" in poster_url:
+            poster_url = None
+
+        # Find enclosing li for rating & liked
+        parent = item.parent
+        rating = None
+        rating_stars = ""
+        liked = False
+
+        while parent and parent.tag != "li" and parent.tag != "body":
+            parent = parent.parent
+
+        if parent:
+            r_el = parent.css_first("span.rating, span.rated, p.poster-viewingdata span.rating")
+            if r_el:
+                classes = r_el.attributes.get("class", "").split()
+                rating = parse_star_rating_from_class(classes)
+                if rating is None and r_el.text():
+                    txt = r_el.text(strip=True)
+                    full_stars = txt.count("★")
+                    half_star = 0.5 if "½" in txt else 0.0
+                    if full_stars or half_star:
+                        rating = float(full_stars) + half_star
+                rating_stars = rating_to_stars_text(rating)
+
+            if parent.css_first("span.like, svg.inline-liked, .has-liked, span.icon-liked, svg[aria-label*='Liked']"):
+                liked = True
+
+        films.append(UserFilmItem(
+            slug=slug,
+            title=title or slug.replace("-", " ").title(),
+            year=year,
+            poster_url=poster_url,
+            user_rating=rating,
+            user_rating_stars=rating_stars,
+            user_liked=liked,
+            film_url=f"https://letterboxd.com/film/{slug}/",
+        ))
+
+    return films
+

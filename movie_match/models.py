@@ -62,6 +62,62 @@ class SearchQuery(BaseModel):
     concurrency: int = 15
 
 
+class UserFilmItem(BaseModel):
+    slug: str
+    title: str = ""
+    year: Optional[int] = None
+    poster_url: Optional[str] = None
+    user_rating: Optional[float] = None
+    user_rating_stars: str = ""
+    user_liked: bool = False
+    film_url: str = ""
+
+
+class UserProfileDetail(UserProfile):
+    stats: dict = Field(default_factory=dict)
+    favorite_films: List[UserFilmItem] = Field(default_factory=list)
+    recent_films: List[UserFilmItem] = Field(default_factory=list)
+    top_rated_films: List[UserFilmItem] = Field(default_factory=list)
+    liked_films: List[UserFilmItem] = Field(default_factory=list)
+
+
+class FilmInteraction(BaseModel):
+    film_slug: str
+    film_title: str = ""
+    user_rating: Optional[float] = None
+    user_rating_stars: str = ""
+    user_liked: Optional[bool] = None
+    user_review: Optional[str] = None
+    found_via: str = ""
+
+
+class TasteMatchResult(BaseModel):
+    username: str
+    display_name: str = ""
+    location: str = ""
+    bio: str = ""
+    avatar_url: str = ""
+    profile_url: str = ""
+    matched_location: str = ""
+    matched_fields: List[str] = Field(default_factory=list)
+    shared_films: List[FilmInteraction] = Field(default_factory=list)
+    shared_films_count: int = 0
+    compatibility_score: float = 0.0
+    total_target_films: int = 0
+
+
+class MultiFilmMatchQuery(BaseModel):
+    films: List[str]
+    location_query: str
+    min_shared_films: int = 1
+    sentiment: SentimentType = SentimentType.LIKED
+    rating_range: Optional[str] = None
+    include_bio: bool = True
+    max_pages_per_film: int = 3
+    limit_matches: int = 50
+    concurrency: int = 15
+
+
 class ScanStats(BaseModel):
     film_title: str = ""
     film_slug: str = ""
@@ -71,3 +127,4 @@ class ScanStats(BaseModel):
     cache_hits: int = 0
     matches_count: int = 0
     elapsed_seconds: float = 0.0
+

@@ -151,25 +151,116 @@ def find_command(
 def profile_command(
     username: str = typer.Argument(..., help="Letterboxd username to inspect"),
 ):
-    """Inspect a Letterboxd user profile and its location metadata."""
+    """Inspect a Letterboxd user profile, stats, favorite films, and recent watches."""
     async def run():
         async with LetterboxdScraper() as scraper:
             with console.status(f"Fetching @{username}..."):
-                profile = await scraper.fetch_user_profile(username)
+                profile = await scraper.get_user_full_profile(username, include_films=True)
             if not profile:
                 console.print(f"[red]Could not fetch profile for @{username}[/red]")
                 return
 
-            console.print(f"[bold cyan]User:[/bold cyan] {profile.display_name} (@{profile.username})")
+            console.print(f"\n[bold cyan]User:[/bold cyan] {profile.display_name} (@{profile.username})")
             console.print(f"[bold green]Location:[/bold green] {profile.location or '(not set)'}")
-            console.print(f"[bold yellow]Bio:[/bold yellow] {profile.bio or '(empty)'}")
+            if profile.bio:
+                console.print(f"[bold yellow]Bio:[/bold yellow] {profile.bio}")
             console.print(f"[bold blue]Profile Link:[/bold blue] {profile.profile_url}")
-            if profile.is_pro:
-                console.print("[bold orange1]Badge: PRO[/bold orange1]")
-            if profile.is_patron:
-                console.print("[bold magenta]Badge: PATRON[/bold magenta]")
+            if profile.stats:
+                stat_str = " | ".join(f"{k.title()}: {v}" for k, v in profile.stats.items())
+                console.print(f"[bold magenta]Stats:[/bold magenta] {stat_str}")
+
+            if profile.favorite_films:
+                console.print("\n[bold gold1]★ Favorite Films:[/bold gold1]")
+                for f in profile.favorite_films:
+                    yr = f" ({f.year})" if f.year else ""
+                    console.print(f"  • [bold white]{f.title}[/bold white]{yr} - [dim]{f.slug}[/dim]")
+
+            if profile.recent_films:
+                console.print("\n[bold green]🎬 Recent Watched Films:[/bold green]")
+                for f in profile.recent_films[:8]:
+                    yr = f" ({f.year})" if f.year else ""
+                    r_str = f" [{f.user_rating_stars}]" if f.user_rating_stars else ""
+                    liked_str = " ❤️" if f.user_liked else ""
+                    console.print(f"  • {f.title}{yr}{r_str}{liked_str}")
 
     asyncio.run(run())
+
+
+@app.command(name="taste-match")
+def taste_match_command(
+    films: str = typer.Argument(
+        ...,
+        help="Comma-separated list of film slugs or URLs (e.g. 'alien, sunshine-2007, interstellar')",
+    ),
+    location: str = typer.Option(
+        ...,
+        "--location",
+        "-l",
+        help="Target location to match (e.g. 'Turkey', 'Berlin', 'London', etc.).",
+    ),
+    min_shared: int = typer.Option(
+        1,
+        "--min-shared",
+        "-m",
+        help="Minimum number of shared films required to match.",
+    ),
+    max_pages: int = typer.Option(
+        3,
+        "--max-pages",
+        "-p",
+        help="Maximum pages to scan per film endpoint.",
+    ),
+    limit: int = typer.Option(
+        50,
+        "--limit",
+        "-n",
+        help="Stop search after finding this many matches.",
+    ),
+):
+    """Find users from LOCATION who share taste across MULTIPLE films."""
+    film_list = [f.strip() for f in films.split(",") if f.strip()]
+    if not film_list:
+        console.print("[red]Please provide at least one film.[/red]")
+        return
+
+    from movie_match.models import MultiFilmMatchQuery
+    query = MultiFilmMatchQuery(
+        films=film_list,
+        location_query=location,
+        min_shared_films=min_shared,
+        max_pages_per_film=max_pages,
+        limit_matches=limit,
+    )
+
+    async def run():
+        async with LetterboxdScraper() as scraper:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TimeElapsedColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Finding taste matches in '{location}'...", total=None)
+
+                def on_progress(desc, scanned, discovered, matches_count):
+                    progress.update(
+                        task,
+                        description=f"[cyan]{desc}[/cyan] | Scanned: {scanned} | Users: {discovered} | Matches: [bold green]{matches_count}[/bold green]",
+                    )
+
+                results, stats = await scraper.find_taste_matches(query, progress_callback=on_progress)
+
+            console.print(f"\n[bold green]Found {len(results)} taste matches in '{location}' across {len(film_list)} films![/bold green]\n")
+            for idx, r in enumerate(results, 1):
+                shared_titles = ", ".join(i.film_title or i.film_slug for i in r.shared_films)
+                console.print(f"[bold cyan]#{idx} @{r.username}[/bold cyan] ({r.display_name}) - [bold yellow]{r.compatibility_score}% Match[/bold yellow]")
+                console.print(f"   📍 Location: {r.location} (matched '{r.matched_location}')")
+                console.print(f"   🎬 Shared Films ({r.shared_films_count}): {shared_titles}")
+                console.print(f"   🔗 {r.profile_url}\n")
+
+    asyncio.run(run())
+
 
 
 @app.command(name="cache")
