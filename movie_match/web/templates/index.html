@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
   <title>Letterboxd Movie Matcher</title>
   <meta name="description" content="Connect your Letterboxd profile to scout and match with film lovers in your area based on shared movie tastes." />
   
@@ -176,7 +177,12 @@
       <!-- Active User Profile Pill in Header -->
       <div x-show="userProfile" class="hidden sm:flex items-center">
         <div class="flex items-center space-x-2 bg-brand-card px-3 py-1 rounded-xl border border-brand-border">
-          <img :src="userProfile?.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'" class="w-5 h-5 rounded-full border border-brand-green object-cover" />
+          <img 
+            :src="userProfile?.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'" 
+            referrerpolicy="no-referrer"
+            @error="$event.target.src='https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'"
+            class="w-5 h-5 rounded-full border border-brand-green object-cover" 
+          />
           <span class="text-xs font-bold text-white" x-text="'@' + userProfile?.username"></span>
           <button @click="logout()" class="text-gray-400 hover:text-red-400 ml-1 p-0.5" title="Switch profile">
             <i data-lucide="x" class="w-3 h-3"></i>
@@ -207,7 +213,7 @@
             <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-brand-muted font-mono text-sm">@</span>
             <input 
               type="text" 
-              x-model="usernameInput"
+              x-model="usernameInput" 
               required
               placeholder="e.g. karsten or your username"
               class="w-full pl-8 pr-4 py-3 bg-brand-darker border border-brand-border rounded-xl text-white placeholder-brand-muted focus:outline-none glow-focus text-sm font-medium"
@@ -252,6 +258,8 @@
               <div class="relative flex-shrink-0">
                 <img 
                   :src="userProfile?.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'" 
+                  referrerpolicy="no-referrer"
+                  @error="$event.target.src='https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'"
                   alt="Avatar" 
                   class="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl object-cover border-2 border-brand-border"
                 />
@@ -344,12 +352,14 @@
             <template x-for="film in userProfile?.favorite_films || []" :key="film.slug">
               <div class="solid-card rounded-xl p-4 flex flex-col justify-between group">
                 <div class="flex items-start space-x-3 mb-3">
-                  <div class="w-14 h-20 rounded-lg bg-brand-darker flex-shrink-0 overflow-hidden border border-brand-border flex items-center justify-center">
+                  <div class="w-14 h-20 rounded-lg bg-brand-darker flex-shrink-0 overflow-hidden border border-brand-border flex items-center justify-center relative">
                     <template x-if="film.poster_url">
-                      <img :src="film.poster_url" class="w-full h-full object-cover" />
+                      <img :src="film.poster_url" referrerpolicy="no-referrer" @error="film.poster_url = null" class="w-full h-full object-cover" />
                     </template>
                     <template x-if="!film.poster_url">
-                      <i data-lucide="film" class="w-6 h-6 text-brand-muted"></i>
+                      <div class="w-full h-full flex items-center justify-center bg-brand-card text-brand-muted">
+                        <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg>
+                      </div>
                     </template>
                   </div>
                   <div class="min-w-0 flex-1">
@@ -446,14 +456,17 @@
                 <div>
                   <div class="w-full aspect-[2/3] rounded-lg bg-brand-darker mb-2 overflow-hidden border border-brand-border flex items-center justify-center relative">
                     <template x-if="film.poster_url">
-                      <img :src="film.poster_url" class="w-full h-full object-cover" />
+                      <img :src="film.poster_url" referrerpolicy="no-referrer" @error="film.poster_url = null" class="w-full h-full object-cover" />
                     </template>
                     <template x-if="!film.poster_url">
-                      <i data-lucide="film" class="w-8 h-8 text-brand-muted"></i>
+                      <div class="w-full h-full flex flex-col items-center justify-center bg-brand-card p-2 text-center select-none">
+                        <svg class="w-8 h-8 text-brand-muted mb-1.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg>
+                        <span class="text-[10px] font-bold text-brand-subtext line-clamp-2" x-text="film.title"></span>
+                      </div>
                     </template>
                     
                     <span x-show="film.user_liked" class="absolute top-1.5 right-1.5 text-[10px] bg-red-600 text-white rounded p-1" title="Liked">
-                      <i data-lucide="heart" class="w-3 h-3 fill-current"></i>
+                      <svg class="w-3 h-3 fill-current" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                     </span>
                   </div>
 
@@ -619,7 +632,12 @@
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-3">
                   <a :href="m.profile_url" target="_blank">
-                    <img :src="m.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'" class="w-12 h-12 rounded-full object-cover border border-brand-border group-hover:border-brand-green transition" />
+                    <img 
+                      :src="m.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'" 
+                      referrerpolicy="no-referrer"
+                      @error="$event.target.src='https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'"
+                      class="w-12 h-12 rounded-full object-cover border border-brand-border group-hover:border-brand-green transition" 
+                    />
                   </a>
                   <div>
                     <a :href="m.profile_url" target="_blank" class="font-bold text-white text-base hover:text-brand-green transition block" x-text="m.display_name"></a>
@@ -787,7 +805,12 @@
             <div>
               <div class="flex items-center space-x-3.5 mb-3">
                 <a :href="m.profile_url" target="_blank" class="flex-shrink-0">
-                  <img :src="m.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'" class="w-12 h-12 rounded-full object-cover border border-brand-border group-hover:border-brand-green transition" />
+                  <img 
+                    :src="m.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'" 
+                    referrerpolicy="no-referrer"
+                    @error="$event.target.src='https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png'"
+                    class="w-12 h-12 rounded-full object-cover border border-brand-border group-hover:border-brand-green transition" 
+                  />
                 </a>
                 <div class="min-w-0 flex-1">
                   <a :href="m.profile_url" target="_blank" class="font-bold text-white text-base truncate hover:text-brand-green hover:underline transition block" x-text="m.display_name"></a>
@@ -888,6 +911,12 @@
 
   <!-- Alpine.js Application State Logic -->
   <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    });
+
     function movieApp() {
       return {
         activeTab: 'profile',
@@ -950,13 +979,15 @@
         },
 
         async loginWithUsername(uname) {
-          const clean = uname.trim().replace(/^@/, '');
+          const clean = (uname || '').trim().replace(/^@/, '');
           if (!clean) return;
           this.isLoggingIn = true;
           try {
             const res = await fetch(`/api/user/${encodeURIComponent(clean)}`);
+            if (!res.ok) {
+              throw new Error(`Profile not found (HTTP ${res.status})`);
+            }
             const data = await res.json();
-            this.isLoggingIn = false;
             if (data.status === 'success' && data.profile) {
               this.userProfile = data.profile;
               this.userFilms = data.profile.recent_films || [];
@@ -974,13 +1005,15 @@
                   poster_url: f.poster_url,
                 }));
               }
-              this.refreshIcons();
             } else {
               alert(`Could not load profile for @${clean}.`);
             }
           } catch (err) {
-            this.isLoggingIn = false;
+            console.warn('Login error:', err);
             alert('Error loading profile: ' + err.message);
+          } finally {
+            this.isLoggingIn = false;
+            this.refreshIcons();
           }
         },
 
@@ -1006,21 +1039,23 @@
           this.isFilmsLoading = true;
           try {
             const res = await fetch(`/api/user/${encodeURIComponent(this.userProfile.username)}/films?category=${cat}&page=1`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            this.isFilmsLoading = false;
             if (data.status === 'success') {
               this.userFilms = data.films || [];
-              this.refreshIcons();
             }
           } catch (err) {
+            console.warn('Error fetching category films:', err);
+          } finally {
             this.isFilmsLoading = false;
+            this.refreshIcons();
           }
         },
 
         filteredUserFilms() {
           if (!this.filmFilter.trim()) return this.userFilms;
           const q = this.filmFilter.toLowerCase().trim();
-          return this.userFilms.filter(f => f.title.toLowerCase().includes(q) || f.slug.toLowerCase().includes(q));
+          return this.userFilms.filter(f => (f.title || '').toLowerCase().includes(q) || (f.slug || '').toLowerCase().includes(q));
         },
 
         toggleFilmSelection(film) {
@@ -1107,20 +1142,19 @@
               }),
             });
             const data = await res.json();
-            clearInterval(timer);
-            this.isTasteSearching = false;
             if (data.status === 'success') {
               this.tasteResults = data.matches || [];
               this.tasteStats = data.stats || {};
               this.tasteTime = (data.stats.elapsed_seconds || 0).toFixed(2);
-              this.refreshIcons();
             } else {
               alert('Taste match error: ' + (data.detail || 'Failed'));
             }
           } catch (err) {
+            alert('Network error: ' + err.message);
+          } finally {
             clearInterval(timer);
             this.isTasteSearching = false;
-            alert('Network error: ' + err.message);
+            this.refreshIcons();
           }
         },
 
@@ -1137,21 +1171,20 @@
             const url = `/api/search?film=${encodeURIComponent(this.searchFilm)}&location=${encodeURIComponent(this.searchLocation)}&sentiment=${encodeURIComponent(this.searchSentiment)}&max_pages=${this.searchPages}&limit=${this.searchLimit}&include_bio=${this.searchIncludeBio}`;
             const res = await fetch(url);
             const data = await res.json();
-            clearInterval(timer);
-            this.isSearching = false;
             if (data.status === 'success') {
               this.searchResults = data.matches || [];
               this.searchStats = data.stats || {};
               this.searchTime = (data.stats.elapsed_seconds || 0).toFixed(2);
               this.loadHistoryCount();
-              this.refreshIcons();
             } else {
               alert('Search error: ' + (data.detail || 'Failed'));
             }
           } catch (err) {
+            alert('Network error: ' + err.message);
+          } finally {
             clearInterval(timer);
             this.isSearching = false;
-            alert('Network error: ' + err.message);
+            this.refreshIcons();
           }
         },
 
@@ -1172,9 +1205,11 @@
             if (data.status === 'success' && data.history) {
               this.historyList = data.history;
               this.historyCount = data.history.length;
-              this.refreshIcons();
             }
           } catch (e) {}
+          finally {
+            this.refreshIcons();
+          }
         },
 
         async loadHistoricalItem(id) {
@@ -1193,10 +1228,11 @@
                 total_users_discovered: '-',
               };
               this.searchTime = 'Cached';
-              this.refreshIcons();
             }
           } catch (err) {
             alert('Failed to load historical search: ' + err.message);
+          } finally {
+            this.refreshIcons();
           }
         },
 
@@ -1206,8 +1242,10 @@
             await fetch('/api/history', { method: 'DELETE' });
             this.historyList = [];
             this.historyCount = 0;
-            this.refreshIcons();
           } catch (e) {}
+          finally {
+            this.refreshIcons();
+          }
         },
 
         exportSearchResults(format) {

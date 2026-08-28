@@ -290,6 +290,15 @@ class LetterboxdScraper:
 
         profile = parse_user_profile_detail(resp.text, clean_user)
 
+        if profile.favorite_films:
+            async def resolve_poster(film_item: UserFilmItem):
+                if not film_item.poster_url or "empty-poster" in film_item.poster_url:
+                    meta = await self.get_film_info(film_item.slug)
+                    if meta.poster_url:
+                        film_item.poster_url = meta.poster_url
+
+            await asyncio.gather(*[resolve_poster(f) for f in profile.favorite_films])
+
         if include_films:
             # Fetch recent films from page 1 of /films/
             recent_films = await self.get_user_films_category(clean_user, "films", page=1)

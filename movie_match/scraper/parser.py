@@ -59,9 +59,17 @@ def parse_film_page(html: str, slug: str) -> FilmMetadata:
 
     # Poster
     poster_url = None
-    poster_el = tree.css_first(".film-poster img, .image img, meta[property='og:image']")
-    if poster_el:
-        poster_url = poster_el.attributes.get("src") or poster_el.attributes.get("content")
+    og_img = tree.css_first("meta[property='og:image'], meta[name='twitter:image']")
+    if og_img and og_img.attributes.get("content"):
+        content_url = og_img.attributes.get("content")
+        if "empty-poster" not in content_url:
+            poster_url = content_url
+    if not poster_url:
+        poster_el = tree.css_first(".film-poster img, .image img")
+        if poster_el:
+            src = poster_el.attributes.get("src")
+            if src and "empty-poster" not in src:
+                poster_url = src
 
     return FilmMetadata(
         slug=slug,
