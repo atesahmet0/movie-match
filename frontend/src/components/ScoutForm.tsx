@@ -18,10 +18,10 @@ import {
   X,
 } from "lucide-react";
 import { searchFilms } from "@/lib/api";
-import { FilmSearchResult } from "@/lib/types";
+import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
 
 interface ScoutFormProps {
-  initialFilm: string;
+  initialFilms: string[];
   initialLocation: string;
   initialSentiment: string;
   initialPages: number;
@@ -101,7 +101,7 @@ const POPULAR_SUGGESTIONS: FilmSearchResult[] = [
 ];
 
 export default function ScoutForm({
-  initialFilm,
+  initialFilms,
   initialLocation,
   initialSentiment,
   initialPages,
@@ -111,7 +111,32 @@ export default function ScoutForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [film, setFilm] = useState(initialFilm || "vampire-hunter-d-bloodlust");
+  // Multi-films state
+  const parseInitialFilms = (list: string[]): SelectedFilmChip[] => {
+    if (!list || list.length === 0) {
+      return [
+        {
+          slug: "vampire-hunter-d-bloodlust",
+          title: "Vampire Hunter D: Bloodlust",
+          year: 2000,
+          poster_url: null,
+        },
+      ];
+    }
+    return list.map((slug) => ({
+      slug,
+      title: slug
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase()),
+      year: null,
+      poster_url: null,
+    }));
+  };
+
+  const [selectedFilms, setSelectedFilms] = useState<SelectedFilmChip[]>(
+    parseInitialFilms(initialFilms)
+  );
+  const [filmInput, setFilmInput] = useState("");
 
   // Multi-location chips state
   const parseInitialLocations = (raw: string): string[] => {
@@ -145,7 +170,7 @@ export default function ScoutForm({
 
   // Debounced search on film input
   useEffect(() => {
-    const trimmed = film.trim();
+    const trimmed = filmInput.trim();
     if (!trimmed || trimmed.startsWith("http")) {
       setSuggestions([]);
       return;
@@ -159,7 +184,7 @@ export default function ScoutForm({
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [film]);
+  }, [filmInput]);
 
   // Click outside listener for dropdown
   useEffect(() => {
@@ -199,13 +224,61 @@ export default function ScoutForm({
     return () => clearInterval(interval);
   }, [isPending]);
 
-  const handleSelectSuggestion = (selected: FilmSearchResult) => {
-    setFilm(selected.slug);
+  // Film Handlers
+  const handleAddFilmItem = (item: FilmSearchResult) => {
+    const exists = selectedFilms.some((f) => f.slug.toLowerCase() === item.slug.toLowerCase());
+    if (!exists) {
+      setSelectedFilms((prev) => [
+        ...prev,
+        {
+          slug: item.slug,
+          title: item.title,
+          year: item.year || null,
+          poster_url: null,
+        },
+      ]);
+    }
+    setFilmInput("");
     setIsDropdownOpen(false);
     setHighlightedIndex(-1);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleAddManualFilm = (raw: string) => {
+    const clean = raw
+      .toLowerCase()
+      .replace(/https?:\/\/letterboxd\.com\/film\//, "")
+      .replace(/\/$/, "")
+      .trim();
+
+    if (!clean) return;
+    const exists = selectedFilms.some((f) => f.slug.toLowerCase() === clean.toLowerCase());
+    if (!exists) {
+      setSelectedFilms((prev) => [
+        ...prev,
+        {
+          slug: clean,
+          title: clean
+            .replace(/-/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase()),
+          year: null,
+          poster_url: null,
+        },
+      ]);
+    }
+    setFilmInput("");
+    setIsDropdownOpen(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleRemoveFilm = (slug: string) => {
+    setSelectedFilms((prev) => prev.filter((f) => f.slug !== slug));
+  };
+
+  const handleClearFilms = () => {
+    setSelectedFilms([]);
+  };
+
+  const handleFilmKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const currentList = suggestions.length > 0 ? suggestions : POPULAR_SUGGESTIONS;
 
     if (e.key === "ArrowDown") {
@@ -216,13 +289,17 @@ export default function ScoutForm({
       e.preventDefault();
       setIsDropdownOpen(true);
       setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : currentList.length - 1));
-    } else if (e.key === "Enter" && isDropdownOpen && highlightedIndex >= 0) {
+    } else if (e.key === "Enter") {
       e.preventDefault();
-      if (currentList[highlightedIndex]) {
-        handleSelectSuggestion(currentList[highlightedIndex]);
+      if (isDropdownOpen && highlightedIndex >= 0 && currentList[highlightedIndex]) {
+        handleAddFilmItem(currentList[highlightedIndex]);
+      } else if (filmInput.trim()) {
+        handleAddManualFilm(filmInput);
       }
     } else if (e.key === "Escape") {
       setIsDropdownOpen(false);
+    } else if (e.key === "Backspace" && !filmInput && selectedFilms.length > 0) {
+      handleRemoveFilm(selectedFilms[selectedFilms.length - 1].slug);
     }
   };
 
@@ -281,17 +358,35 @@ export default function ScoutForm({
       e.preventDefault();
       handleAddLocation(locationInput);
     } else if (e.key === "Backspace" && !locationInput && locations.length > 0) {
-      // Remove last chip on backspace if input is empty
       handleRemoveLocation(locations[locations.length - 1]);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!film.trim()) return;
-    setIsDropdownOpen(false);
 
-    // If user has un-added text in location input, add it first
+    let finalFilms = [...selectedFilms];
+    if (filmInput.trim()) {
+      const clean = filmInput
+        .toLowerCase()
+        .replace(/https?:\/\/letterboxd\.com\/film\//, "")
+        .replace(/\/$/, "")
+        .trim();
+      if (!finalFilms.some((f) => f.slug.toLowerCase() === clean)) {
+        finalFilms.push({
+          slug: clean,
+          title: clean.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          year: null,
+          poster_url: null,
+        });
+      }
+    }
+
+    if (finalFilms.length === 0) {
+      alert("Please add at least 1 film to scout.");
+      return;
+    }
+
     let finalLocations = [...locations];
     if (locationInput.trim()) {
       const clean = locationInput.trim();
@@ -303,21 +398,16 @@ export default function ScoutForm({
           finalLocations = [...filtered, clean];
         }
       }
-      setLocations(finalLocations);
-      setLocationInput("");
     }
 
-    startTransition(() => {
-      const cleanSlug = film
-        .toLowerCase()
-        .replace(/https?:\/\/letterboxd\.com\/film\//, "")
-        .replace(/\/$/, "")
-        .trim();
+    setIsDropdownOpen(false);
 
+    startTransition(() => {
+      const filmsParam = finalFilms.map((f) => f.slug).join(",");
       const locationParam = finalLocations.join(",");
 
       const params = new URLSearchParams();
-      params.set("film", cleanSlug);
+      params.set("films", filmsParam);
       params.set("location", locationParam || "Anywhere");
       params.set("sentiment", sentiment);
       params.set("max_pages", String(maxPages));
@@ -328,56 +418,89 @@ export default function ScoutForm({
   };
 
   const displayedSuggestions =
-    suggestions.length > 0
-      ? suggestions
-      : !film.trim() || film === "vampire-hunter-d-bloodlust"
-      ? POPULAR_SUGGESTIONS
-      : [];
+    suggestions.length > 0 ? suggestions : POPULAR_SUGGESTIONS;
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
       <div className="solid-card rounded-2xl p-6 sm:p-7 relative">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Film Input with Dynamic Dropdown */}
+            {/* Multi-Film Selection with Dynamic Autocomplete */}
             <div className="relative" ref={dropdownRef}>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-gray-300">
-                  Film URL, Slug, or Title
+                  Target Films ({selectedFilms.length})
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setIsDropdownOpen((prev) => !prev)}
-                  className="text-[10px] text-brand-green hover:underline flex items-center space-x-1 cursor-pointer"
-                >
-                  <Clapperboard className="w-3 h-3" />
-                  <span>Popular films</span>
-                  <ChevronDown className="w-3 h-3" />
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsDropdownOpen((prev) => !prev)}
+                    className="text-[10px] text-brand-green hover:underline flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Clapperboard className="w-3 h-3" />
+                    <span>Popular films</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                  {selectedFilms.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={handleClearFilms}
+                      className="text-[10px] text-brand-muted hover:text-red-400 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="relative">
+              {/* Films Chips Box */}
+              <div className="min-h-[42px] p-2 bg-brand-darker border border-brand-border rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green transition">
+                {selectedFilms.map((film) => (
+                  <span
+                    key={film.slug}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-card text-brand-green border border-brand-green/30 transition shadow-sm"
+                  >
+                    <Clapperboard className="w-3 h-3 text-brand-green shrink-0" />
+                    <span className="truncate max-w-[150px]">{film.title}</span>
+                    {film.year && (
+                      <span className="text-[10px] font-mono text-brand-subtext">
+                        ({film.year})
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFilm(film.slug)}
+                      className="text-brand-muted hover:text-red-400 ml-0.5 p-0.5 rounded transition cursor-pointer"
+                      title={`Remove ${film.title}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+
                 <input
                   type="text"
-                  value={film}
+                  value={filmInput}
                   onChange={(e) => {
-                    setFilm(e.target.value);
+                    setFilmInput(e.target.value);
                     setIsDropdownOpen(true);
                     setHighlightedIndex(-1);
                   }}
                   onFocus={() => setIsDropdownOpen(true)}
-                  onKeyDown={handleKeyDown}
-                  required
-                  placeholder="e.g. alien, interstellar, the-substance..."
-                  className="w-full bg-brand-darker border border-brand-border rounded-xl px-4 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus text-sm font-medium pr-10"
+                  onKeyDown={handleFilmKeyDown}
+                  placeholder={
+                    selectedFilms.length === 0
+                      ? "Search film title or slug..."
+                      : "+ Add another film..."
+                  }
+                  className="flex-grow min-w-[120px] bg-transparent text-xs text-white placeholder-brand-muted focus:outline-none py-1 px-1 font-medium"
                   autoComplete="off"
                 />
-                <div className="absolute right-3 top-3 text-brand-green pointer-events-none flex items-center justify-center">
+
+                <div className="flex items-center pr-1 text-brand-green">
                   {isSearchingFilms ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-brand-green" />
-                  ) : (
-                    <Clapperboard className="w-4 h-4 opacity-80" />
-                  )}
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : null}
                 </div>
               </div>
 
@@ -391,7 +514,7 @@ export default function ScoutForm({
                         ? `Matching Films (${suggestions.length})`
                         : "Popular & Suggested Films"}
                     </span>
-                    <span className="text-[10px] font-mono">Use ↑↓ & Enter</span>
+                    <span className="text-[10px] font-mono">Use ↑↓ & Enter to add</span>
                   </div>
 
                   <ul className="py-1 divide-y divide-brand-border/40">
@@ -399,7 +522,7 @@ export default function ScoutForm({
                       <li key={item.slug}>
                         <button
                           type="button"
-                          onClick={() => handleSelectSuggestion(item)}
+                          onClick={() => handleAddFilmItem(item)}
                           onMouseEnter={() => setHighlightedIndex(idx)}
                           className={`w-full text-left px-3.5 py-2.5 flex items-center justify-between transition cursor-pointer ${
                             highlightedIndex === idx
@@ -428,17 +551,11 @@ export default function ScoutForm({
                             </div>
                           </div>
                           <span className="text-[10px] font-mono text-brand-green opacity-80 shrink-0">
-                            /{item.slug}
+                            + Add Film
                           </span>
                         </button>
                       </li>
                     ))}
-
-                    {displayedSuggestions.length === 0 && !isSearchingFilms && (
-                      <li className="px-4 py-4 text-center text-xs text-brand-subtext">
-                        No films found matching &quot;{film}&quot;. You can still scout with this slug directly.
-                      </li>
-                    )}
                   </ul>
                 </div>
               )}
@@ -572,10 +689,9 @@ export default function ScoutForm({
                 onChange={(e) => setMaxPages(parseInt(e.target.value) || 3)}
                 className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus"
               >
-                <option value={2}>2 Pages (~150 candidates)</option>
-                <option value={3}>3 Pages (~225 candidates)</option>
-                <option value={5}>5 Pages (~375 candidates)</option>
-                <option value={10}>10 Pages (~750 candidates)</option>
+                <option value={2}>2 Pages per film (~150 candidates)</option>
+                <option value={3}>3 Pages per film (~225 candidates)</option>
+                <option value={5}>5 Pages per film (~375 candidates)</option>
               </select>
             </div>
 
@@ -610,7 +726,7 @@ export default function ScoutForm({
 
           <button
             type="submit"
-            disabled={isPending || !film.trim()}
+            disabled={isPending || selectedFilms.length === 0}
             className="w-full bg-brand-green hover:bg-brand-greenHover disabled:opacity-50 text-black font-bold py-3 px-6 rounded-xl transition duration-150 flex items-center justify-center space-x-2 text-sm cursor-pointer shadow-lg shadow-brand-green/10"
           >
             {isPending ? (
@@ -621,7 +737,7 @@ export default function ScoutForm({
             ) : (
               <>
                 <Search className="w-4 h-4" />
-                <span>Start Scout</span>
+                <span>Start Scout ({selectedFilms.length} {selectedFilms.length === 1 ? "Film" : "Films"})</span>
               </>
             )}
           </button>
@@ -641,11 +757,11 @@ export default function ScoutForm({
                 <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
                   <span>Scouting Letterboxd</span>
                   <span className="text-xs font-mono text-brand-green">
-                    &bull; {film} in {locations.join(", ")}
+                    &bull; {selectedFilms.map((f) => f.title).join(", ")} in {locations.join(", ")}
                   </span>
                 </h4>
                 <p className="text-[11px] text-brand-subtext">
-                  Bypassing anti-bot verification & scanning member network across {locations.length} target locations
+                  Bypassing anti-bot verification & scanning member network across {selectedFilms.length} target films and {locations.length} locations
                 </p>
               </div>
             </div>
@@ -672,7 +788,7 @@ export default function ScoutForm({
               )}
               <div className="min-w-0">
                 <span className="block font-semibold truncate text-[11px]">1. Connection</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Letterboxd target</span>
+                <span className="text-[10px] text-brand-subtext block truncate">{selectedFilms.length} target films</span>
               </div>
             </div>
 
@@ -692,7 +808,7 @@ export default function ScoutForm({
               )}
               <div className="min-w-0">
                 <span className="block font-semibold truncate text-[11px]">2. Reviews & Likes</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Parsing {maxPages} pages</span>
+                <span className="text-[10px] text-brand-subtext block truncate">Parsing {maxPages} pages/film</span>
               </div>
             </div>
 
@@ -733,7 +849,7 @@ export default function ScoutForm({
               )}
               <div className="min-w-0">
                 <span className="block font-semibold truncate text-[11px]">4. Filtering</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Rendering results</span>
+                <span className="text-[10px] text-brand-subtext block truncate">Rendering matches</span>
               </div>
             </div>
           </div>

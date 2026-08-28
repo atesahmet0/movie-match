@@ -7,11 +7,13 @@ import { useTaste } from "@/lib/taste-context";
 import FilmCard from "./FilmCard";
 
 interface FavoriteFilmsSectionProps {
+  username?: string;
   favoriteFilms: UserFilmItem[];
   userLocation?: string;
 }
 
 export default function FavoriteFilmsSection({
+  username,
   favoriteFilms,
   userLocation,
 }: FavoriteFilmsSectionProps) {
@@ -31,8 +33,9 @@ export default function FavoriteFilmsSection({
     });
 
     const filmsParam = favoriteFilms.map((f) => f.slug).join(",");
+    const userParam = username ? `&user=${encodeURIComponent(username)}` : "";
     const locParam = userLocation ? `&location=${encodeURIComponent(userLocation)}` : "";
-    router.push(`/taste?films=${encodeURIComponent(filmsParam)}${locParam}`);
+    router.push(`/taste?films=${encodeURIComponent(filmsParam)}${userParam}${locParam}`);
   };
 
   return (
@@ -46,16 +49,16 @@ export default function FavoriteFilmsSection({
             </h2>
           </div>
           <p className="text-xs text-brand-subtext">
-            Click Scout to find local members who also love that specific film.
+            Your top 4 Letterboxd favorites. Find local members who share your exact taste.
           </p>
         </div>
 
         <button
           onClick={handleMatchAllFavorites}
-          className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-brand-blue hover:bg-opacity-90 text-black font-bold text-xs transition flex items-center space-x-1.5 cursor-pointer"
+          className="self-start sm:self-auto px-4 py-2 rounded-xl bg-brand-green hover:bg-brand-greenHover text-black font-extrabold text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-md shadow-brand-green/10"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Match All 4 Favorites Combined</span>
+          <span>Find My Taste Soulmates (1-Click)</span>
         </button>
       </div>
 

@@ -66,6 +66,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       {/* 4 Pinned Favorites */}
       {profile.favorite_films && profile.favorite_films.length > 0 && (
         <FavoriteFilmsSection
+          username={profile.username}
           favoriteFilms={profile.favorite_films}
           userLocation={profile.location}
         />
