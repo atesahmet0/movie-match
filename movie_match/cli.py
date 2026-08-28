@@ -20,7 +20,7 @@ from movie_match.scraper.parser import extract_slug_from_input
 
 app = typer.Typer(
     name="movie-match",
-    help="🎬 Find Letterboxd users from specific locations who liked or disliked movies.",
+    help="Find Letterboxd users from specific locations who liked or disliked movies.",
     add_completion=False,
 )
 console = Console()
@@ -134,13 +134,13 @@ def find_command(
             ext = output.suffix.lower()
             if ext == ".json":
                 export_to_json(matches, stats, output)
-                console.print(f"[green]✓ Exported {len(matches)} results to {output}[/green]")
+                console.print(f"[green]Exported {len(matches)} results to {output}[/green]")
             elif ext == ".csv":
                 export_to_csv(matches, output)
-                console.print(f"[green]✓ Exported {len(matches)} results to {output}[/green]")
+                console.print(f"[green]Exported {len(matches)} results to {output}[/green]")
             elif ext in [".md", ".markdown"]:
                 export_to_markdown(matches, stats, output)
-                console.print(f"[green]✓ Exported {len(matches)} results to {output}[/green]")
+                console.print(f"[green]Exported {len(matches)} results to {output}[/green]")
             else:
                 console.print(f"[red]Unsupported file format: {ext}. Use .json, .csv, or .md[/red]")
 
@@ -170,18 +170,18 @@ def profile_command(
                 console.print(f"[bold magenta]Stats:[/bold magenta] {stat_str}")
 
             if profile.favorite_films:
-                console.print("\n[bold gold1]★ Favorite Films:[/bold gold1]")
+                console.print("\n[bold gold1]Favorite Films:[/bold gold1]")
                 for f in profile.favorite_films:
                     yr = f" ({f.year})" if f.year else ""
-                    console.print(f"  • [bold white]{f.title}[/bold white]{yr} - [dim]{f.slug}[/dim]")
+                    console.print(f"  - [bold white]{f.title}[/bold white]{yr} - [dim]{f.slug}[/dim]")
 
             if profile.recent_films:
-                console.print("\n[bold green]🎬 Recent Watched Films:[/bold green]")
+                console.print("\n[bold green]Recent Watched Films:[/bold green]")
                 for f in profile.recent_films[:8]:
                     yr = f" ({f.year})" if f.year else ""
                     r_str = f" [{f.user_rating_stars}]" if f.user_rating_stars else ""
-                    liked_str = " ❤️" if f.user_liked else ""
-                    console.print(f"  • {f.title}{yr}{r_str}{liked_str}")
+                    liked_str = " (Liked)" if f.user_liked else ""
+                    console.print(f"  - {f.title}{yr}{r_str}{liked_str}")
 
     asyncio.run(run())
 
@@ -255,12 +255,11 @@ def taste_match_command(
             for idx, r in enumerate(results, 1):
                 shared_titles = ", ".join(i.film_title or i.film_slug for i in r.shared_films)
                 console.print(f"[bold cyan]#{idx} @{r.username}[/bold cyan] ({r.display_name}) - [bold yellow]{r.compatibility_score}% Match[/bold yellow]")
-                console.print(f"   📍 Location: {r.location} (matched '{r.matched_location}')")
-                console.print(f"   🎬 Shared Films ({r.shared_films_count}): {shared_titles}")
-                console.print(f"   🔗 {r.profile_url}\n")
+                console.print(f"   Location: {r.location} (matched '{r.matched_location}')")
+                console.print(f"   Shared Films ({r.shared_films_count}): {shared_titles}")
+                console.print(f"   Profile: {r.profile_url}\n")
 
     asyncio.run(run())
-
 
 
 @app.command(name="cache")
@@ -273,7 +272,7 @@ def cache_command(
         await cache.init()
         if clear:
             await cache.clear_cache()
-            console.print("[green]✓ Local cache cleared successfully.[/green]")
+            console.print("[green]Local cache cleared successfully.[/green]")
         else:
             count = await cache.count_cached_profiles()
             console.print(f"[cyan]Local cache database:[/cyan] {cache.db_path}")
@@ -290,7 +289,7 @@ def serve_command(
 ):
     """Launch the modern web UI dashboard and REST API."""
     import uvicorn
-    console.print(f"[bold green]🚀 Starting Movie Match Web Server on http://{host}:{port}[/bold green]")
+    console.print(f"[bold green]Starting Movie Match Web Server on http://{host}:{port}[/bold green]")
     uvicorn.run("movie_match.web.app:app", host=host, port=port, reload=False)
 
 
@@ -300,3 +299,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
