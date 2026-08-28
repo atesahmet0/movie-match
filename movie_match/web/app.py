@@ -37,6 +37,12 @@ async def home(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for backend status."""
+    return {"status": "ok", "service": "movie-match-backend"}
+
+
 @app.get("/api/search")
 async def api_search(
     film: str = Query(..., description="Film URL or slug"),
@@ -183,4 +189,16 @@ async def api_film_info(film: str = Query(...)):
     async with LetterboxdScraper() as scraper:
         meta = await scraper.get_film_info(slug)
     return meta.model_dump()
+
+
+@app.get("/api/films/search")
+async def api_search_films(
+    q: str = Query(..., min_length=1, description="Search query for films"),
+    limit: int = Query(10, ge=1, le=25),
+):
+    """Search Letterboxd for films by title / keyword."""
+    async with LetterboxdScraper() as scraper:
+        results = await scraper.search_films(q, limit=limit)
+    return {"status": "success", "query": q, "results": results}
+
 

@@ -90,13 +90,29 @@ uv run movie-match cache
 uv run movie-match cache --clear
 ```
 
-### 7. Launch the Modern Web Dashboard
+### 7. Launch the Application (Separated Backend & Next.js Frontend)
+
+#### Start the FastAPI Backend:
 ```bash
 uv run movie-match serve --port 8000
+# or: uv run uvicorn movie_match.web.app:app --host 127.0.0.1 --port 8000
 ```
-Then open `http://127.0.0.1:8000` in your browser.
+Backend API and OpenAPI docs will be available at `http://127.0.0.1:8000/docs`.
+
+#### Start the Next.js SSR Frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open `http://localhost:3000` in your browser. All pages utilize Next.js App Router with Server-Side Rendering (SSR).
 
 ---
+
+## 🏗️ Architecture & Separation
+
+- **Backend (`movie_match/`)**: Python FastAPI REST API providing endpoints for geo-matching, multi-film taste soulmates, user profiles, category films, and search history caching.
+- **Frontend (`frontend/`)**: Next.js App Router (TypeScript + Tailwind CSS) leveraging React Server Components for fast SSR page loads, dynamic OpenGraph/SEO metadata, responsive dark mode, and client interaction controls.
 
 ## 🧪 Running Tests
 

@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from movie_match.cache.db import CacheDB
 from movie_match.matcher.location import LocationMatcher
 from movie_match.matcher.sentiment import SentimentPlan, rating_to_stars_text
@@ -593,4 +593,48 @@ class LetterboxdScraper:
         stats.elapsed_seconds = time.time() - start_time
 
         return results[:query.limit_matches], stats
+
+    async def search_films(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search Letterboxd for films matching query string."""
+        clean_q = query.strip()
+        if not clean_q:
+            return []
+
+        import urllib.parse
+        from selectolax.parser import HTMLParser
+
+        encoded = urllib.parse.quote(clean_q)
+        url = f"https://letterboxd.com/s/search/films/{encoded}/"
+        response = await self.client.get(url)
+        if not response or response.status_code != 200:
+            return []
+
+        tree = HTMLParser(response.text)
+        films: List[Dict[str, Any]] = []
+        for li in tree.css("li.search-result.-production"):
+            fig = li.css_first(".react-component.figure")
+            slug = fig.attributes.get("data-item-slug") if fig else None
+
+            title_a = li.css_first("h2 a, .film-title-wrapper a")
+            title = title_a.text(strip=True) if title_a else (fig.attributes.get("data-item-name", "") if fig else "")
+
+            year_a = li.css_first("small.metadata a, .metadata a")
+            year_text = year_a.text(strip=True) if year_a else None
+            year = int(year_text) if year_text and year_text.isdigit() else None
+
+            director_a = li.css_first('p.film-metadata a[href*="/director/"]')
+            director = director_a.text(strip=True) if director_a else None
+
+            if slug and title:
+                films.append({
+                    "slug": slug,
+                    "title": title,
+                    "year": year,
+                    "director": director,
+                    "film_url": f"https://letterboxd.com/film/{slug}/",
+                })
+                if len(films) >= limit:
+                    break
+
+        return films
 

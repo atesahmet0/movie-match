@@ -53,3 +53,16 @@ def test_taste_match_validation():
     response = client.post("/api/taste-match", json={"films": [], "location_query": "Turkey"})
     assert response.status_code == 400
 
+
+def test_films_search_endpoint():
+    response = client.get("/api/films/search?q=alien&limit=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert "results" in data
+    assert isinstance(data["results"], list)
+    assert len(data["results"]) > 0
+    assert "slug" in data["results"][0]
+    assert "title" in data["results"][0]
+
+
