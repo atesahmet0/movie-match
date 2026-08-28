@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -9,10 +9,13 @@ import {
   Clapperboard,
   ArrowRight,
   Sliders,
+  Heart,
+  CheckCircle2,
 } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { fetchUserProfile } from "@/lib/api";
 import { UserFilmItem, UserProfileDetail } from "@/lib/types";
+import { motion } from "framer-motion";
 
 interface TasteSoulmatesSectionProps {
   initialUser?: string;
@@ -81,7 +84,7 @@ export default function TasteSoulmatesSection({
       } else {
         setProfileError(`Could not find public Letterboxd profile for @${clean}.`);
       }
-    } catch (e) {
+    } catch {
       setProfileError("Failed to fetch Letterboxd profile.");
     } finally {
       setIsLoadingProfile(false);
@@ -101,101 +104,84 @@ export default function TasteSoulmatesSection({
       setElapsedSeconds(0);
       return;
     }
-    const startTime = Date.now();
+    const start = Date.now();
     const interval = setInterval(() => {
-      setElapsedSeconds((Date.now() - startTime) / 1000);
+      setElapsedSeconds((Date.now() - start) / 1000);
     }, 100);
     return () => clearInterval(interval);
   }, [isPending]);
 
-  const handle1ClickSoulmates = (profileOverride?: UserProfileDetail) => {
-    const activeProf = profileOverride || userProfile;
-    if (!activeProf) return;
+  const handleUserFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (usernameInput.trim()) {
+      loadUser(usernameInput.trim());
+    }
+  };
 
-    const favoriteSlugs = (activeProf.favorite_films || []).map((f) => f.slug);
-    const recentSlugs = (activeProf.recent_films || []).slice(0, 4).map((f) => f.slug);
-    const filmSlugs = favoriteSlugs.length > 0 ? favoriteSlugs : recentSlugs;
+  const handle1ClickSoulmates = (overrideLocation?: string) => {
+    if (!userProfile) return;
 
-    if (filmSlugs.length === 0) {
-      alert("No films found in your profile to match.");
+    const favoriteSlugs = (userProfile.favorite_films || []).map((f) => f.slug);
+    if (favoriteSlugs.length === 0) {
+      setProfileError("Your Letterboxd profile has no pinned 4 favorites yet. Please select films manually.");
       return;
     }
 
+    const loc = overrideLocation || targetLocation || userProfile.location || "Anywhere";
+    const filmsParam = favoriteSlugs.join(",");
+
     startTransition(() => {
-      const params = new URLSearchParams();
-      params.set("user", activeProf.username);
-      params.set("films", filmSlugs.join(","));
-      params.set("location", targetLocation.trim() || activeProf.location || "Anywhere");
-      params.set("minShared", String(minShared));
-      params.set("maxPages", "2");
-      router.push(`/taste?${params.toString()}`);
+      router.push(
+        `/taste?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
+          loc
+        )}&user=${encodeURIComponent(userProfile.username)}&min_shared=${minShared}&max_pages=2`
+      );
     });
   };
 
-  const handleUserFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = usernameInput.trim().replace(/^@/, "");
-    if (!clean) return;
-
-    setIsLoadingProfile(true);
-    setProfileError("");
-
-    try {
-      const data = await fetchUserProfile(clean);
-      if (data && data.profile) {
-        setUserProfile(data.profile);
-        setActiveUsername(clean);
-        if (data.profile.location) {
-          setTargetLocation(data.profile.location);
-        }
-        // Immediately run soulmates match with 1 click!
-        handle1ClickSoulmates(data.profile);
-      } else {
-        setProfileError(`Could not find profile for @${clean}.`);
-      }
-    } catch (err) {
-      setProfileError("Error fetching profile.");
-    } finally {
-      setIsLoadingProfile(false);
-    }
-  };
-
   return (
-    <div className="space-y-5 max-w-4xl mx-auto">
-      {/* 1-Click Soulmates Match Panel */}
+    <div className="space-y-4 max-w-4xl mx-auto">
       {userProfile ? (
-        <div className="solid-card rounded-2xl p-6 sm:p-7 border-brand-green/30 relative overflow-hidden">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-brand-border">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-card p-6 sm:p-7 relative overflow-hidden"
+        >
+          {/* Header Profile Summary */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2c3440] pb-5">
             <div className="flex items-center space-x-3.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={
-                  userProfile.avatar_url ||
-                  "https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png"
-                }
-                alt={userProfile.display_name || userProfile.username}
-                referrerPolicy="no-referrer"
-                className="w-12 h-12 rounded-xl object-cover border border-brand-border"
-              />
+              <div className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    userProfile.avatar_url ||
+                    "https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png"
+                  }
+                  alt={userProfile.display_name || userProfile.username}
+                  referrerPolicy="no-referrer"
+                  className="w-12 h-12 rounded-2xl object-cover border-2 border-[#2c3440]"
+                />
+              </div>
+
               <div>
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-base font-bold text-white">
+                  <h3 className="font-bold text-white text-base">
                     {userProfile.display_name || userProfile.username}
                   </h3>
-                  <a
-                    href={userProfile.profile_url || `https://letterboxd.com/${userProfile.username}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-mono text-brand-blue hover:underline"
-                  >
+                  <span className="text-xs font-mono text-[#40bcf4]">
                     @{userProfile.username}
-                  </a>
-                </div>
-                <div className="flex items-center space-x-2 mt-0.5 text-xs text-brand-subtext">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-brand-green" />
-                    <span>{targetLocation || userProfile.location || "Anywhere"}</span>
                   </span>
+                </div>
+
+                <div className="flex items-center space-x-3 text-xs text-[#99aabb] mt-0.5">
+                  {userProfile.location ? (
+                    <span className="flex items-center gap-1 text-[#00e054]">
+                      <MapPin className="w-3 h-3" />
+                      {userProfile.location}
+                    </span>
+                  ) : (
+                    <span>Location: Anywhere</span>
+                  )}
                   <span>&bull;</span>
                   <span>{userProfile.favorite_films?.length || 0} Pinned Favorites</span>
                 </div>
@@ -206,7 +192,7 @@ export default function TasteSoulmatesSection({
               <button
                 type="button"
                 onClick={() => setShowAdvanced((prev) => !prev)}
-                className="text-xs text-brand-muted hover:text-white px-3 py-1.5 rounded-xl border border-brand-border bg-brand-darker flex items-center space-x-1 cursor-pointer transition"
+                className="text-xs text-[#99aabb] hover:text-white px-3 py-1.5 rounded-xl border border-[#2c3440] bg-[#14181c] flex items-center space-x-1 cursor-pointer transition"
               >
                 <Sliders className="w-3.5 h-3.5" />
                 <span>{showAdvanced ? "Hide Options" : "Filter Options"}</span>
@@ -219,7 +205,7 @@ export default function TasteSoulmatesSection({
                   setActiveUsername("");
                   setUsernameInput("");
                 }}
-                className="text-xs text-brand-muted hover:text-red-400 px-3 py-1.5 rounded-xl border border-brand-border bg-brand-darker cursor-pointer transition"
+                className="text-xs text-[#667788] hover:text-red-400 px-3 py-1.5 rounded-xl border border-[#2c3440] bg-[#14181c] cursor-pointer transition"
               >
                 Switch User
               </button>
@@ -229,11 +215,11 @@ export default function TasteSoulmatesSection({
           {/* 4 Favorite Films Visual Row */}
           <div className="py-5">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-brand-green" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#00e054]" />
                 <span>Your Favorite Films (Matching Targets)</span>
               </span>
-              <span className="text-[11px] font-mono text-brand-subtext">
+              <span className="text-[11px] font-mono text-[#99aabb]">
                 Ranked by Compatibility Ratio
               </span>
             </div>
@@ -242,9 +228,9 @@ export default function TasteSoulmatesSection({
               {(userProfile.favorite_films || []).map((film) => (
                 <div
                   key={film.slug}
-                  className="bg-brand-darker border border-brand-border rounded-xl p-2.5 flex items-center space-x-2.5 group hover:border-brand-green/50 transition"
+                  className="bg-[#14181c] border border-[#2c3440] rounded-xl p-2.5 flex items-center space-x-2.5 group hover:border-[#00e054]/50 transition"
                 >
-                  <div className="w-10 h-14 bg-brand-card rounded-md flex-shrink-0 overflow-hidden relative border border-brand-border">
+                  <div className="w-10 h-14 bg-[#1b2228] rounded-lg flex-shrink-0 overflow-hidden relative border border-[#2c3440]">
                     {film.poster_url ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
@@ -254,18 +240,18 @@ export default function TasteSoulmatesSection({
                         className="w-full h-full object-cover group-hover:scale-105 transition"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-brand-muted">
-                        <Clapperboard className="w-4 h-4 text-brand-green" />
+                      <div className="w-full h-full flex items-center justify-center text-[#667788]">
+                        <Clapperboard className="w-4 h-4 text-[#00e054]" />
                       </div>
                     )}
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-xs text-white truncate group-hover:text-brand-green transition">
+                    <p className="font-bold text-xs text-white truncate group-hover:text-[#00e054] transition">
                       {film.title}
                     </p>
                     {film.year && (
-                      <p className="text-[10px] font-mono text-brand-subtext mt-0.5">
+                      <p className="text-[10px] font-mono text-[#99aabb] mt-0.5">
                         {film.year}
                       </p>
                     )}
@@ -277,9 +263,13 @@ export default function TasteSoulmatesSection({
 
           {/* Optional Filter Controls */}
           {showAdvanced && (
-            <div className="pt-4 border-t border-brand-border grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 animate-in fade-in-50 duration-150">
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="pt-4 border-t border-[#2c3440] grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4"
+            >
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                <label className="block text-xs font-semibold text-white mb-1.5">
                   Target Location (or Anywhere)
                 </label>
                 <input
@@ -287,18 +277,18 @@ export default function TasteSoulmatesSection({
                   value={targetLocation}
                   onChange={(e) => setTargetLocation(e.target.value)}
                   placeholder="e.g. Anywhere, Turkey, Berlin, London..."
-                  className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2 text-white placeholder-brand-muted focus:outline-none glow-focus"
+                  className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2 text-white placeholder-[#667788] focus:outline-none focus:border-[#00e054]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                <label className="block text-xs font-semibold text-white mb-1.5">
                   Minimum Shared Films
                 </label>
                 <select
                   value={minShared}
                   onChange={(e) => setMinShared(parseInt(e.target.value) || 1)}
-                  className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2 text-white focus:outline-none glow-focus"
+                  className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#00e054]"
                 >
                   <option value={1}>Match at least 1 film (25%+ Ratio)</option>
                   <option value={2}>Match at least 2 films (50%+ Ratio)</option>
@@ -306,15 +296,15 @@ export default function TasteSoulmatesSection({
                   <option value={4}>Match all 4 films (100% Perfect Match)</option>
                 </select>
               </div>
-            </div>
+            </motion.div>
           )}
 
-          {/* THE SINGLE 1-CLICK BUTTON */}
+          {/* 1-Click Match Button */}
           <button
             type="button"
             onClick={() => handle1ClickSoulmates()}
             disabled={isPending}
-            className="w-full bg-brand-green hover:bg-brand-greenHover disabled:opacity-50 text-black font-extrabold py-3.5 px-6 rounded-xl transition duration-150 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer shadow-xl shadow-brand-green/20 group"
+            className="w-full bg-gradient-to-r from-[#00e054] to-[#00b844] hover:from-[#00b844] hover:to-[#009e3a] disabled:opacity-50 text-[#0d1114] font-extrabold py-3.5 px-6 rounded-2xl transition duration-150 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer shadow-xl shadow-[#00e054]/15 group"
           >
             {isPending ? (
               <>
@@ -331,22 +321,22 @@ export default function TasteSoulmatesSection({
               </>
             )}
           </button>
-        </div>
+        </motion.div>
       ) : (
         /* Instant User Input for 1-Click Match */
-        <div className="solid-card rounded-2xl p-6 sm:p-7 space-y-4 text-center">
+        <div className="glass-card p-6 sm:p-8 space-y-4 text-center">
           <div className="max-w-md mx-auto">
-            <h2 className="text-lg font-bold text-white mb-1">
+            <h2 className="text-lg sm:text-xl font-extrabold text-white mb-1">
               Find Your Letterboxd Taste Soulmates
             </h2>
-            <p className="text-xs text-brand-subtext mb-4">
+            <p className="text-xs text-[#99aabb] mb-5">
               Enter your Letterboxd username to automatically match your 4 pinned favorite films and location.
             </p>
 
             <form onSubmit={handleUserFormSubmit} className="space-y-3">
               <div className="flex gap-2">
                 <div className="relative flex-grow">
-                  <span className="absolute left-3.5 top-2.5 text-brand-muted text-sm font-mono">
+                  <span className="absolute left-3.5 top-2.5 text-[#667788] text-sm font-mono">
                     @
                   </span>
                   <input
@@ -355,14 +345,14 @@ export default function TasteSoulmatesSection({
                     onChange={(e) => setUsernameInput(e.target.value)}
                     required
                     placeholder="your-letterboxd-username"
-                    className="w-full bg-brand-darker border border-brand-border rounded-xl pl-8 pr-4 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus text-sm font-medium"
+                    className="w-full bg-[#14181c] border border-[#2c3440] rounded-xl pl-8 pr-4 py-2.5 text-white placeholder-[#667788] focus:outline-none focus:border-[#00e054] text-sm font-medium"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoadingProfile || !usernameInput.trim()}
-                  className="bg-brand-green hover:bg-brand-greenHover disabled:opacity-50 text-black font-bold px-5 py-2.5 rounded-xl transition flex items-center space-x-1.5 text-sm cursor-pointer whitespace-nowrap shadow-lg shadow-brand-green/10"
+                  className="bg-gradient-to-r from-[#00e054] to-[#00b844] hover:from-[#00b844] hover:to-[#009e3a] disabled:opacity-50 text-[#0d1114] font-extrabold px-5 py-2.5 rounded-xl transition flex items-center space-x-1.5 text-sm cursor-pointer whitespace-nowrap shadow-lg shadow-[#00e054]/10"
                 >
                   {isLoadingProfile ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -374,13 +364,13 @@ export default function TasteSoulmatesSection({
               </div>
 
               {profileError && (
-                <p className="text-xs text-red-400 bg-red-950/40 p-2 rounded-lg border border-red-800/40">
+                <p className="text-xs text-red-400 bg-red-950/40 p-2.5 rounded-xl border border-red-800/40">
                   {profileError}
                 </p>
               )}
 
               {/* Demo profile quick pills */}
-              <div className="flex items-center justify-center gap-1.5 pt-1 text-xs text-brand-subtext">
+              <div className="flex items-center justify-center gap-1.5 pt-2 text-xs text-[#99aabb]">
                 <span>Try sample profile:</span>
                 {DEMO_USERS.map((demo) => (
                   <button
@@ -390,7 +380,7 @@ export default function TasteSoulmatesSection({
                       setUsernameInput(demo);
                       loadUser(demo);
                     }}
-                    className="text-brand-green hover:underline cursor-pointer font-mono text-[11px] bg-brand-darker px-2 py-0.5 rounded border border-brand-border"
+                    className="text-[#00e054] hover:underline cursor-pointer font-mono text-[11px] bg-[#14181c] px-2 py-0.5 rounded-lg border border-[#2c3440]"
                   >
                     @{demo}
                   </button>

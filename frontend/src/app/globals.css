@@ -26,22 +26,104 @@ body {
   background-color: #14181c;
   color: #e1e7ed;
   font-family: var(--font-outfit), 'Outfit', system-ui, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
+/* Glassmorphism & Solid Card styles */
 .solid-card {
   background-color: #1b2228;
   border: 1px solid #2c3440;
-  transition: border-color 0.15s ease-in-out;
+  border-radius: 12px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .solid-card:hover {
   border-color: #3d4957;
 }
 
+.glass-card {
+  background: rgba(27, 34, 40, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(44, 52, 64, 0.8);
+  border-radius: 12px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(61, 73, 87, 0.9);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+.glass-nav {
+  background: rgba(20, 24, 28, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(44, 52, 64, 0.7);
+}
+
+/* Glow effects */
 .glow-focus:focus {
   outline: none;
   border-color: #00e054;
-  box-shadow: 0 0 0 1px #00e054;
+  box-shadow: 0 0 0 2px rgba(0, 224, 84, 0.25);
+}
+
+.glow-green:hover {
+  border-color: rgba(0, 224, 84, 0.6);
+  box-shadow: 0 0 20px rgba(0, 224, 84, 0.15);
+}
+
+.glow-orange:hover {
+  border-color: rgba(255, 128, 0, 0.6);
+  box-shadow: 0 0 20px rgba(255, 128, 0, 0.15);
+}
+
+.glow-blue:hover {
+  border-color: rgba(64, 188, 244, 0.6);
+  box-shadow: 0 0 20px rgba(64, 188, 244, 0.15);
+}
+
+/* Shimmer animation for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #1b2228 25%,
+    #252f38 37%,
+    #1b2228 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Radar pulse animation */
+@keyframes radar-ping {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+.radar-active {
+  animation: radar-ping 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* Custom scrollbars */
@@ -59,3 +141,4 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #00e054;
 }
+

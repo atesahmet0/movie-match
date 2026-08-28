@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -13,12 +13,14 @@ import {
   Globe,
   Users,
   Layers,
-  ChevronDown,
   Plus,
   X,
+  Trash2,
 } from "lucide-react";
-import { searchFilms } from "@/lib/api";
+import { fetchFilmInfo } from "@/lib/api";
 import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
+import { FilmCombobox } from "@/components/ui/FilmCombobox";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ScoutFormProps {
   initialFilms: string[];
@@ -42,62 +44,12 @@ const PRESET_LOCATIONS = [
 ];
 
 const POPULAR_SUGGESTIONS: FilmSearchResult[] = [
-  {
-    slug: "vampire-hunter-d-bloodlust",
-    title: "Vampire Hunter D: Bloodlust",
-    year: 2000,
-    director: "Yoshiaki Kawajiri",
-    film_url: "https://letterboxd.com/film/vampire-hunter-d-bloodlust/",
-  },
-  {
-    slug: "alien",
-    title: "Alien",
-    year: 1979,
-    director: "Ridley Scott",
-    film_url: "https://letterboxd.com/film/alien/",
-  },
-  {
-    slug: "interstellar",
-    title: "Interstellar",
-    year: 2014,
-    director: "Christopher Nolan",
-    film_url: "https://letterboxd.com/film/interstellar/",
-  },
-  {
-    slug: "the-substance",
-    title: "The Substance",
-    year: 2024,
-    director: "Coralie Fargeat",
-    film_url: "https://letterboxd.com/film/the-substance/",
-  },
-  {
-    slug: "fight-club",
-    title: "Fight Club",
-    year: 1999,
-    director: "David Fincher",
-    film_url: "https://letterboxd.com/film/fight-club/",
-  },
-  {
-    slug: "dune-part-two",
-    title: "Dune: Part Two",
-    year: 2024,
-    director: "Denis Villeneuve",
-    film_url: "https://letterboxd.com/film/dune-part-two/",
-  },
-  {
-    slug: "spirited-away",
-    title: "Spirited Away",
-    year: 2001,
-    director: "Hayao Miyazaki",
-    film_url: "https://letterboxd.com/film/spirited-away/",
-  },
-  {
-    slug: "parasite-2019",
-    title: "Parasite",
-    year: 2019,
-    director: "Bong Joon-ho",
-    film_url: "https://letterboxd.com/film/parasite-2019/",
-  },
+  { slug: "alien", title: "Alien", year: 1979, director: "Ridley Scott", film_url: "https://letterboxd.com/film/alien/" },
+  { slug: "interstellar", title: "Interstellar", year: 2014, director: "Christopher Nolan", film_url: "https://letterboxd.com/film/interstellar/" },
+  { slug: "the-substance", title: "The Substance", year: 2024, director: "Coralie Fargeat", film_url: "https://letterboxd.com/film/the-substance/" },
+  { slug: "fight-club", title: "Fight Club", year: 1999, director: "David Fincher", film_url: "https://letterboxd.com/film/fight-club/" },
+  { slug: "dune-part-two", title: "Dune: Part Two", year: 2024, director: "Denis Villeneuve", film_url: "https://letterboxd.com/film/dune-part-two/" },
+  { slug: "spirited-away", title: "Spirited Away", year: 2001, director: "Hayao Miyazaki", film_url: "https://letterboxd.com/film/spirited-away/" },
 ];
 
 export default function ScoutForm({
@@ -111,34 +63,11 @@ export default function ScoutForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Multi-films state
-  const parseInitialFilms = (list: string[]): SelectedFilmChip[] => {
-    if (!list || list.length === 0) {
-      return [
-        {
-          slug: "vampire-hunter-d-bloodlust",
-          title: "Vampire Hunter D: Bloodlust",
-          year: 2000,
-          poster_url: null,
-        },
-      ];
-    }
-    return list.map((slug) => ({
-      slug,
-      title: slug
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase()),
-      year: null,
-      poster_url: null,
-    }));
-  };
+  const [selectedFilms, setSelectedFilms] = useState<SelectedFilmChip[]>([]);
+  const [comboboxValue, setComboboxValue] = useState("");
+  const [isAddingFilm, setIsAddingFilm] = useState(false);
 
-  const [selectedFilms, setSelectedFilms] = useState<SelectedFilmChip[]>(
-    parseInitialFilms(initialFilms)
-  );
-  const [filmInput, setFilmInput] = useState("");
-
-  // Multi-location chips state
+  // Multi-location chips
   const parseInitialLocations = (raw: string): string[] => {
     const split = (raw || "")
       .split(",")
@@ -155,157 +84,111 @@ export default function ScoutForm({
   const [sentiment, setSentiment] = useState(initialSentiment || "liked");
   const [maxPages, setMaxPages] = useState(initialPages || 3);
   const [limit, setLimit] = useState(initialLimit || 50);
-  const [includeBio, setIncludeBio] = useState(initialIncludeBio ?? true);
+  const [includeBio, setIncludeBio] = useState(initialIncludeBio !== false);
 
-  // Dropdown Autocomplete state
-  const [suggestions, setSuggestions] = useState<FilmSearchResult[]>([]);
-  const [isSearchingFilms, setIsSearchingFilms] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Scouting status state
+  // Live status progress
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [statusStep, setStatusStep] = useState(0);
 
-  // Debounced search on film input
+  // Initialize films on load
   useEffect(() => {
-    const trimmed = filmInput.trim();
-    if (!trimmed || trimmed.startsWith("http")) {
-      setSuggestions([]);
-      return;
+    if (initialFilms && initialFilms.length > 0 && selectedFilms.length === 0) {
+      initialFilms.forEach((slug) => {
+        if (slug) {
+          fetchFilmInfo(slug).then((meta) => {
+            if (meta && meta.slug) {
+              setSelectedFilms((prev) => {
+                if (prev.some((f) => f.slug === meta.slug)) return prev;
+                return [
+                  ...prev,
+                  {
+                    slug: meta.slug,
+                    title: meta.title || meta.slug,
+                    year: meta.year,
+                    poster_url: meta.poster_url,
+                  },
+                ];
+              });
+            } else {
+              setSelectedFilms((prev) => [
+                ...prev,
+                { slug, title: slug },
+              ]);
+            }
+          });
+        }
+      });
     }
+  }, [initialFilms]);
 
-    const timer = setTimeout(async () => {
-      setIsSearchingFilms(true);
-      const results = await searchFilms(trimmed, 8);
-      setSuggestions(results);
-      setIsSearchingFilms(false);
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [filmInput]);
-
-  // Click outside listener for dropdown
+  // Handle timer during scan
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Timer & stage progression while scouting is pending
-  useEffect(() => {
-    if (!isPending) {
+    let interval: NodeJS.Timeout | null = null;
+    if (isPending) {
       setElapsedSeconds(0);
+      setStatusStep(1);
+      const startTime = Date.now();
+      interval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        setElapsedSeconds(elapsed);
+        if (elapsed > 1.2 && elapsed <= 3.5) setStatusStep(2);
+        else if (elapsed > 3.5 && elapsed <= 7.0) setStatusStep(3);
+        else if (elapsed > 7.0) setStatusStep(4);
+      }, 100);
+    } else {
       setStatusStep(0);
-      return;
     }
-
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      const sec = (Date.now() - startTime) / 1000;
-      setElapsedSeconds(sec);
-
-      if (sec < 2.5) {
-        setStatusStep(1); // Connecting & resolving
-      } else if (sec < 6.0) {
-        setStatusStep(2); // Extracting interactions & ratings
-      } else if (sec < 11.0) {
-        setStatusStep(3); // Scanning candidate member profiles & locations
-      } else {
-        setStatusStep(4); // Aggregating & ranking
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isPending]);
 
-  // Film Handlers
-  const handleAddFilmItem = (item: FilmSearchResult) => {
-    const exists = selectedFilms.some((f) => f.slug.toLowerCase() === item.slug.toLowerCase());
-    if (!exists) {
-      setSelectedFilms((prev) => [
-        ...prev,
-        {
-          slug: item.slug,
-          title: item.title,
-          year: item.year || null,
-          poster_url: null,
-        },
-      ]);
+  const handleAddFilmFromCombobox = async (slug: string, filmMeta?: FilmSearchResult) => {
+    if (!slug) return;
+    setIsAddingFilm(true);
+
+    if (filmMeta) {
+      setSelectedFilms((prev) => {
+        if (prev.some((f) => f.slug === filmMeta.slug)) return prev;
+        return [...prev, { slug: filmMeta.slug, title: filmMeta.title, year: filmMeta.year }];
+      });
+      setComboboxValue("");
+      setIsAddingFilm(false);
+      return;
     }
-    setFilmInput("");
-    setIsDropdownOpen(false);
-    setHighlightedIndex(-1);
-  };
 
-  const handleAddManualFilm = (raw: string) => {
-    const clean = raw
-      .toLowerCase()
-      .replace(/https?:\/\/letterboxd\.com\/film\//, "")
-      .replace(/\/$/, "")
-      .trim();
-
-    if (!clean) return;
-    const exists = selectedFilms.some((f) => f.slug.toLowerCase() === clean.toLowerCase());
-    if (!exists) {
-      setSelectedFilms((prev) => [
-        ...prev,
-        {
-          slug: clean,
-          title: clean
-            .replace(/-/g, " ")
-            .replace(/\b\w/g, (c) => c.toUpperCase()),
-          year: null,
-          poster_url: null,
-        },
-      ]);
-    }
-    setFilmInput("");
-    setIsDropdownOpen(false);
-    setHighlightedIndex(-1);
-  };
-
-  const handleRemoveFilm = (slug: string) => {
-    setSelectedFilms((prev) => prev.filter((f) => f.slug !== slug));
-  };
-
-  const handleClearFilms = () => {
-    setSelectedFilms([]);
-  };
-
-  const handleFilmKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const currentList = suggestions.length > 0 ? suggestions : POPULAR_SUGGESTIONS;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setIsDropdownOpen(true);
-      setHighlightedIndex((prev) => (prev < currentList.length - 1 ? prev + 1 : 0));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setIsDropdownOpen(true);
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : currentList.length - 1));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (isDropdownOpen && highlightedIndex >= 0 && currentList[highlightedIndex]) {
-        handleAddFilmItem(currentList[highlightedIndex]);
-      } else if (filmInput.trim()) {
-        handleAddManualFilm(filmInput);
+    try {
+      const meta = await fetchFilmInfo(slug);
+      if (meta && meta.slug) {
+        setSelectedFilms((prev) => {
+          if (prev.some((f) => f.slug === meta.slug)) return prev;
+          return [
+            ...prev,
+            {
+              slug: meta.slug,
+              title: meta.title || meta.slug,
+              year: meta.year,
+              poster_url: meta.poster_url,
+            },
+          ];
+        });
+      } else {
+        setSelectedFilms((prev) => [...prev, { slug, title: slug }]);
       }
-    } else if (e.key === "Escape") {
-      setIsDropdownOpen(false);
-    } else if (e.key === "Backspace" && !filmInput && selectedFilms.length > 0) {
-      handleRemoveFilm(selectedFilms[selectedFilms.length - 1].slug);
+    } catch {
+      setSelectedFilms((prev) => [...prev, { slug, title: slug }]);
+    } finally {
+      setComboboxValue("");
+      setIsAddingFilm(false);
     }
   };
 
-  // Location chip handlers
-  const handleAddLocation = (locName: string) => {
-    const clean = locName.trim().replace(/^[,]+|[,]+$/g, "");
+  const handleRemoveFilm = (slugToRemove: string) => {
+    setSelectedFilms((prev) => prev.filter((f) => f.slug !== slugToRemove));
+  };
+
+  const handleAddLocation = (loc: string) => {
+    const clean = loc.trim();
     if (!clean) return;
 
     if (clean.toLowerCase() === "anywhere") {
@@ -324,339 +207,152 @@ export default function ScoutForm({
     setLocationInput("");
   };
 
-  const handleRemoveLocation = (locName: string) => {
+  const handleRemoveLocation = (locToRemove: string) => {
     setLocations((prev) => {
-      const updated = prev.filter((l) => l !== locName);
-      return updated.length > 0 ? updated : ["Anywhere"];
+      const filtered = prev.filter((l) => l !== locToRemove);
+      return filtered.length > 0 ? filtered : ["Anywhere"];
     });
   };
 
-  const handleTogglePresetLocation = (preset: string) => {
-    if (preset.toLowerCase() === "anywhere") {
+  const handleTogglePresetLocation = (loc: string) => {
+    if (loc === "Anywhere") {
       setLocations(["Anywhere"]);
       return;
     }
 
     setLocations((prev) => {
-      const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
-      const exists = filtered.some((l) => l.toLowerCase() === preset.toLowerCase());
-      if (exists) {
-        const next = filtered.filter((l) => l.toLowerCase() !== preset.toLowerCase());
+      const withoutAnywhere = prev.filter((l) => l !== "Anywhere");
+      if (withoutAnywhere.includes(loc)) {
+        const next = withoutAnywhere.filter((l) => l !== loc);
         return next.length > 0 ? next : ["Anywhere"];
       } else {
-        return [...filtered, preset];
+        return [...withoutAnywhere, loc];
       }
     });
   };
 
-  const isPresetActive = (preset: string) => {
-    return locations.some((l) => l.toLowerCase() === preset.toLowerCase());
-  };
-
-  const handleLocationInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       handleAddLocation(locationInput);
-    } else if (e.key === "Backspace" && !locationInput && locations.length > 0) {
-      handleRemoveLocation(locations[locations.length - 1]);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedFilms.length === 0) return;
 
-    let finalFilms = [...selectedFilms];
-    if (filmInput.trim()) {
-      const clean = filmInput
-        .toLowerCase()
-        .replace(/https?:\/\/letterboxd\.com\/film\//, "")
-        .replace(/\/$/, "")
-        .trim();
-      if (!finalFilms.some((f) => f.slug.toLowerCase() === clean)) {
-        finalFilms.push({
-          slug: clean,
-          title: clean.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-          year: null,
-          poster_url: null,
-        });
-      }
-    }
-
-    if (finalFilms.length === 0) {
-      alert("Please add at least 1 film to scout.");
-      return;
-    }
-
-    let finalLocations = [...locations];
-    if (locationInput.trim()) {
-      const clean = locationInput.trim();
-      if (clean.toLowerCase() === "anywhere") {
-        finalLocations = ["Anywhere"];
-      } else {
-        const filtered = finalLocations.filter((l) => l.toLowerCase() !== "anywhere");
-        if (!filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
-          finalLocations = [...filtered, clean];
-        }
-      }
-    }
-
-    setIsDropdownOpen(false);
+    const filmsParam = selectedFilms.map((f) => f.slug).join(",");
+    const locParam = locations.join(",");
 
     startTransition(() => {
-      const filmsParam = finalFilms.map((f) => f.slug).join(",");
-      const locationParam = finalLocations.join(",");
-
-      const params = new URLSearchParams();
-      params.set("films", filmsParam);
-      params.set("location", locationParam || "Anywhere");
-      params.set("sentiment", sentiment);
-      params.set("max_pages", String(maxPages));
-      params.set("limit", String(limit));
-      params.set("include_bio", String(includeBio));
-      router.push(`/scout?${params.toString()}`);
+      router.push(
+        `/scout?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
+          locParam
+        )}&sentiment=${sentiment}&max_pages=${maxPages}&limit=${limit}&include_bio=${includeBio}`
+      );
     });
   };
 
-  const displayedSuggestions =
-    suggestions.length > 0 ? suggestions : POPULAR_SUGGESTIONS;
-
   return (
-    <div className="space-y-4 max-w-4xl mx-auto">
-      <div className="solid-card rounded-2xl p-6 sm:p-7 relative">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Multi-Film Selection with Dynamic Autocomplete */}
-            <div className="relative" ref={dropdownRef}>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-gray-300">
-                  Target Films ({selectedFilms.length})
-                </label>
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsDropdownOpen((prev) => !prev)}
-                    className="text-[10px] text-brand-green hover:underline flex items-center space-x-1 cursor-pointer"
-                  >
-                    <Clapperboard className="w-3 h-3" />
-                    <span>Popular films</span>
-                    <ChevronDown className="w-3 h-3" />
-                  </button>
-                  {selectedFilms.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={handleClearFilms}
-                      className="text-[10px] text-brand-muted hover:text-red-400 cursor-pointer"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Films Chips Box */}
-              <div className="min-h-[42px] p-2 bg-brand-darker border border-brand-border rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green transition">
-                {selectedFilms.map((film) => (
-                  <span
-                    key={film.slug}
-                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-card text-brand-green border border-brand-green/30 transition shadow-sm"
-                  >
-                    <Clapperboard className="w-3 h-3 text-brand-green shrink-0" />
-                    <span className="truncate max-w-[150px]">{film.title}</span>
-                    {film.year && (
-                      <span className="text-[10px] font-mono text-brand-subtext">
-                        ({film.year})
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFilm(film.slug)}
-                      className="text-brand-muted hover:text-red-400 ml-0.5 p-0.5 rounded transition cursor-pointer"
-                      title={`Remove ${film.title}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-
-                <input
-                  type="text"
-                  value={filmInput}
-                  onChange={(e) => {
-                    setFilmInput(e.target.value);
-                    setIsDropdownOpen(true);
-                    setHighlightedIndex(-1);
-                  }}
-                  onFocus={() => setIsDropdownOpen(true)}
-                  onKeyDown={handleFilmKeyDown}
-                  placeholder={
-                    selectedFilms.length === 0
-                      ? "Search film title or slug..."
-                      : "+ Add another film..."
-                  }
-                  className="flex-grow min-w-[120px] bg-transparent text-xs text-white placeholder-brand-muted focus:outline-none py-1 px-1 font-medium"
-                  autoComplete="off"
-                />
-
-                <div className="flex items-center pr-1 text-brand-green">
-                  {isSearchingFilms ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : null}
-                </div>
-              </div>
-
-              {/* Dynamic Dropdown Menu */}
-              {isDropdownOpen && (
-                <div className="absolute z-50 left-0 right-0 mt-1.5 bg-brand-card border border-brand-borderLight rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto animate-in fade-in-50 duration-100">
-                  <div className="p-2 border-b border-brand-border bg-brand-darker/60 flex items-center justify-between text-[11px] text-brand-muted px-3">
-                    <span className="font-semibold flex items-center gap-1.5 text-gray-300">
-                      <Clapperboard className="w-3.5 h-3.5 text-brand-green" />
-                      {suggestions.length > 0
-                        ? `Matching Films (${suggestions.length})`
-                        : "Popular & Suggested Films"}
-                    </span>
-                    <span className="text-[10px] font-mono">Use ↑↓ & Enter to add</span>
-                  </div>
-
-                  <ul className="py-1 divide-y divide-brand-border/40">
-                    {displayedSuggestions.map((item, idx) => (
-                      <li key={item.slug}>
-                        <button
-                          type="button"
-                          onClick={() => handleAddFilmItem(item)}
-                          onMouseEnter={() => setHighlightedIndex(idx)}
-                          className={`w-full text-left px-3.5 py-2.5 flex items-center justify-between transition cursor-pointer ${
-                            highlightedIndex === idx
-                              ? "bg-brand-darker text-white border-l-2 border-brand-green pl-3"
-                              : "text-gray-300 hover:bg-brand-darker hover:text-white"
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1 pr-2 flex items-start space-x-2">
-                            <Clapperboard className="w-4 h-4 text-brand-green/70 shrink-0 mt-0.5" />
-                            <div className="min-w-0">
-                              <div className="flex items-center space-x-2">
-                                <span className="font-bold text-xs text-white truncate">
-                                  {item.title}
-                                </span>
-                                {item.year && (
-                                  <span className="text-[10px] font-mono px-1.5 py-0.2 bg-brand-darker text-brand-subtext rounded border border-brand-border">
-                                    {item.year}
-                                  </span>
-                                )}
-                              </div>
-                              {item.director && (
-                                <p className="text-[11px] text-brand-subtext truncate mt-0.5">
-                                  dir. {item.director}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <span className="text-[10px] font-mono text-brand-green opacity-80 shrink-0">
-                            + Add Film
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+    <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="glass-card p-6 sm:p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Section 1: Film Selector */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Film className="w-4 h-4 text-[#00e054]" />
+                Target Films ({selectedFilms.length} Selected)
+              </label>
+              {selectedFilms.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedFilms([])}
+                  className="text-xs text-[#667788] hover:text-red-400 transition flex items-center space-x-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear</span>
+                </button>
               )}
             </div>
 
-            {/* Target Location Field with Multiple Chips */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-gray-300">
-                  Target Locations ({locations.length})
-                </label>
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setLocations(["Anywhere"])}
-                    className="text-[10px] text-brand-green hover:underline cursor-pointer"
+            {/* Selected Chips */}
+            <div className="min-h-[56px] p-3 rounded-2xl bg-[#14181c] border border-[#2c3440] flex flex-wrap items-center gap-2">
+              <AnimatePresence mode="popLayout">
+                {selectedFilms.map((film) => (
+                  <motion.div
+                    key={film.slug}
+                    layout
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                    className="inline-flex items-center space-x-2 bg-[#1b2228] border border-[#2c3440] hover:border-[#3d4957] pl-3 pr-2 py-1.5 rounded-xl text-xs font-semibold text-white shadow-sm"
                   >
-                    Set Anywhere
-                  </button>
-                  {locations.length > 1 && (
+                    <Clapperboard className="w-3.5 h-3.5 text-[#00e054] shrink-0" />
+                    <span className="truncate max-w-[200px]">
+                      {film.title || film.slug}
+                      {film.year && (
+                        <span className="text-[#99aabb] font-normal ml-1">
+                          ({film.year})
+                        </span>
+                      )}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setLocations(["Anywhere"])}
-                      className="text-[10px] text-brand-muted hover:text-red-400 cursor-pointer"
+                      onClick={() => handleRemoveFilm(film.slug)}
+                      className="text-[#667788] hover:text-red-400 p-0.5 rounded-md hover:bg-[#222b33] transition"
                     >
-                      Clear
+                      <X className="w-3.5 h-3.5" />
                     </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Chips Input Box */}
-              <div className="min-h-[42px] p-2 bg-brand-darker border border-brand-border rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green transition">
-                {locations.map((loc) => (
-                  <span
-                    key={loc}
-                    className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
-                      loc.toLowerCase() === "anywhere"
-                        ? "bg-brand-card text-brand-blue border-brand-blue/30"
-                        : "bg-brand-card text-brand-green border-brand-green/30"
-                    }`}
-                  >
-                    {loc.toLowerCase() === "anywhere" ? (
-                      <Globe className="w-3 h-3 text-brand-blue shrink-0" />
-                    ) : (
-                      <MapPin className="w-3 h-3 text-brand-green shrink-0" />
-                    )}
-                    <span>{loc}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveLocation(loc)}
-                      className="text-brand-muted hover:text-red-400 ml-0.5 p-0.5 rounded transition cursor-pointer"
-                      title={`Remove ${loc}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
+                  </motion.div>
                 ))}
+              </AnimatePresence>
 
-                <input
-                  type="text"
-                  value={locationInput}
-                  onChange={(e) => setLocationInput(e.target.value)}
-                  onKeyDown={handleLocationInputKeyDown}
-                  placeholder={
-                    locations.length === 0
-                      ? "Add location (e.g. Ankara, Berlin)..."
-                      : "+ Add location..."
-                  }
-                  className="flex-grow min-w-[110px] bg-transparent text-xs text-white placeholder-brand-muted focus:outline-none py-1 px-1 font-medium"
-                />
+              {selectedFilms.length === 0 && (
+                <span className="text-xs text-[#667788] px-2 italic select-none">
+                  Search a movie below or choose from popular suggestions.
+                </span>
+              )}
+            </div>
 
-                {locationInput.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => handleAddLocation(locationInput)}
-                    className="px-2 py-0.5 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded text-[10px] text-brand-green font-bold flex items-center space-x-0.5 cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Add</span>
-                  </button>
-                )}
-              </div>
+            {/* Instant Film Combobox */}
+            <FilmCombobox
+              value={comboboxValue}
+              onChange={handleAddFilmFromCombobox}
+              placeholder="Search Letterboxd film title (e.g. Interstellar, Alien, Dune)..."
+              disabled={isAddingFilm}
+            />
 
-              {/* Quick Preset Buttons */}
-              <div className="flex flex-wrap gap-1 mt-2">
-                {PRESET_LOCATIONS.map((loc) => {
-                  const active = isPresetActive(loc);
+            {/* Quick Suggestions */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-semibold text-[#667788] uppercase tracking-wider block">
+                Popular Quick Picks:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_SUGGESTIONS.map((film) => {
+                  const alreadyAdded = selectedFilms.some((f) => f.slug === film.slug);
                   return (
                     <button
-                      key={loc}
+                      key={film.slug}
                       type="button"
-                      onClick={() => handleTogglePresetLocation(loc)}
-                      className={`px-2 py-0.5 rounded border text-[10px] transition cursor-pointer flex items-center space-x-1 ${
-                        active
-                          ? "bg-brand-green text-black font-bold border-brand-green"
-                          : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white"
+                      disabled={alreadyAdded}
+                      onClick={() =>
+                        setSelectedFilms((prev) => {
+                          if (prev.some((f) => f.slug === film.slug)) return prev;
+                          return [...prev, { slug: film.slug, title: film.title, year: film.year }];
+                        })
+                      }
+                      className={`px-3 py-1 rounded-xl text-xs transition flex items-center space-x-1.5 ${
+                        alreadyAdded
+                          ? "bg-[#14181c] text-[#667788] border border-[#2c3440] opacity-50 cursor-not-allowed"
+                          : "bg-[#1b2228] text-[#e1e7ed] border border-[#2c3440] hover:border-[#00e054] hover:text-[#00e054] cursor-pointer"
                       }`}
                     >
-                      <span>{loc}</span>
-                      {active && <CheckCircle2 className="w-2.5 h-2.5 text-black" />}
+                      <Plus className="w-3 h-3" />
+                      <span>{film.title}</span>
+                      {film.year && <span className="text-[10px] text-[#667788]">({film.year})</span>}
                     </button>
                   );
                 })}
@@ -664,15 +360,79 @@ export default function ScoutForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-brand-border">
+          {/* Section 2: Location Filter */}
+          <div className="space-y-3 pt-4 border-t border-[#2c3440]">
+            <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <MapPin className="w-4 h-4 text-[#40bcf4]" />
+              Target Locations
+            </label>
+
+            <div className="min-h-[50px] p-2.5 rounded-2xl bg-[#14181c] border border-[#2c3440] flex flex-wrap items-center gap-2">
+              {locations.map((loc) => (
+                <span
+                  key={loc}
+                  className="inline-flex items-center space-x-1.5 bg-[#1b2228] border border-[#2c3440] px-3 py-1 rounded-xl text-xs font-semibold text-[#00e054]"
+                >
+                  <MapPin className="w-3 h-3" />
+                  <span>{loc}</span>
+                  {locations.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLocation(loc)}
+                      className="text-[#667788] hover:text-red-400 ml-1"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </span>
+              ))}
+
+              <input
+                type="text"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                onKeyDown={handleLocationKeyDown}
+                onBlur={() => {
+                  if (locationInput.trim()) handleAddLocation(locationInput);
+                }}
+                placeholder={locations.length === 0 ? "Type city (e.g. Ankara) and press Enter" : "Add another location..."}
+                className="bg-transparent border-none text-xs sm:text-sm text-white placeholder-[#667788] focus:outline-none flex-1 min-w-[140px] px-2 py-1"
+              />
+            </div>
+
+            {/* Preset Buttons */}
+            <div className="flex flex-wrap gap-1.5">
+              {PRESET_LOCATIONS.map((loc) => {
+                const active = locations.some((l) => l.toLowerCase() === loc.toLowerCase());
+                return (
+                  <button
+                    key={loc}
+                    type="button"
+                    onClick={() => handleTogglePresetLocation(loc)}
+                    className={`px-3 py-1 rounded-xl border text-xs transition cursor-pointer flex items-center space-x-1.5 ${
+                      active
+                        ? "bg-[#00e054] text-[#0d1114] font-bold border-[#00e054]"
+                        : "bg-[#14181c] text-[#99aabb] border-[#2c3440] hover:text-white hover:border-[#3d4957]"
+                    }`}
+                  >
+                    <span>{loc}</span>
+                    {active && <CheckCircle2 className="w-3 h-3 text-[#0d1114]" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 3: Fine Tuning */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-[#2c3440]">
             <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+              <label className="block text-xs font-semibold text-white mb-1.5">
                 Sentiment Filter
               </label>
               <select
                 value={sentiment}
                 onChange={(e) => setSentiment(e.target.value)}
-                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus"
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
               >
                 <option value="liked">Liked / High Rating (4-5 Stars)</option>
                 <option value="disliked">Disliked / Low Rating (0.5-2 Stars)</option>
@@ -681,13 +441,13 @@ export default function ScoutForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+              <label className="block text-xs font-semibold text-white mb-1.5">
                 Scan Depth
               </label>
               <select
                 value={maxPages}
                 onChange={(e) => setMaxPages(parseInt(e.target.value) || 3)}
-                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus"
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
               >
                 <option value={2}>2 Pages per film (~150 candidates)</option>
                 <option value={3}>3 Pages per film (~225 candidates)</option>
@@ -696,13 +456,13 @@ export default function ScoutForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+              <label className="block text-xs font-semibold text-white mb-1.5">
                 Matches Limit
               </label>
               <select
                 value={limit}
                 onChange={(e) => setLimit(parseInt(e.target.value) || 50)}
-                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus"
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
               >
                 <option value={25}>Stop at 25 Matches</option>
                 <option value={50}>Stop at 50 Matches</option>
@@ -711,15 +471,15 @@ export default function ScoutForm({
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 pt-1">
             <input
               type="checkbox"
               id="scout-bio-checkbox"
               checked={includeBio}
               onChange={(e) => setIncludeBio(e.target.checked)}
-              className="rounded bg-brand-darker border-brand-border text-brand-green focus:ring-0 w-4 h-4 cursor-pointer"
+              className="rounded bg-[#14181c] border-[#2c3440] text-[#00e054] focus:ring-0 w-4 h-4 cursor-pointer"
             />
-            <label htmlFor="scout-bio-checkbox" className="text-xs text-gray-300 cursor-pointer">
+            <label htmlFor="scout-bio-checkbox" className="text-xs text-[#99aabb] cursor-pointer">
               Search member profile bio in addition to location field
             </label>
           </div>
@@ -727,16 +487,16 @@ export default function ScoutForm({
           <button
             type="submit"
             disabled={isPending || selectedFilms.length === 0}
-            className="w-full bg-brand-green hover:bg-brand-greenHover disabled:opacity-50 text-black font-bold py-3 px-6 rounded-xl transition duration-150 flex items-center justify-center space-x-2 text-sm cursor-pointer shadow-lg shadow-brand-green/10"
+            className="w-full bg-gradient-to-r from-[#00e054] to-[#00b844] hover:from-[#00b844] hover:to-[#009e3a] disabled:opacity-50 text-[#0d1114] font-extrabold py-3.5 px-6 rounded-2xl transition duration-150 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer shadow-xl shadow-[#00e054]/15"
           >
             {isPending ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
                 <span>Scouting Letterboxd... ({elapsedSeconds.toFixed(1)}s)</span>
               </>
             ) : (
               <>
-                <Search className="w-4 h-4" />
+                <Search className="w-5 h-5" />
                 <span>Start Scout ({selectedFilms.length} {selectedFilms.length === 1 ? "Film" : "Films"})</span>
               </>
             )}
@@ -744,116 +504,117 @@ export default function ScoutForm({
         </form>
       </div>
 
-      {/* Dynamic Scouting Status Panel (Displayed during active search) */}
+      {/* Dynamic Scouting Status Panel with Animated Radar */}
       {isPending && (
-        <div className="solid-card rounded-2xl p-5 sm:p-6 border-brand-green/40 bg-brand-darker/90 backdrop-blur space-y-4 animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-border pb-3">
-            <div className="flex items-center space-x-2.5">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-green"></span>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-6 border-[#00e054]/40 space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2c3440] pb-3">
+            <div className="flex items-center space-x-3">
+              <span className="relative flex h-3.5 w-3.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00e054] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00e054]"></span>
               </span>
               <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
                   <span>Scouting Letterboxd</span>
-                  <span className="text-xs font-mono text-brand-green">
-                    &bull; {selectedFilms.map((f) => f.title).join(", ")} in {locations.join(", ")}
+                  <span className="text-xs font-mono text-[#00e054]">
+                    &bull; {selectedFilms.length} Films in {locations.join(", ")}
                   </span>
                 </h4>
-                <p className="text-[11px] text-brand-subtext">
-                  Bypassing anti-bot verification & scanning member network across {selectedFilms.length} target films and {locations.length} locations
+                <p className="text-[11px] text-[#99aabb]">
+                  Bypassing rate limits & scanning member network across target films and locations
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 bg-brand-card px-3 py-1.5 rounded-xl border border-brand-border text-xs font-mono">
-              <span className="text-brand-muted">Elapsed:</span>
-              <span className="font-bold text-brand-green">{elapsedSeconds.toFixed(1)}s</span>
+            <div className="flex items-center space-x-2 bg-[#14181c] px-3 py-1.5 rounded-xl border border-[#2c3440] text-xs font-mono">
+              <span className="text-[#667788]">Elapsed:</span>
+              <span className="font-bold text-[#00e054]">{elapsedSeconds.toFixed(1)}s</span>
             </div>
           </div>
 
           {/* Stepper Status Progression */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 1
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep > 1 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
               ) : (
-                <Globe className="w-4 h-4 text-brand-green animate-pulse shrink-0" />
+                <Globe className="w-4 h-4 text-[#00e054] animate-pulse shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">1. Connection</span>
-                <span className="text-[10px] text-brand-subtext block truncate">{selectedFilms.length} target films</span>
+                <span className="block font-semibold truncate text-xs">1. Connection</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">{selectedFilms.length} target films</span>
               </div>
             </div>
 
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 2
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep > 2 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
               ) : statusStep === 2 ? (
-                <Loader2 className="w-4 h-4 text-brand-orange animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-[#ff8000] animate-spin shrink-0" />
               ) : (
                 <Layers className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">2. Reviews & Likes</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Parsing {maxPages} pages/film</span>
+                <span className="block font-semibold truncate text-xs">2. Reviews & Likes</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">Parsing {maxPages} pages/film</span>
               </div>
             </div>
 
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 3
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep > 3 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
               ) : statusStep === 3 ? (
-                <Loader2 className="w-4 h-4 text-brand-blue animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-[#40bcf4] animate-spin shrink-0" />
               ) : (
                 <Users className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">3. Member Profiles</span>
-                <span className="text-[10px] text-brand-subtext block truncate">
-                  Matching {locations.slice(0, 2).join(", ")}
-                  {locations.length > 2 ? ` +${locations.length - 2}` : ""}
-                </span>
+                <span className="block font-semibold truncate text-xs">3. Member Profiles</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">{locations.join(", ")}</span>
               </div>
             </div>
 
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 4
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep >= 4 ? (
-                <Loader2 className="w-4 h-4 text-brand-green animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-[#00e054] animate-spin shrink-0" />
               ) : (
                 <Sparkles className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">4. Filtering</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Rendering matches</span>
+                <span className="block font-semibold truncate text-xs">4. Filtering</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">Rendering matches</span>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   );

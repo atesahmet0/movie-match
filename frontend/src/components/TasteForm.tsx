@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import React, { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Clapperboard,
@@ -14,10 +14,14 @@ import {
   Users,
   CheckCircle2,
   MapPin,
+  Trash2,
+  Sliders,
 } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
-import { fetchFilmInfo, searchFilms } from "@/lib/api";
+import { fetchFilmInfo } from "@/lib/api";
 import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
+import { FilmCombobox } from "@/components/ui/FilmCombobox";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface TasteFormProps {
   initialFilms: string[];
@@ -57,7 +61,7 @@ export default function TasteForm({
   const [isPending, startTransition] = useTransition();
   const { selectedFilms, addFilm, removeFilm, clearFilms } = useTaste();
 
-  const [manualInput, setManualInput] = useState("");
+  const [comboboxValue, setComboboxValue] = useState("");
   const [isAddingFilm, setIsAddingFilm] = useState(false);
 
   // Multi-location chips state
@@ -77,137 +81,91 @@ export default function TasteForm({
   const [minShared, setMinShared] = useState(initialMinShared || 1);
   const [maxPages, setMaxPages] = useState(initialPages || 2);
 
-  // Suggestions dropdown
-  const [suggestions, setSuggestions] = useState<FilmSearchResult[]>([]);
-  const [isSearchingFilms, setIsSearchingFilms] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
   // Live status progress
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [statusStep, setStatusStep] = useState(0);
 
-  // Debounced search for manual film input
+  // Seed initial films on first mount
   useEffect(() => {
-    const trimmed = manualInput.trim();
-    if (!trimmed || trimmed.startsWith("http")) {
-      setSuggestions([]);
-      return;
+    if (initialFilms && initialFilms.length > 0 && selectedFilms.length === 0) {
+      initialFilms.forEach((slug) => {
+        if (slug) {
+          fetchFilmInfo(slug).then((meta) => {
+            if (meta && meta.slug) {
+              addFilm({
+                slug: meta.slug,
+                title: meta.title || meta.slug,
+                year: meta.year,
+                poster_url: meta.poster_url,
+              });
+            } else {
+              addFilm({ slug, title: slug });
+            }
+          });
+        }
+      });
     }
+  }, [initialFilms]);
 
-    const timer = setTimeout(async () => {
-      setIsSearchingFilms(true);
-      const results = await searchFilms(trimmed, 6);
-      setSuggestions(results);
-      setIsSearchingFilms(false);
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [manualInput]);
-
+  // Handle timer during scan
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Timer & stage progression while taste match is pending
-  useEffect(() => {
-    if (!isPending) {
+    let interval: NodeJS.Timeout | null = null;
+    if (isPending) {
       setElapsedSeconds(0);
+      setStatusStep(1);
+      const startTime = Date.now();
+      interval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        setElapsedSeconds(elapsed);
+        if (elapsed > 1.2 && elapsed <= 3.5) setStatusStep(2);
+        else if (elapsed > 3.5 && elapsed <= 7.0) setStatusStep(3);
+        else if (elapsed > 7.0) setStatusStep(4);
+      }, 100);
+    } else {
       setStatusStep(0);
-      return;
     }
-
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      const sec = (Date.now() - startTime) / 1000;
-      setElapsedSeconds(sec);
-
-      if (sec < 3.0) {
-        setStatusStep(1);
-      } else if (sec < 8.0) {
-        setStatusStep(2);
-      } else if (sec < 15.0) {
-        setStatusStep(3);
-      } else {
-        setStatusStep(4);
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isPending]);
 
-  const handleAddFilmFromSuggestion = async (filmItem: FilmSearchResult) => {
-    const filmObj: SelectedFilmChip = {
-      slug: filmItem.slug,
-      title: filmItem.title,
-      year: filmItem.year || null,
-      poster_url: null,
-    };
-
-    setIsAddingFilm(true);
-    try {
-      const meta = await fetchFilmInfo(filmItem.slug);
-      if (meta?.poster_url) {
-        filmObj.poster_url = meta.poster_url;
-      }
-    } catch (e) {
-      console.warn("Could not fetch film info:", e);
-    }
-
-    addFilm(filmObj);
-    setManualInput("");
-    setIsDropdownOpen(false);
-    setIsAddingFilm(false);
-  };
-
-  const handleAddManualFilm = async () => {
-    const val = manualInput.trim();
-    if (!val) return;
+  const handleAddFilmFromCombobox = async (slug: string, filmMeta?: FilmSearchResult) => {
+    if (!slug) return;
     setIsAddingFilm(true);
 
-    const clean = val
-      .toLowerCase()
-      .replace(/https?:\/\/letterboxd\.com\/film\//, "")
-      .replace(/\/$/, "")
-      .trim();
-
-    const title = clean
-      .replace(/-/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-
-    const filmObj: SelectedFilmChip = {
-      slug: clean,
-      title: title,
-      year: null,
-      poster_url: null,
-    };
-
-    try {
-      const meta = await fetchFilmInfo(clean);
-      if (meta) {
-        if (meta.title) filmObj.title = meta.title;
-        if (meta.year !== undefined) filmObj.year = meta.year;
-        if (meta.poster_url !== undefined) filmObj.poster_url = meta.poster_url;
-      }
-    } catch (err) {
-      console.warn("Could not fetch film info:", err);
+    if (filmMeta) {
+      addFilm({
+        slug: filmMeta.slug,
+        title: filmMeta.title,
+        year: filmMeta.year,
+      });
+      setComboboxValue("");
+      setIsAddingFilm(false);
+      return;
     }
 
-    addFilm(filmObj);
-    setManualInput("");
-    setIsDropdownOpen(false);
-    setIsAddingFilm(false);
+    try {
+      const meta = await fetchFilmInfo(slug);
+      if (meta && meta.slug) {
+        addFilm({
+          slug: meta.slug,
+          title: meta.title || meta.slug,
+          year: meta.year,
+          poster_url: meta.poster_url,
+        });
+      } else {
+        addFilm({ slug, title: slug });
+      }
+    } catch {
+      addFilm({ slug, title: slug });
+    } finally {
+      setComboboxValue("");
+      setIsAddingFilm(false);
+    }
   };
 
-  // Location chip handlers
-  const handleAddLocation = (locName: string) => {
-    const clean = locName.trim().replace(/^[,]+|[,]+$/g, "");
+  const handleAddLocation = (loc: string) => {
+    const clean = loc.trim();
     if (!clean) return;
 
     if (clean.toLowerCase() === "anywhere") {
@@ -226,262 +184,186 @@ export default function TasteForm({
     setLocationInput("");
   };
 
-  const handleRemoveLocation = (locName: string) => {
+  const handleRemoveLocation = (locToRemove: string) => {
     setLocations((prev) => {
-      const updated = prev.filter((l) => l !== locName);
-      return updated.length > 0 ? updated : ["Anywhere"];
+      const filtered = prev.filter((l) => l !== locToRemove);
+      return filtered.length > 0 ? filtered : ["Anywhere"];
     });
   };
 
-  const handleTogglePresetLocation = (preset: string) => {
-    if (preset.toLowerCase() === "anywhere") {
+  const handleTogglePresetLocation = (loc: string) => {
+    if (loc === "Anywhere") {
       setLocations(["Anywhere"]);
       return;
     }
 
     setLocations((prev) => {
-      const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
-      const exists = filtered.some((l) => l.toLowerCase() === preset.toLowerCase());
-      if (exists) {
-        const next = filtered.filter((l) => l.toLowerCase() !== preset.toLowerCase());
+      const withoutAnywhere = prev.filter((l) => l !== "Anywhere");
+      if (withoutAnywhere.includes(loc)) {
+        const next = withoutAnywhere.filter((l) => l !== loc);
         return next.length > 0 ? next : ["Anywhere"];
       } else {
-        return [...filtered, preset];
+        return [...withoutAnywhere, loc];
       }
     });
   };
 
-  const isPresetActive = (preset: string) => {
-    return locations.some((l) => l.toLowerCase() === preset.toLowerCase());
-  };
-
-  const handleLocationInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       handleAddLocation(locationInput);
-    } else if (e.key === "Backspace" && !locationInput && locations.length > 0) {
-      handleRemoveLocation(locations[locations.length - 1]);
     }
   };
 
-  const handleRunMatch = () => {
-    if (selectedFilms.length === 0) {
-      alert("Please select at least 1 film.");
-      return;
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedFilms.length === 0) return;
 
-    let finalLocations = [...locations];
-    if (locationInput.trim()) {
-      const clean = locationInput.trim();
-      if (clean.toLowerCase() === "anywhere") {
-        finalLocations = ["Anywhere"];
-      } else {
-        const filtered = finalLocations.filter((l) => l.toLowerCase() !== "anywhere");
-        if (!filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
-          finalLocations = [...filtered, clean];
-        }
-      }
-      setLocations(finalLocations);
-      setLocationInput("");
-    }
+    const filmsParam = selectedFilms.map((f) => f.slug).join(",");
+    const locParam = locations.join(",");
 
     startTransition(() => {
-      const filmsParam = selectedFilms.map((f) => f.slug).join(",");
-      const locationParam = finalLocations.join(",");
-      const params = new URLSearchParams();
-      params.set("films", filmsParam);
-      params.set("location", locationParam || "Anywhere");
-      params.set("minShared", String(minShared));
-      params.set("maxPages", String(maxPages));
-      router.push(`/taste?${params.toString()}`);
+      router.push(
+        `/taste?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
+          locParam
+        )}&min_shared=${minShared}&max_pages=${maxPages}`
+      );
     });
   };
 
-  const displayedSuggestions =
-    suggestions.length > 0 ? suggestions : POPULAR_SUGGESTIONS;
-
   return (
-    <div className="space-y-4 max-w-4xl mx-auto">
-      <div className="solid-card rounded-2xl p-6 sm:p-7 space-y-5">
-        {/* Selected Films Queue */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs font-semibold text-gray-300">
-              Selected Target Films ({selectedFilms.length})
-            </label>
-            {selectedFilms.length > 0 && (
-              <button
-                type="button"
-                onClick={clearFilms}
-                className="text-xs text-brand-muted hover:text-red-400 transition cursor-pointer"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-
-          <div className="min-h-[52px] p-2.5 bg-brand-darker border border-brand-border rounded-xl flex flex-wrap items-center gap-2">
-            {selectedFilms.map((film) => (
-              <span
-                key={film.slug}
-                className="inline-flex items-center space-x-1.5 px-3 py-1 bg-brand-card rounded-lg border border-brand-border text-xs text-white"
-              >
-                <Clapperboard className="w-3.5 h-3.5 text-brand-green" />
-                <span className="font-semibold">{film.title}</span>
-                <button
-                  type="button"
-                  onClick={() => removeFilm(film.slug)}
-                  className="text-brand-muted hover:text-red-400 font-bold ml-1 cursor-pointer"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-            {selectedFilms.length === 0 && (
-              <span className="text-xs text-brand-muted italic pl-1">
-                No films selected yet. Search and pick movies below.
-              </span>
-            )}
-          </div>
-
-          {/* Add Film Slug/URL Input with Dropdown */}
-          <div className="mt-2.5 relative" ref={dropdownRef}>
-            <div className="flex gap-2">
-              <div className="relative flex-grow">
-                <input
-                  type="text"
-                  value={manualInput}
-                  onChange={(e) => {
-                    setManualInput(e.target.value);
-                    setIsDropdownOpen(true);
-                  }}
-                  onFocus={() => setIsDropdownOpen(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddManualFilm();
-                    }
-                  }}
-                  placeholder="Search film title or slug (e.g. alien, sunshine-2007)..."
-                  className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2 text-white placeholder-brand-muted focus:outline-none glow-focus pr-8 font-medium"
-                />
-                <div className="absolute right-2.5 top-2.5 text-brand-green pointer-events-none">
-                  {isSearchingFilms ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-green" />
-                  ) : (
-                    <Clapperboard className="w-3.5 h-3.5 opacity-80" />
-                  )}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleAddManualFilm}
-                disabled={isAddingFilm || !manualInput.trim()}
-                className="px-4 py-2 bg-brand-card hover:bg-brand-cardHover disabled:opacity-50 border border-brand-border rounded-xl text-xs font-semibold text-white transition flex items-center space-x-1 cursor-pointer"
-              >
-                {isAddingFilm ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Plus className="w-3.5 h-3.5" />
-                )}
-                <span>Add</span>
-              </button>
-            </div>
-
-            {/* Dropdown Suggestions */}
-            {isDropdownOpen && (
-              <div className="absolute z-50 left-0 right-16 mt-1 bg-brand-card border border-brand-borderLight rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
-                <div className="p-2 border-b border-brand-border bg-brand-darker/60 flex items-center justify-between text-[11px] text-brand-muted px-3">
-                  <span className="font-semibold flex items-center gap-1 text-gray-300">
-                    <Clapperboard className="w-3 h-3 text-brand-green" />
-                    {suggestions.length > 0
-                      ? `Matching Films (${suggestions.length})`
-                      : "Suggested Films"}
-                  </span>
-                </div>
-                <ul className="py-1 divide-y divide-brand-border/40">
-                  {displayedSuggestions.map((item) => (
-                    <li key={item.slug}>
-                      <button
-                        type="button"
-                        onClick={() => handleAddFilmFromSuggestion(item)}
-                        className="w-full text-left px-3.5 py-2 flex items-center justify-between hover:bg-brand-darker text-gray-300 hover:text-white transition cursor-pointer text-xs"
-                      >
-                        <div className="truncate pr-2 flex items-center space-x-2">
-                          <Clapperboard className="w-3.5 h-3.5 text-brand-green/70 shrink-0" />
-                          <span className="font-bold text-white mr-1 truncate">{item.title}</span>
-                          {item.year && (
-                            <span className="text-[10px] text-brand-subtext font-mono">
-                              ({item.year})
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] font-mono text-brand-green shrink-0">
-                          + Add
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Query Parameters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-brand-border">
-          {/* Target Location Field with Multiple Chips */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-gray-300">
-                Target Locations ({locations.length})
+    <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="glass-card p-6 sm:p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Section 1: Film Matrix Basket */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#00e054]" />
+                Taste Matrix Basket ({selectedFilms.length} Selected)
               </label>
-              <div className="flex items-center space-x-2">
+              {selectedFilms.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setLocations(["Anywhere"])}
-                  className="text-[10px] text-brand-green hover:underline cursor-pointer"
+                  onClick={clearFilms}
+                  className="text-xs text-[#667788] hover:text-red-400 transition flex items-center space-x-1"
                 >
-                  Set Anywhere
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear all</span>
                 </button>
-                {locations.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setLocations(["Anywhere"])}
-                    className="text-[10px] text-brand-muted hover:text-red-400 cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Chips Box */}
-            <div className="min-h-[42px] p-2 bg-brand-darker border border-brand-border rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green transition">
+            {/* Selected Chips with Framer Motion Springs */}
+            <div className="min-h-[56px] p-3 rounded-2xl bg-[#14181c] border border-[#2c3440] flex flex-wrap items-center gap-2">
+              <AnimatePresence mode="popLayout">
+                {selectedFilms.map((film) => (
+                  <motion.div
+                    key={film.slug}
+                    layout
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                    className="inline-flex items-center space-x-2 bg-[#1b2228] border border-[#2c3440] hover:border-[#3d4957] pl-3 pr-2 py-1.5 rounded-xl text-xs font-semibold text-white shadow-sm group"
+                  >
+                    <Clapperboard className="w-3.5 h-3.5 text-[#00e054] shrink-0" />
+                    <span className="truncate max-w-[200px]">
+                      {film.title || film.slug}
+                      {film.year && (
+                        <span className="text-[#99aabb] font-normal ml-1">
+                          ({film.year})
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFilm(film.slug)}
+                      className="text-[#667788] hover:text-red-400 p-0.5 rounded-md hover:bg-[#222b33] transition"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {selectedFilms.length === 0 && (
+                <span className="text-xs text-[#667788] px-2 italic select-none">
+                  No films added yet. Search below or click popular suggestions.
+                </span>
+              )}
+            </div>
+
+            {/* Instant Film Search Combobox */}
+            <div className="relative">
+              <FilmCombobox
+                value={comboboxValue}
+                onChange={handleAddFilmFromCombobox}
+                placeholder="Search Letterboxd film to add to your taste basket..."
+                disabled={isAddingFilm}
+              />
+            </div>
+
+            {/* Quick Popular Suggestions */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-semibold text-[#667788] uppercase tracking-wider block">
+                Quick Add Suggestions:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_SUGGESTIONS.map((film) => {
+                  const alreadyAdded = selectedFilms.some((f) => f.slug === film.slug);
+                  return (
+                    <button
+                      key={film.slug}
+                      type="button"
+                      disabled={alreadyAdded}
+                      onClick={() =>
+                        addFilm({
+                          slug: film.slug,
+                          title: film.title,
+                          year: film.year,
+                        })
+                      }
+                      className={`px-3 py-1 rounded-xl text-xs transition flex items-center space-x-1.5 ${
+                        alreadyAdded
+                          ? "bg-[#14181c] text-[#667788] border border-[#2c3440] opacity-50 cursor-not-allowed"
+                          : "bg-[#1b2228] text-[#e1e7ed] border border-[#2c3440] hover:border-[#00e054] hover:text-[#00e054] cursor-pointer"
+                      }`}
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{film.title}</span>
+                      {film.year && <span className="text-[10px] text-[#667788]">({film.year})</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Location Filter */}
+          <div className="space-y-3 pt-4 border-t border-[#2c3440]">
+            <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <MapPin className="w-4 h-4 text-[#40bcf4]" />
+              Target Locations
+            </label>
+
+            <div className="min-h-[50px] p-2.5 rounded-2xl bg-[#14181c] border border-[#2c3440] flex flex-wrap items-center gap-2">
               {locations.map((loc) => (
                 <span
                   key={loc}
-                  className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
-                    loc.toLowerCase() === "anywhere"
-                      ? "bg-brand-card text-brand-blue border-brand-blue/30"
-                      : "bg-brand-card text-brand-green border-brand-green/30"
-                  }`}
+                  className="inline-flex items-center space-x-1.5 bg-[#1b2228] border border-[#2c3440] px-3 py-1 rounded-xl text-xs font-semibold text-[#00e054]"
                 >
-                  {loc.toLowerCase() === "anywhere" ? (
-                    <Globe className="w-3 h-3 text-brand-blue shrink-0" />
-                  ) : (
-                    <MapPin className="w-3 h-3 text-brand-green shrink-0" />
-                  )}
+                  <MapPin className="w-3 h-3" />
                   <span>{loc}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveLocation(loc)}
-                    className="text-brand-muted hover:text-red-400 ml-0.5 p-0.5 rounded transition cursor-pointer"
-                    title={`Remove ${loc}`}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  {locations.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLocation(loc)}
+                      className="text-[#667788] hover:text-red-400 ml-1"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </span>
               ))}
 
@@ -489,203 +371,208 @@ export default function TasteForm({
                 type="text"
                 value={locationInput}
                 onChange={(e) => setLocationInput(e.target.value)}
-                onKeyDown={handleLocationInputKeyDown}
-                placeholder={
-                  locations.length === 0
-                    ? "Add location..."
-                    : "+ Add..."
-                }
-                className="flex-grow min-w-[90px] bg-transparent text-xs text-white placeholder-brand-muted focus:outline-none py-1 px-1 font-medium"
+                onKeyDown={handleLocationKeyDown}
+                onBlur={() => {
+                  if (locationInput.trim()) handleAddLocation(locationInput);
+                }}
+                placeholder={locations.length === 0 ? "Type city (e.g. Ankara) and press Enter" : "Add another location..."}
+                className="bg-transparent border-none text-xs sm:text-sm text-white placeholder-[#667788] focus:outline-none flex-1 min-w-[140px] px-2 py-1"
               />
-
-              {locationInput.trim() && (
-                <button
-                  type="button"
-                  onClick={() => handleAddLocation(locationInput)}
-                  className="px-2 py-0.5 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded text-[10px] text-brand-green font-bold flex items-center space-x-0.5 cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Add</span>
-                </button>
-              )}
             </div>
 
-            <div className="flex flex-wrap gap-1 mt-2">
+            {/* Location Presets */}
+            <div className="flex flex-wrap gap-1.5">
               {PRESET_LOCATIONS.map((loc) => {
-                const active = isPresetActive(loc);
+                const active = locations.some((l) => l.toLowerCase() === loc.toLowerCase());
                 return (
                   <button
                     key={loc}
                     type="button"
                     onClick={() => handleTogglePresetLocation(loc)}
-                    className={`px-2 py-0.5 rounded border text-[10px] transition cursor-pointer flex items-center space-x-1 ${
+                    className={`px-3 py-1 rounded-xl border text-xs transition cursor-pointer flex items-center space-x-1.5 ${
                       active
-                        ? "bg-brand-green text-black font-bold border-brand-green"
-                        : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white"
+                        ? "bg-[#00e054] text-[#0d1114] font-bold border-[#00e054]"
+                        : "bg-[#14181c] text-[#99aabb] border-[#2c3440] hover:text-white hover:border-[#3d4957]"
                     }`}
                   >
                     <span>{loc}</span>
-                    {active && <CheckCircle2 className="w-2.5 h-2.5 text-black" />}
+                    {active && <CheckCircle2 className="w-3 h-3 text-[#0d1114]" />}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-300 mb-1.5">Min Shared Films</label>
-            <select
-              value={minShared}
-              onChange={(e) => setMinShared(parseInt(e.target.value) || 1)}
-              className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus"
-            >
-              <option value={1}>Match at least 1 film</option>
-              <option value={2}>Match at least 2 films (Overlap)</option>
-              <option value={3}>Match at least 3 films</option>
-              <option value={4}>Match all 4 films</option>
-            </select>
+          {/* Section 3: Fine Tuning Parameters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#2c3440]">
+            <div>
+              <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
+                <span>Minimum Shared Films</span>
+                <span className="text-[#00e054] font-mono font-bold">{minShared} / {selectedFilms.length || 1}</span>
+              </label>
+              <select
+                value={minShared}
+                onChange={(e) => setMinShared(parseInt(e.target.value) || 1)}
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
+              >
+                {Array.from({ length: Math.max(selectedFilms.length, 1) }, (_, i) => i + 1).map((num) => (
+                  <option key={num} value={num}>
+                    At least {num} {num === 1 ? "film" : "films"} in common
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
+                <span>Scan Depth per Film</span>
+                <span className="text-[#40bcf4] font-mono font-bold">{maxPages} Pages</span>
+              </label>
+              <select
+                value={maxPages}
+                onChange={(e) => setMaxPages(parseInt(e.target.value) || 2)}
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
+              >
+                <option value={1}>1 Page (~50 candidates / film)</option>
+                <option value={2}>2 Pages (~150 candidates / film)</option>
+                <option value={3}>3 Pages (~250 candidates / film)</option>
+                <option value={5}>5 Pages (~400 candidates / film)</option>
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-300 mb-1.5">Scan Depth</label>
-            <select
-              value={maxPages}
-              onChange={(e) => setMaxPages(parseInt(e.target.value) || 2)}
-              className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus"
-            >
-              <option value={1}>Quick (1 Page per film)</option>
-              <option value={2}>Balanced (2 Pages per film)</option>
-              <option value={3}>Deep (3 Pages per film)</option>
-            </select>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleRunMatch}
-          disabled={isPending || selectedFilms.length === 0}
-          className="w-full bg-brand-green hover:bg-brand-greenHover disabled:opacity-50 text-black font-bold py-3 px-6 rounded-xl transition duration-150 flex items-center justify-center space-x-2 text-sm cursor-pointer shadow-lg shadow-brand-green/10"
-        >
-          {isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Scouting Taste Soulmates... ({elapsedSeconds.toFixed(1)}s)</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              <span>Discover Taste Soulmates</span>
-            </>
-          )}
-        </button>
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={isPending || selectedFilms.length === 0}
+            className="w-full bg-gradient-to-r from-[#00e054] to-[#00b844] hover:from-[#00b844] hover:to-[#009e3a] disabled:opacity-50 text-[#0d1114] font-extrabold py-3.5 px-6 rounded-2xl transition duration-150 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer shadow-xl shadow-[#00e054]/15"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Finding Taste Soulmates... ({elapsedSeconds.toFixed(1)}s)</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" />
+                <span>Find My Taste Soulmates ({selectedFilms.length} Films)</span>
+              </>
+            )}
+          </button>
+        </form>
       </div>
 
-      {/* Dynamic Status Progress for Taste Soulmates */}
+      {/* Dynamic Scouting Status Panel with Animated Radar */}
       {isPending && (
-        <div className="solid-card rounded-2xl p-5 sm:p-6 border-brand-green/40 bg-brand-darker/90 backdrop-blur space-y-4 animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-border pb-3">
-            <div className="flex items-center space-x-2.5">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-green"></span>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-6 border-[#00e054]/40 space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2c3440] pb-3">
+            <div className="flex items-center space-x-3">
+              <span className="relative flex h-3.5 w-3.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00e054] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00e054]"></span>
               </span>
               <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                  <span>Calculating Multi-Film Taste Overlap</span>
-                  <span className="text-xs font-mono text-brand-green">
-                    &bull; {selectedFilms.length} films in {locations.join(", ")}
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>Scanning Taste Graph</span>
+                  <span className="text-xs font-mono text-[#00e054]">
+                    &bull; {selectedFilms.length} Films across {locations.join(", ")}
                   </span>
                 </h4>
-                <p className="text-[11px] text-brand-subtext">
-                  Cross-referencing members across multiple film fanbases
+                <p className="text-[11px] text-[#99aabb]">
+                  Correlating user ratings and favorites via rotating proxy pipeline
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 bg-brand-card px-3 py-1.5 rounded-xl border border-brand-border text-xs font-mono">
-              <span className="text-brand-muted">Elapsed:</span>
-              <span className="font-bold text-brand-green">{elapsedSeconds.toFixed(1)}s</span>
+            <div className="flex items-center space-x-2 bg-[#14181c] px-3 py-1.5 rounded-xl border border-[#2c3440] text-xs font-mono">
+              <span className="text-[#667788]">Elapsed:</span>
+              <span className="font-bold text-[#00e054]">{elapsedSeconds.toFixed(1)}s</span>
             </div>
           </div>
 
+          {/* Stepper Status Progression */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 1
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep > 1 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
               ) : (
-                <Globe className="w-4 h-4 text-brand-green animate-pulse shrink-0" />
+                <Globe className="w-4 h-4 text-[#00e054] animate-pulse shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">1. Film Targets</span>
-                <span className="text-[10px] text-brand-subtext block truncate">{selectedFilms.length} films queued</span>
+                <span className="block font-semibold truncate text-xs">1. Matrix Load</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">{selectedFilms.length} target films</span>
               </div>
             </div>
 
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 2
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep > 2 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
               ) : statusStep === 2 ? (
-                <Loader2 className="w-4 h-4 text-brand-orange animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-[#ff8000] animate-spin shrink-0" />
               ) : (
                 <Layers className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">2. Cross-Scraping</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Scanning ratings</span>
+                <span className="block font-semibold truncate text-xs">2. Film Overlap</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">{maxPages} pages / film</span>
               </div>
             </div>
 
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 3
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep > 3 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
               ) : statusStep === 3 ? (
-                <Loader2 className="w-4 h-4 text-brand-blue animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-[#40bcf4] animate-spin shrink-0" />
               ) : (
                 <Users className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">3. Geo Matching</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Filtering {locations.slice(0, 2).join(", ")}</span>
+                <span className="block font-semibold truncate text-xs">3. Profile Match</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">{locations.join(", ")}</span>
               </div>
             </div>
 
             <div
-              className={`p-2.5 rounded-xl border flex items-center space-x-2 transition ${
+              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 4
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
+                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
+                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
               }`}
             >
               {statusStep >= 4 ? (
-                <Loader2 className="w-4 h-4 text-brand-green animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-[#00e054] animate-spin shrink-0" />
               ) : (
                 <Sparkles className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-[11px]">4. Compatibility</span>
-                <span className="text-[10px] text-brand-subtext block truncate">Ranking soulmates</span>
+                <span className="block font-semibold truncate text-xs">4. Scoring</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">Calculating overlap</span>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   );
