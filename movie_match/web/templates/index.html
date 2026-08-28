@@ -572,13 +572,23 @@
         <!-- Query Parameters -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-brand-border">
           <div>
-            <label class="block text-xs font-semibold text-gray-300 mb-1.5">Target Location</label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-semibold text-gray-300">Target Location</label>
+              <button type="button" @click="tasteLocation = 'Anywhere'" class="text-[10px] text-brand-green hover:underline">Set Anywhere</button>
+            </div>
             <input 
               type="text" 
               x-model="tasteLocation"
-              placeholder="e.g. Turkey, Ankara, Berlin..." 
+              placeholder="e.g. Anywhere, Turkey, Berlin..." 
               class="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus"
             />
+            <div class="flex flex-wrap gap-1 mt-1.5">
+              <button type="button" @click="tasteLocation = 'Anywhere'" :class="tasteLocation.toLowerCase() === 'anywhere' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">Anywhere</button>
+              <button type="button" @click="tasteLocation = 'Turkey'" :class="tasteLocation.toLowerCase() === 'turkey' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">Turkey</button>
+              <button type="button" @click="tasteLocation = 'USA'" :class="tasteLocation.toLowerCase() === 'usa' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">USA</button>
+              <button type="button" @click="tasteLocation = 'UK'" :class="tasteLocation.toLowerCase() === 'uk' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">UK</button>
+              <button type="button" @click="tasteLocation = 'Germany'" :class="tasteLocation.toLowerCase() === 'germany' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">Germany</button>
+            </div>
           </div>
 
           <div>
@@ -720,14 +730,23 @@
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-gray-300 mb-1.5">Location Query</label>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-semibold text-gray-300">Location Query</label>
+                <button type="button" @click="searchLocation = 'Anywhere'" class="text-[10px] text-brand-green hover:underline">Set Anywhere</button>
+              </div>
               <input 
                 type="text" 
                 x-model="searchLocation"
-                required
-                placeholder="e.g. Turkey, Ankara, Berlin..."
+                placeholder="e.g. Anywhere, Turkey, Ankara, Berlin..."
                 class="w-full bg-brand-darker border border-brand-border rounded-xl px-4 py-2.5 text-white placeholder-brand-muted focus:outline-none glow-focus text-sm"
               />
+              <div class="flex flex-wrap gap-1 mt-1.5">
+                <button type="button" @click="searchLocation = 'Anywhere'" :class="searchLocation.toLowerCase() === 'anywhere' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">Anywhere</button>
+                <button type="button" @click="searchLocation = 'Turkey'" :class="searchLocation.toLowerCase() === 'turkey' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">Turkey</button>
+                <button type="button" @click="searchLocation = 'USA'" :class="searchLocation.toLowerCase() === 'usa' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">USA</button>
+                <button type="button" @click="searchLocation = 'UK'" :class="searchLocation.toLowerCase() === 'uk' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">UK</button>
+                <button type="button" @click="searchLocation = 'Germany'" :class="searchLocation.toLowerCase() === 'germany' ? 'bg-brand-green text-black font-bold' : 'bg-brand-darker text-brand-subtext border-brand-border hover:text-white'" class="px-2 py-0.5 rounded border text-[10px] transition">Germany</button>
+              </div>
             </div>
           </div>
 
@@ -930,7 +949,7 @@
         selectedFilms: [],
         manualFilmInput: '',
         
-        tasteLocation: 'Turkey',
+        tasteLocation: 'Anywhere',
         tasteMinShared: 1,
         tastePages: 2,
         isTasteSearching: false,
@@ -939,7 +958,7 @@
         tasteTime: '0.0',
 
         searchFilm: 'vampire-hunter-d-bloodlust',
-        searchLocation: 'Turkey',
+        searchLocation: 'Anywhere',
         searchSentiment: 'liked',
         searchPages: 3,
         searchLimit: 50,
@@ -1122,6 +1141,7 @@
             alert('Please select at least 1 film.');
             return;
           }
+          const targetLoc = (this.tasteLocation || '').trim() || 'Anywhere';
           this.isTasteSearching = true;
           this.tasteResults = [];
           const start = performance.now();
@@ -1135,7 +1155,7 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 films: this.selectedFilms.map(f => f.slug),
-                location_query: this.tasteLocation,
+                location_query: targetLoc,
                 min_shared_films: parseInt(this.tasteMinShared) || 1,
                 max_pages_per_film: parseInt(this.tastePages) || 2,
                 limit_matches: 50,
@@ -1159,7 +1179,8 @@
         },
 
         async runSingleSearch() {
-          if (!this.searchFilm.trim() || !this.searchLocation.trim()) return;
+          if (!this.searchFilm.trim()) return;
+          const targetLoc = (this.searchLocation || '').trim() || 'Anywhere';
           this.isSearching = true;
           this.searchResults = [];
           const start = performance.now();
@@ -1168,7 +1189,7 @@
           }, 100);
 
           try {
-            const url = `/api/search?film=${encodeURIComponent(this.searchFilm)}&location=${encodeURIComponent(this.searchLocation)}&sentiment=${encodeURIComponent(this.searchSentiment)}&max_pages=${this.searchPages}&limit=${this.searchLimit}&include_bio=${this.searchIncludeBio}`;
+            const url = `/api/search?film=${encodeURIComponent(this.searchFilm)}&location=${encodeURIComponent(targetLoc)}&sentiment=${encodeURIComponent(this.searchSentiment)}&max_pages=${this.searchPages}&limit=${this.searchLimit}&include_bio=${this.searchIncludeBio}`;
             const res = await fetch(url);
             const data = await res.json();
             if (data.status === 'success') {

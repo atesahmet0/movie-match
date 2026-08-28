@@ -40,7 +40,7 @@ async def home(request: Request):
 @app.get("/api/search")
 async def api_search(
     film: str = Query(..., description="Film URL or slug"),
-    location: str = Query(..., description="Target location query (e.g. Turkey, Ankara)"),
+    location: str = Query("Anywhere", description="Target location query (e.g. Anywhere, Turkey, Ankara)"),
     sentiment: SentimentType = Query(SentimentType.LIKED, description="Sentiment: liked, disliked, all"),
     rating: Optional[str] = Query(None, description="Optional star rating (e.g. 5, 4.5, 0.5-2)"),
     max_pages: int = Query(3, ge=1, le=20),

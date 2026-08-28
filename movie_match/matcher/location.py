@@ -120,19 +120,34 @@ SHORT_ABBREVIATIONS: Set[str] = {
 }
 
 
+ANYWHERE_KEYWORDS: Set[str] = {
+    "anywhere", "worldwide", "global", "all", "*", "everywhere", "any", "world", ""
+}
+
+
 class LocationMatcher:
     """Matches user profile locations and bios against target queries with intelligent geo-aliasing."""
 
-    def __init__(self, query: str, include_bio: bool = True):
-        self.raw_query = query.strip()
+    def __init__(self, query: str = "Anywhere", include_bio: bool = True):
+        self.raw_query = (query or "").strip()
         self.include_bio = include_bio
         self.normalized_query = normalize_text(self.raw_query)
-        self.location_tokens: Set[str] = self._build_target_tokens()
-        # For bio matching, exclude short 2-letter abbreviations that collide with common words
-        self.bio_tokens: Set[str] = {t for t in self.location_tokens if len(t) > 2 and t not in SHORT_ABBREVIATIONS}
+        self.is_anywhere = (
+            not self.normalized_query
+            or self.normalized_query in ANYWHERE_KEYWORDS
+        )
 
-        self.loc_pattern = self._compile_pattern(self.location_tokens)
-        self.bio_pattern = self._compile_pattern(self.bio_tokens) if self.bio_tokens else None
+        if not self.is_anywhere:
+            self.location_tokens: Set[str] = self._build_target_tokens()
+            # For bio matching, exclude short 2-letter abbreviations that collide with common words
+            self.bio_tokens: Set[str] = {t for t in self.location_tokens if len(t) > 2 and t not in SHORT_ABBREVIATIONS}
+            self.loc_pattern = self._compile_pattern(self.location_tokens)
+            self.bio_pattern = self._compile_pattern(self.bio_tokens) if self.bio_tokens else None
+        else:
+            self.location_tokens = set()
+            self.bio_tokens = set()
+            self.loc_pattern = None
+            self.bio_pattern = None
 
     def _build_target_tokens(self) -> Set[str]:
         tokens: Set[str] = {self.normalized_query}
@@ -163,6 +178,11 @@ class LocationMatcher:
         Check if user's location or bio matches the target.
         Returns: (is_match, matched_fields, matched_text)
         """
+        # If searching for anywhere/worldwide, all users match!
+        if self.is_anywhere:
+            matched_text = location.strip() if location and location.strip() else "Worldwide"
+            return True, ["location"], matched_text
+
         norm_loc = normalize_text(location)
         matched_fields = []
         matched_text = ""

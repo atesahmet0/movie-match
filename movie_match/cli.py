@@ -33,10 +33,10 @@ def find_command(
         help="Letterboxd film URL (e.g. https://letterboxd.com/film/vampire-hunter-d-bloodlust/) or slug.",
     ),
     location: str = typer.Option(
-        ...,
+        "Anywhere",
         "--location",
         "-l",
-        help="Target location to match (e.g. 'Turkey', 'Ankara', 'Istanbul', 'Germany', 'USA', etc.).",
+        help="Target location to match (e.g. 'Anywhere', 'Turkey', 'Ankara', 'Berlin', 'USA').",
     ),
     sentiment: SentimentType = typer.Option(
         SentimentType.LIKED,
@@ -193,10 +193,10 @@ def taste_match_command(
         help="Comma-separated list of film slugs or URLs (e.g. 'alien, sunshine-2007, interstellar')",
     ),
     location: str = typer.Option(
-        ...,
+        "Anywhere",
         "--location",
         "-l",
-        help="Target location to match (e.g. 'Turkey', 'Berlin', 'London', etc.).",
+        help="Target location to match (e.g. 'Anywhere', 'Turkey', 'Berlin', 'London').",
     ),
     min_shared: int = typer.Option(
         1,

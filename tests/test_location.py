@@ -69,3 +69,15 @@ def test_international_matcher():
     assert matcher_usa.match("Austin, Texas")[0] is True
     assert matcher_usa.match("New York City")[0] is True
     assert matcher_usa.match("Paris")[0] is False
+
+
+def test_anywhere_location_matcher():
+    for q in ["Anywhere", "Worldwide", "global", "all", "*", ""]:
+        matcher = LocationMatcher(q)
+        assert matcher.is_anywhere is True
+        assert matcher.match("Istanbul, Turkey")[0] is True
+        assert matcher.match("London, UK")[0] is True
+        assert matcher.match("")[0] is True
+        assert matcher.match("", "Some bio without location")[0] is True
+        assert matcher.match("Tokyo, Japan")[2] == "Tokyo, Japan"
+        assert matcher.match("")[2] == "Worldwide"

@@ -1,7 +1,7 @@
 """Data models for movie-match using Pydantic v2."""
 
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, HttpUrl
 
 
@@ -53,7 +53,7 @@ class UserMatch(BaseModel):
 
 class SearchQuery(BaseModel):
     film_input: str
-    location_query: str
+    location_query: str = "Anywhere"
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None
     include_bio: bool = True
@@ -74,7 +74,7 @@ class UserFilmItem(BaseModel):
 
 
 class UserProfileDetail(UserProfile):
-    stats: dict = Field(default_factory=dict)
+    stats: Dict[str, Any] = Field(default_factory=dict)
     favorite_films: List[UserFilmItem] = Field(default_factory=list)
     recent_films: List[UserFilmItem] = Field(default_factory=list)
     top_rated_films: List[UserFilmItem] = Field(default_factory=list)
@@ -108,7 +108,7 @@ class TasteMatchResult(BaseModel):
 
 class MultiFilmMatchQuery(BaseModel):
     films: List[str]
-    location_query: str
+    location_query: str = "Anywhere"
     min_shared_films: int = 1
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None

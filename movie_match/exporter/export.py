@@ -12,28 +12,28 @@ from movie_match.models import ScanStats, UserMatch
 
 
 def render_rich_table(matches: List[UserMatch], stats: ScanStats, console: Optional[Console] = None):
-    """Render a beautiful, rich terminal table of results."""
+    """Render a clean terminal table of results."""
     console = console or Console()
 
     # Summary Panel
     summary_text = Text()
-    summary_text.append(f"🎬 Film: ", style="bold cyan")
+    summary_text.append(f"Film: ", style="bold cyan")
     summary_text.append(f"{stats.film_title} ({stats.film_slug})\n", style="bold white")
-    summary_text.append(f"📍 Location Matches: ", style="bold green")
+    summary_text.append(f"Location Matches: ", style="bold green")
     summary_text.append(f"{len(matches)} users found  ", style="bold white")
-    summary_text.append(f"👥 Candidates Scanned: ", style="bold yellow")
+    summary_text.append(f"Candidates Scanned: ", style="bold yellow")
     summary_text.append(f"{stats.total_users_discovered} (Cache hits: {stats.cache_hits})  ", style="dim white")
-    summary_text.append(f"⏱️ Time: ", style="bold magenta")
+    summary_text.append(f"Time: ", style="bold magenta")
     summary_text.append(f"{stats.elapsed_seconds:.2f}s", style="white")
 
-    console.print(Panel(summary_text, title="🎯 Movie Match Summary", border_style="cyan"))
+    console.print(Panel(summary_text, title="Movie Match Summary", border_style="cyan"))
 
     if not matches:
         console.print("[yellow]No matching users found for this location and criteria.[/yellow]")
         return
 
     table = Table(
-        title="🌟 Matching Letterboxd Users",
+        title="Matching Letterboxd Users",
         header_style="bold magenta",
         border_style="dim white",
         show_lines=True,
@@ -53,7 +53,7 @@ def render_rich_table(matches: List[UserMatch], stats: ScanStats, console: Optio
 
         loc_cell = Text()
         if m.location:
-            loc_cell.append(f"📍 {m.location}\n", style="bold green")
+            loc_cell.append(f"{m.location}\n", style="bold green")
         if "bio" in m.matched_fields:
             loc_cell.append(f"[{m.matched_location}]", style="dim italic green")
 
@@ -61,15 +61,15 @@ def render_rich_table(matches: List[UserMatch], stats: ScanStats, console: Optio
         if m.user_rating_stars:
             rating_cell.append(f"{m.user_rating_stars}\n", style="bold gold1")
         if m.user_liked:
-            rating_cell.append("❤️ Liked  ", style="bold red")
+            rating_cell.append("Liked  ", style="bold red")
         if m.found_via:
             rating_cell.append(f"({m.found_via})", style="dim white")
 
         snippet_cell = Text()
         if m.user_review:
-            snippet_cell.append(f"💬 \"{m.user_review[:120]}...\"\n", style="italic white")
+            snippet_cell.append(f"\"{m.user_review[:120]}...\"\n", style="italic white")
         elif m.bio:
-            snippet_cell.append(f"👤 {m.bio[:120]}", style="dim white")
+            snippet_cell.append(f"{m.bio[:120]}", style="dim white")
         else:
             snippet_cell.append("-", style="dim")
 
@@ -145,7 +145,7 @@ def export_to_markdown(matches: List[UserMatch], stats: ScanStats, output_path: 
         "|---|------|----------|----------------|--------------|--------------|",
     ]
     for idx, m in enumerate(matches, 1):
-        stars = m.user_rating_stars or ("❤️ Liked" if m.user_liked else "-")
+        stars = m.user_rating_stars or ("Liked" if m.user_liked else "-")
         review = (m.user_review or m.bio or "-").replace("\n", " ").replace("|", "\\|")[:100]
         lines.append(
             f"| {idx} | **{m.display_name}** (`@{m.username}`) | {m.location or m.matched_location} | {stars} | {review} | [{m.username}]({m.profile_url}) |"
