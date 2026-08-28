@@ -44,7 +44,7 @@ def test_html_home_page_compliance():
 
 
 def test_user_profile_flow():
-    """Test user profile lookup and favorite films poster resolution."""
+    """Test user profile lookup and favorite/recent films poster resolution."""
     # Test valid user
     response = client.get("/api/user/karsten")
     assert response.status_code == 200
@@ -64,9 +64,16 @@ def test_user_profile_flow():
             assert "empty-poster" not in f["poster_url"]
             assert f["poster_url"].startswith("http")
 
+    # Ensure recent films outside favourites have resolved posters
+    for f in profile.get("recent_films", []):
+        assert f["slug"] is not None
+        if f["poster_url"]:
+            assert "empty-poster" not in f["poster_url"]
+            assert f["poster_url"].startswith("http")
+
 
 def test_user_films_categories_flow():
-    """Test fetching watched, top-rated, and liked films for a user."""
+    """Test fetching watched, top-rated, and liked films for a user with poster resolution."""
     # Watched films
     resp_films = client.get("/api/user/karsten/films?category=films&page=1")
     assert resp_films.status_code == 200
@@ -74,6 +81,12 @@ def test_user_films_categories_flow():
     assert data_films["status"] == "success"
     assert isinstance(data_films["films"], list)
     assert len(data_films["films"]) > 0
+
+    # Verify posters outside favourites are resolved
+    for f in data_films["films"]:
+        if f["poster_url"]:
+            assert "empty-poster" not in f["poster_url"]
+            assert f["poster_url"].startswith("http")
 
     # Top rated films
     resp_top = client.get("/api/user/karsten/films?category=top_rated&page=1")

@@ -276,11 +276,38 @@ class LetterboxdScraper:
         stats.elapsed_seconds = time.time() - start_time
         return matches, stats
 
+    async def resolve_film_poster(self, film_item: UserFilmItem) -> None:
+        """Resolve film poster URL from film page metadata if missing."""
+        if not film_item.poster_url or "empty-poster" in film_item.poster_url:
+            try:
+                meta = await self.get_film_info(film_item.slug)
+                if meta.poster_url:
+                    film_item.poster_url = meta.poster_url
+            except Exception:
+                pass
+
+    async def resolve_posters_batch(self, films: List[UserFilmItem], limit: int = 36) -> None:
+        """Concurrently resolve posters for a list of film items."""
+        to_resolve = [f for f in films[:limit] if not f.poster_url or "empty-poster" in f.poster_url]
+        if to_resolve:
+            await asyncio.gather(*[self.resolve_film_poster(f) for f in to_resolve])
+
     async def get_user_full_profile(self, username: str, include_films: bool = True) -> Optional[UserProfileDetail]:
         """Fetch full user profile, stats, favorite films, and recent/top-rated films."""
         clean_user = username.strip().lower().lstrip("@")
         cached = await self.cache.get_user_profile_detail(clean_user)
         if cached:
+            # If cached profile has films without posters, resolve them
+            all_cached_films = (
+                (cached.favorite_films or [])
+                + (cached.recent_films or [])
+                + (cached.top_rated_films or [])
+                + (cached.liked_films or [])
+            )
+            needs_resolve = [f for f in all_cached_films if not f.poster_url or "empty-poster" in f.poster_url]
+            if needs_resolve:
+                await self.resolve_posters_batch(needs_resolve)
+                await self.cache.save_user_profile_detail(cached)
             return cached
 
         url = f"https://letterboxd.com/{clean_user}/"
@@ -291,30 +318,32 @@ class LetterboxdScraper:
         profile = parse_user_profile_detail(resp.text, clean_user)
 
         if profile.favorite_films:
-            async def resolve_poster(film_item: UserFilmItem):
-                if not film_item.poster_url or "empty-poster" in film_item.poster_url:
-                    meta = await self.get_film_info(film_item.slug)
-                    if meta.poster_url:
-                        film_item.poster_url = meta.poster_url
-
-            await asyncio.gather(*[resolve_poster(f) for f in profile.favorite_films])
+            await self.resolve_posters_batch(profile.favorite_films)
 
         if include_films:
             # Fetch recent films from page 1 of /films/
-            recent_films = await self.get_user_films_category(clean_user, "films", page=1)
+            recent_films = await self.get_user_films_category(clean_user, "films", page=1, resolve_posters=False)
             profile.recent_films = recent_films[:24]
 
             # Top rated films from recent or /films/by/rating/
             top_films = [f for f in recent_films if f.user_rating and f.user_rating >= 4.0]
             if not top_films:
-                top_films = await self.get_user_films_category(clean_user, "top_rated", page=1)
+                top_films = await self.get_user_films_category(clean_user, "top_rated", page=1, resolve_posters=False)
             profile.top_rated_films = top_films[:24]
 
             # Liked films from recent or /likes/films/
             liked_films = [f for f in recent_films if f.user_liked]
             if not liked_films:
-                liked_films = await self.get_user_films_category(clean_user, "likes", page=1)
+                liked_films = await self.get_user_films_category(clean_user, "likes", page=1, resolve_posters=False)
             profile.liked_films = liked_films[:24]
+
+            # Concurrently resolve posters across all film categories in profile
+            all_profile_films = (
+                profile.recent_films
+                + profile.top_rated_films
+                + profile.liked_films
+            )
+            await self.resolve_posters_batch(all_profile_films)
 
         await self.cache.save_user_profile_detail(profile)
         return profile
@@ -324,11 +353,17 @@ class LetterboxdScraper:
         username: str,
         category: str = "films",
         page: int = 1,
+        resolve_posters: bool = True,
     ) -> List[UserFilmItem]:
         """Fetch user films by category (films, top_rated, likes, watchlist)."""
         clean_user = username.strip().lower().lstrip("@")
         cached = await self.cache.get_user_films(clean_user, category, page)
         if cached is not None:
+            if resolve_posters:
+                needs_resolve = [f for f in cached[:36] if not f.poster_url or "empty-poster" in f.poster_url]
+                if needs_resolve:
+                    await self.resolve_posters_batch(needs_resolve)
+                    await self.cache.save_user_films(clean_user, category, page, cached)
             return cached
 
         if category == "top_rated":
@@ -360,13 +395,15 @@ class LetterboxdScraper:
         if not resp or resp.status_code != 200:
             if category == "likes":
                 # Fallback to watched films with user_liked == True
-                watched = await self.get_user_films_category(clean_user, "films", page=page)
+                watched = await self.get_user_films_category(clean_user, "films", page=page, resolve_posters=resolve_posters)
                 liked = [f for f in watched if f.user_liked]
                 await self.cache.save_user_films(clean_user, category, page, liked)
                 return liked
             return []
 
         films = parse_user_films_page(resp.text)
+        if resolve_posters and films:
+            await self.resolve_posters_batch(films[:36])
         await self.cache.save_user_films(clean_user, category, page, films)
         return films
 

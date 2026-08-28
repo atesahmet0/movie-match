@@ -1119,13 +1119,25 @@
           this.runSingleSearch();
         },
 
-        addManualFilm() {
+        async addManualFilm() {
           const val = this.manualFilmInput.trim();
           if (!val) return;
           const clean = val.toLowerCase().replace(/https?:\/\/letterboxd\.com\/film\//, '').replace(/\/$/, '').trim();
           const title = clean.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
           if (!this.isFilmSelected(clean)) {
-            this.selectedFilms.push({ slug: clean, title: title, year: null, poster_url: null });
+            const filmObj = { slug: clean, title: title, year: null, poster_url: null };
+            this.selectedFilms.push(filmObj);
+            try {
+              const res = await fetch(`/api/film-info?film=${encodeURIComponent(clean)}`);
+              if (res.ok) {
+                const info = await res.json();
+                if (info.title) filmObj.title = info.title;
+                if (info.year) filmObj.year = info.year;
+                if (info.poster_url) filmObj.poster_url = info.poster_url;
+              }
+            } catch (e) {
+              console.warn('Could not load film info:', e);
+            }
           }
           this.manualFilmInput = '';
           this.refreshIcons();
