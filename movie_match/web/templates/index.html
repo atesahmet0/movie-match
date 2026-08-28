@@ -70,8 +70,26 @@
         <span class="text-xl font-extrabold tracking-tight text-white">Movie<span class="text-brand-500">Match</span></span>
         <span class="text-xs bg-brand-border text-gray-300 font-mono px-2 py-0.5 rounded">Letterboxd Geo Scout</span>
       </div>
-      <div class="text-sm text-gray-400 font-mono">
-        Anti-Bot Protected &bull; TLS Impersonation
+
+      <!-- Navigation Tabs -->
+      <div class="flex items-center space-x-2 bg-brand-card p-1 rounded-xl border border-brand-border">
+        <button 
+          id="tab-search-btn" 
+          class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition duration-200"
+          onclick="switchTab('search')"
+        >
+          <span>🔍</span>
+          <span>Scout Movies</span>
+        </button>
+        <button 
+          id="tab-history-btn" 
+          class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200"
+          onclick="switchTab('history')"
+        >
+          <span>🕒</span>
+          <span>Previous Searches</span>
+          <span id="history-badge" class="ml-1 px-1.5 py-0.2 bg-brand-border text-gray-400 rounded-full text-[10px] font-mono">0</span>
+        </button>
       </div>
     </div>
   </header>
@@ -79,156 +97,188 @@
   <!-- Main Container -->
   <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
     
-    <!-- Hero Section -->
-    <div class="text-center max-w-3xl mx-auto mb-8">
-      <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
-        Find Film Lovers In <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 via-brand-blue to-brand-orange">Your City</span>
-      </h1>
-      <p class="text-gray-400 text-sm sm:text-base">
-        Filter Letterboxd members by movie, location (e.g. Turkey, Ankara, Berlin), and sentiment (liked vs disliked).
-      </p>
+    <!-- SEARCH TAB CONTENT -->
+    <div id="search-tab-content">
+      
+      <!-- Hero Section -->
+      <div class="text-center max-w-3xl mx-auto mb-8">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
+          Find Film Lovers In <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 via-brand-blue to-brand-orange">Your City</span>
+        </h1>
+        <p class="text-gray-400 text-sm sm:text-base">
+          Filter Letterboxd members by movie, location (e.g. Turkey, Ankara, Berlin), and sentiment (liked vs disliked).
+        </p>
+      </div>
+
+      <!-- Search Form Card -->
+      <div class="glass-card rounded-2xl p-6 sm:p-8 mb-8 shadow-2xl">
+        <form id="search-form" class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Movie Input -->
+            <div>
+              <label for="film-input" class="block text-sm font-semibold text-gray-200 mb-2">
+                🎬 Film URL or Slug
+              </label>
+              <input 
+                type="text" 
+                id="film-input" 
+                name="film" 
+                required
+                placeholder="e.g. https://letterboxd.com/film/vampire-hunter-d-bloodlust/ or vampire-hunter-d-bloodlust"
+                class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200"
+                value="https://letterboxd.com/film/vampire-hunter-d-bloodlust/"
+              />
+            </div>
+
+            <!-- Location Input -->
+            <div>
+              <label for="location-input" class="block text-sm font-semibold text-gray-200 mb-2">
+                📍 Location Query
+              </label>
+              <input 
+                type="text" 
+                id="location-input" 
+                name="location" 
+                required
+                placeholder="e.g. Turkey, Ankara, Istanbul, Germany, Austin..."
+                class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200"
+                value="Turkey"
+              />
+            </div>
+          </div>
+
+          <!-- Filters Row -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            
+            <!-- Sentiment -->
+            <div>
+              <label for="sentiment-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                Sentiment Filter
+              </label>
+              <select 
+                id="sentiment-select" 
+                name="sentiment"
+                class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
+              >
+                <option value="liked" selected>❤️ Liked (4-5 Stars / Likes / Fans)</option>
+                <option value="disliked">💔 Disliked (0.5 - 2.0 Stars)</option>
+                <option value="all">🌐 All Interactions</option>
+              </select>
+            </div>
+
+            <!-- Max Pages -->
+            <div>
+              <label for="pages-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                Scan Depth
+              </label>
+              <select 
+                id="pages-select" 
+                name="max_pages"
+                class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
+              >
+                <option value="2">Quick Scan (2 Pages ~1000 users)</option>
+                <option value="5" selected>Standard Scan (5 Pages ~2500 users)</option>
+                <option value="10">Deep Scan (10 Pages ~5000 users)</option>
+              </select>
+            </div>
+
+            <!-- Limit Matches -->
+            <div>
+              <label for="limit-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                Match Limit
+              </label>
+              <select 
+                id="limit-select" 
+                name="limit"
+                class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
+              >
+                <option value="10">10 Matches</option>
+                <option value="25">25 Matches</option>
+                <option value="50" selected>50 Matches</option>
+                <option value="100">100 Matches</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="flex items-center justify-between pt-2">
+            <label class="inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="include-bio" checked class="sr-only peer">
+              <div class="relative w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
+              <span class="ms-3 text-xs font-medium text-gray-400">Search Profile Bio as fallback</span>
+            </label>
+
+            <button 
+              type="submit" 
+              id="submit-btn"
+              class="inline-flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-black font-bold px-6 py-3 rounded-xl transition duration-200 shadow-lg hover:shadow-brand-500/20 active:scale-95"
+            >
+              <span id="btn-icon">🔍</span>
+              <span id="btn-text">Start Scout</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Status & Live Stats Bar -->
+      <div id="stats-bar" class="hidden glass-card rounded-xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-brand-500">
+        <div class="flex items-center space-x-3">
+          <div id="loading-spinner" class="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin-fast"></div>
+          <div>
+            <h2 id="status-title" class="text-sm font-bold text-white">Scanning Letterboxd...</h2>
+            <p id="status-desc" class="text-xs text-gray-400 font-mono">Connecting with Chrome 124 TLS signature</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-6 text-xs font-mono">
+          <div>Candidates: <span id="stat-candidates" class="font-bold text-brand-orange">0</span></div>
+          <div>Matches: <span id="stat-matches" class="font-bold text-brand-500">0</span></div>
+          <div>Time: <span id="stat-time" class="text-gray-300">0.0s</span></div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="export-json-btn" class="hidden bg-[#242b32] hover:bg-[#2e3740] text-gray-200 text-xs px-3 py-1.5 rounded-lg border border-brand-border transition">Export JSON</button>
+          <button id="export-csv-btn" class="hidden bg-[#242b32] hover:bg-[#2e3740] text-gray-200 text-xs px-3 py-1.5 rounded-lg border border-brand-border transition">Export CSV</button>
+        </div>
+      </div>
+
+      <!-- Results Grid -->
+      <div id="results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- User cards populated by JS -->
+      </div>
+
+      <!-- Empty / Welcome state -->
+      <div id="empty-state" class="text-center py-16 text-gray-500">
+        <div class="text-5xl mb-3">🍿</div>
+        <p class="text-sm">Enter a Letterboxd movie and target location to discover matching members.</p>
+      </div>
+
     </div>
 
-    <!-- Search Form Card -->
-    <div class="glass-card rounded-2xl p-6 sm:p-8 mb-8 shadow-2xl">
-      <form id="search-form" class="space-y-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          <!-- Movie Input -->
-          <div>
-            <label for="film-input" class="block text-sm font-semibold text-gray-200 mb-2">
-              🎬 Film URL or Slug
-            </label>
-            <input 
-              type="text" 
-              id="film-input" 
-              name="film" 
-              required
-              placeholder="e.g. https://letterboxd.com/film/vampire-hunter-d-bloodlust/ or vampire-hunter-d-bloodlust"
-              class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200"
-              value="https://letterboxd.com/film/vampire-hunter-d-bloodlust/"
-            />
-          </div>
-
-          <!-- Location Input -->
-          <div>
-            <label for="location-input" class="block text-sm font-semibold text-gray-200 mb-2">
-              📍 Location Query
-            </label>
-            <input 
-              type="text" 
-              id="location-input" 
-              name="location" 
-              required
-              placeholder="e.g. Turkey, Ankara, Istanbul, Germany, Austin..."
-              class="w-full bg-[#111518] border border-brand-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 glow-green transition duration-200"
-              value="Turkey"
-            />
-          </div>
-        </div>
-
-        <!-- Filters Row -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-          
-          <!-- Sentiment -->
-          <div>
-            <label for="sentiment-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-              Sentiment Filter
-            </label>
-            <select 
-              id="sentiment-select" 
-              name="sentiment"
-              class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
-            >
-              <option value="liked" selected>❤️ Liked (4-5 Stars / Likes / Fans)</option>
-              <option value="disliked">💔 Disliked (0.5 - 2.0 Stars)</option>
-              <option value="all">🌐 All Interactions</option>
-            </select>
-          </div>
-
-          <!-- Max Pages -->
-          <div>
-            <label for="pages-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-              Scan Depth
-            </label>
-            <select 
-              id="pages-select" 
-              name="max_pages"
-              class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
-            >
-              <option value="2">Quick Scan (2 Pages ~1000 users)</option>
-              <option value="5" selected>Standard Scan (5 Pages ~2500 users)</option>
-              <option value="10">Deep Scan (10 Pages ~5000 users)</option>
-            </select>
-          </div>
-
-          <!-- Limit Matches -->
-          <div>
-            <label for="limit-select" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-              Match Limit
-            </label>
-            <select 
-              id="limit-select" 
-              name="limit"
-              class="w-full bg-[#111518] border border-brand-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
-            >
-              <option value="10">10 Matches</option>
-              <option value="25">25 Matches</option>
-              <option value="50" selected>50 Matches</option>
-              <option value="100">100 Matches</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Submit Button -->
-        <div class="flex items-center justify-between pt-2">
-          <label class="inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="include-bio" checked class="sr-only peer">
-            <div class="relative w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
-            <span class="ms-3 text-xs font-medium text-gray-400">Search Profile Bio as fallback</span>
-          </label>
-
-          <button 
-            type="submit" 
-            id="submit-btn"
-            class="inline-flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-black font-bold px-6 py-3 rounded-xl transition duration-200 shadow-lg hover:shadow-brand-500/20 active:scale-95"
-          >
-            <span id="btn-icon">🔍</span>
-            <span id="btn-text">Start Scout</span>
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <!-- Status & Live Stats Bar -->
-    <div id="stats-bar" class="hidden glass-card rounded-xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-brand-500">
-      <div class="flex items-center space-x-3">
-        <div id="loading-spinner" class="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin-fast"></div>
+    <!-- HISTORY TAB CONTENT -->
+    <div id="history-tab-content" class="hidden">
+      <div class="flex items-center justify-between mb-6">
         <div>
-          <h2 id="status-title" class="text-sm font-bold text-white">Scanning Letterboxd...</h2>
-          <p id="status-desc" class="text-xs text-gray-400 font-mono">Connecting with Chrome 124 TLS signature</p>
+          <h2 class="text-2xl font-bold text-white tracking-tight">Previous Searches</h2>
+          <p class="text-gray-400 text-xs sm:text-sm">Re-visit or re-scout your historical queries instantly.</p>
         </div>
+        <button 
+          id="clear-history-btn" 
+          onclick="clearAllHistory()" 
+          class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold px-4 py-2 rounded-xl border border-red-500/30 transition duration-200"
+        >
+          Clear History
+        </button>
       </div>
-      <div class="flex items-center space-x-6 text-xs font-mono">
-        <div>Candidates: <span id="stat-candidates" class="font-bold text-brand-orange">0</span></div>
-        <div>Matches: <span id="stat-matches" class="font-bold text-brand-500">0</span></div>
-        <div>Time: <span id="stat-time" class="text-gray-300">0.0s</span></div>
-      </div>
-      <div class="flex items-center space-x-2">
-        <button id="export-json-btn" class="hidden bg-[#242b32] hover:bg-[#2e3740] text-gray-200 text-xs px-3 py-1.5 rounded-lg border border-brand-border transition">Export JSON</button>
-        <button id="export-csv-btn" class="hidden bg-[#242b32] hover:bg-[#2e3740] text-gray-200 text-xs px-3 py-1.5 rounded-lg border border-brand-border transition">Export CSV</button>
-      </div>
-    </div>
 
-    <!-- Results Grid -->
-    <div id="results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <!-- User cards populated by JS -->
-    </div>
+      <div id="history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Populated via JS -->
+      </div>
 
-    <!-- Empty / Welcome state -->
-    <div id="empty-state" class="text-center py-16 text-gray-500">
-      <div class="text-5xl mb-3">🍿</div>
-      <p class="text-sm">Enter a Letterboxd movie and target location to discover matching members.</p>
+      <div id="history-empty" class="hidden text-center py-16 text-gray-500 glass-card rounded-2xl">
+        <div class="text-4xl mb-2">📜</div>
+        <p class="font-semibold text-white">No previous searches recorded yet.</p>
+        <p class="text-xs text-gray-500 mt-1">Run a search from the Scout tab to build your search history.</p>
+      </div>
     </div>
 
   </main>
@@ -241,6 +291,7 @@
   <script>
     let currentMatches = [];
     let currentStats = null;
+    let searchHistoryList = [];
 
     const form = document.getElementById('search-form');
     const submitBtn = document.getElementById('submit-btn');
@@ -257,7 +308,189 @@
     const emptyState = document.getElementById('empty-state');
     const exportJsonBtn = document.getElementById('export-json-btn');
     const exportCsvBtn = document.getElementById('export-csv-btn');
+    const historyBadge = document.getElementById('history-badge');
 
+    // Tab switcher
+    function switchTab(tab) {
+      const searchTab = document.getElementById('search-tab-content');
+      const historyTab = document.getElementById('history-tab-content');
+      const searchBtn = document.getElementById('tab-search-btn');
+      const historyBtn = document.getElementById('tab-history-btn');
+
+      if (tab === 'search') {
+        searchTab.classList.remove('hidden');
+        historyTab.classList.add('hidden');
+        searchBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition duration-200';
+        historyBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200';
+      } else {
+        searchTab.classList.add('hidden');
+        historyTab.classList.remove('hidden');
+        historyBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-black transition duration-200';
+        searchBtn.className = 'flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-[#252e37] transition duration-200';
+        loadSearchHistory();
+      }
+    }
+
+    // Load history count on boot
+    async function updateHistoryBadge() {
+      try {
+        const resp = await fetch('/api/history?limit=100');
+        const data = await resp.json();
+        if (data.status === 'success') {
+          searchHistoryList = data.history;
+          historyBadge.innerText = data.history.length;
+        }
+      } catch (e) {
+        console.error('Failed to load history count', e);
+      }
+    }
+    updateHistoryBadge();
+
+    // Render search history tab
+    async function loadSearchHistory() {
+      const container = document.getElementById('history-list');
+      const emptyEl = document.getElementById('history-empty');
+      container.innerHTML = '<div class="col-span-full text-center py-8 text-gray-400">Loading history...</div>';
+
+      try {
+        const resp = await fetch('/api/history?limit=50');
+        const data = await resp.json();
+        if (data.status === 'success' && data.history.length > 0) {
+          emptyEl.classList.add('hidden');
+          searchHistoryList = data.history;
+          historyBadge.innerText = data.history.length;
+          
+          container.innerHTML = data.history.map(item => {
+            const timeAgo = formatTimeAgo(item.created_at);
+            const sentimentBadge = item.sentiment === 'disliked'
+              ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">💔 Disliked</span>'
+              : (item.sentiment === 'liked' 
+                  ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-brand-500/10 text-brand-500 border border-brand-500/20">❤️ Liked</span>'
+                  : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">🌐 All</span>');
+
+            return `
+              <div class="glass-card rounded-xl p-5 hover:border-brand-500/50 transition duration-300 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-start justify-between mb-2">
+                    <h3 class="font-bold text-white text-base truncate flex-1 pr-2">${item.film_title || item.film_slug}</h3>
+                    <span class="text-[11px] font-mono text-gray-400 flex-shrink-0">${timeAgo}</span>
+                  </div>
+                  <p class="text-xs font-mono text-gray-400 mb-3 truncate">film/${item.film_slug}</p>
+                  <div class="flex flex-wrap items-center gap-2 mb-4">
+                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#252e37] text-gray-200 border border-brand-border">📍 ${item.location_query}</span>
+                    ${sentimentBadge}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">🎯 ${item.matches_count} matches</span>
+                  </div>
+                </div>
+
+                <div class="pt-3 border-t border-brand-border/60 flex items-center justify-between gap-2">
+                  <button 
+                    onclick="loadPreviousResult(${item.id})"
+                    class="flex-1 bg-brand-500/10 hover:bg-brand-500 hover:text-black text-brand-500 text-xs font-semibold py-2 px-3 rounded-lg border border-brand-500/30 transition duration-200"
+                  >
+                    View Results
+                  </button>
+                  <button 
+                    onclick="reScoutQuery('${item.film_slug}', '${item.location_query}', '${item.sentiment}')"
+                    class="bg-[#242b32] hover:bg-[#2e3740] text-gray-300 text-xs font-semibold py-2 px-3 rounded-lg border border-brand-border transition duration-200"
+                    title="Re-run search"
+                  >
+                    🔄 Re-Scout
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          container.innerHTML = '';
+          emptyEl.classList.remove('hidden');
+          historyBadge.innerText = '0';
+        }
+      } catch (err) {
+        container.innerHTML = `<div class="col-span-full text-center py-8 text-red-400">Failed to load history: ${err.message}</div>`;
+      }
+    }
+
+    // Load full historical result
+    async function loadPreviousResult(historyId) {
+      try {
+        const resp = await fetch(`/api/history/${historyId}`);
+        const data = await resp.json();
+        if (data.status === 'success') {
+          const item = data.item;
+          switchTab('search');
+
+          // Populate form fields
+          document.getElementById('film-input').value = `https://letterboxd.com/film/${item.film_slug}/`;
+          document.getElementById('location-input').value = item.location_query;
+          document.getElementById('sentiment-select').value = item.sentiment;
+
+          currentMatches = item.results || [];
+          currentStats = {
+            film_title: item.film_title,
+            film_slug: item.film_slug,
+            total_pages_scanned: '-',
+            total_users_discovered: '-',
+            elapsed_seconds: 0,
+          };
+
+          // Update stats bar
+          statsBar.classList.remove('hidden');
+          loadingSpinner.classList.add('hidden');
+          statusTitle.innerText = `Loaded saved search: "${item.film_title}" in ${item.location_query}`;
+          statusDesc.innerText = `Saved search from history with ${item.matches_count} matching members.`;
+          statCandidates.innerText = '-';
+          statMatches.innerText = item.matches_count;
+          statTime.innerText = 'Cached';
+          emptyState.classList.add('hidden');
+
+          if (currentMatches.length > 0) {
+            exportJsonBtn.classList.remove('hidden');
+            exportCsvBtn.classList.remove('hidden');
+            renderCards(currentMatches);
+          } else {
+            resultsContainer.innerHTML = `<div class="col-span-full text-center py-12 text-gray-400 glass-card rounded-2xl">No members matched this search.</div>`;
+          }
+        }
+      } catch (e) {
+        alert('Failed to load search result: ' + e.message);
+      }
+    }
+
+    // Re-run search
+    function reScoutQuery(slug, location, sentiment) {
+      switchTab('search');
+      document.getElementById('film-input').value = `https://letterboxd.com/film/${slug}/`;
+      document.getElementById('location-input').value = location;
+      document.getElementById('sentiment-select').value = sentiment;
+      form.dispatchEvent(new Event('submit'));
+    }
+
+    // Clear history
+    async function clearAllHistory() {
+      if (!confirm('Are you sure you want to clear your search history?')) return;
+      try {
+        await fetch('/api/history', { method: 'DELETE' });
+        loadSearchHistory();
+        historyBadge.innerText = '0';
+      } catch (e) {
+        alert('Failed to clear history: ' + e.message);
+      }
+    }
+
+    function formatTimeAgo(epochSeconds) {
+      if (!epochSeconds) return '';
+      const seconds = Math.floor(Date.now() / 1000 - epochSeconds);
+      if (seconds < 60) return 'Just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    }
+
+    // Search submit handler
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -301,6 +534,7 @@
         if (data.status === 'success') {
           currentMatches = data.matches;
           currentStats = data.stats;
+          updateHistoryBadge();
 
           statCandidates.innerText = data.stats.total_users_discovered;
           statMatches.innerText = data.matches_count;
@@ -334,6 +568,7 @@
       }
     });
 
+    // Render User Cards with Clickable Titles, Avatars, and Usernames
     function renderCards(matches) {
       resultsContainer.innerHTML = matches.map(m => {
         const avatar = m.avatar_url || 'https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png';
@@ -344,13 +579,21 @@
           : (m.bio ? `<p class="text-xs text-gray-400 line-clamp-2">${m.bio}</p>` : '');
 
         return `
-          <div class="glass-card rounded-xl p-5 hover:border-brand-500/50 transition duration-300 flex flex-col justify-between">
+          <div class="glass-card rounded-xl p-5 hover:border-brand-500/50 transition duration-300 flex flex-col justify-between group">
             <div>
               <div class="flex items-center space-x-3.5 mb-3">
-                <img src="${avatar}" alt="${m.username}" class="w-12 h-12 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                <a href="${m.profile_url}" target="_blank" rel="noopener noreferrer" class="flex-shrink-0">
+                  <img src="${avatar}" alt="${m.username}" class="w-12 h-12 rounded-full object-cover border border-brand-border group-hover:border-brand-500 transition duration-200" />
+                </a>
                 <div class="min-w-0 flex-1">
-                  <h3 class="font-bold text-white text-base truncate">${m.display_name}</h3>
-                  <p class="text-xs font-mono text-brand-blue truncate">@${m.username}</p>
+                  <!-- Clickable User Card Title -->
+                  <a href="${m.profile_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-white text-base truncate hover:text-brand-500 hover:underline transition duration-150 block" title="Open @${m.username}'s Letterboxd profile">
+                    ${m.display_name}
+                  </a>
+                  <!-- Clickable Username Link -->
+                  <a href="${m.profile_url}" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-brand-blue truncate hover:underline block">
+                    @${m.username}
+                  </a>
                 </div>
               </div>
 
