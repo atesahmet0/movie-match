@@ -120,7 +120,7 @@ def test_taste_match_soulmates_flow():
     """Test multi-film taste soulmate matching with compatibility scoring."""
     payload = {
         "films": ["alien", "interstellar"],
-        "location_query": "Turkey",
+        "location_query": "Anywhere",
         "min_shared_films": 1,
         "max_pages_per_film": 1,
         "limit_matches": 5,

@@ -102,8 +102,8 @@ class AntiBotHttpClient:
                     if response.status_code == 404:
                         return response
 
-                    # Rate limited or server error -> backoff & retry
-                    if response.status_code in [429, 500, 502, 503, 504]:
+                    # Rate limited, blocked by CF, or server error -> backoff & retry
+                    if response.status_code in [403, 429, 500, 502, 503, 504]:
                         backoff = (2 ** attempt) + random.uniform(0.5, 1.5)
                         await asyncio.sleep(backoff)
                         continue

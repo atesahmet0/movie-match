@@ -57,11 +57,11 @@ export default function RootLayout({
         <meta name="referrer" content="no-referrer" />
       </head>
       <body
-        className={`${outfit.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} min-h-screen flex flex-col justify-between bg-brand-dark text-[#e1e7ed] font-sans antialiased selection:bg-brand-green selection:text-black overflow-x-clip`}
+        className={`${outfit.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} min-h-screen bg-brand-dark text-[#e1e7ed] font-sans antialiased selection:bg-brand-green selection:text-black overflow-x-clip`}
       >
         <QueryProvider>
           <TasteProvider>
-            <div className="relative min-h-screen flex flex-col justify-between">
+            <div className="relative min-h-screen flex flex-col justify-between w-full">
               {/* Ambient Background Noise & Subtle Glow */}
               <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-40">
                 <div className="absolute -top-[30%] left-[10%] w-[600px] h-[600px] rounded-full bg-brand-green/5 blur-[120px]" />
@@ -70,7 +70,7 @@ export default function RootLayout({
               </div>
 
               <Navbar />
-              <main className="relative z-10 flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+              <main className="relative z-10 flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
                 {children}
               </main>
               <Footer />

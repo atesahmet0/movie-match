@@ -7,32 +7,78 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-brand-border/80 bg-brand-darker/90 py-8 mt-16 text-xs text-brand-muted relative z-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Brand facts */}
-        <div className="text-center sm:text-left">
-          <div className="text-brand-subtext font-medium">
-            <span className="text-white font-bold font-display">MovieMatch</span> — Cinema Taste & Location Matching
+    <footer className="w-full border-t border-brand-border/80 bg-brand-darker/90 py-8 mt-16 text-xs text-brand-muted relative z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Brand info & nav links */}
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 text-center sm:text-left">
+            <div>
+              <Link href="/" className="text-white font-extrabold font-display hover:text-brand-green transition-colors text-sm">
+                Movie<span className="text-brand-green">Match</span>
+              </Link>
+              <span className="text-brand-muted ml-2 hidden md:inline">— Cinema Taste &amp; Location Matching</span>
+            </div>
+
+            <nav className="flex items-center gap-3 text-xs text-brand-subtext font-medium">
+              <Link href="/" className="hover:text-white transition-colors">
+                Match
+              </Link>
+              <span className="text-brand-border">&bull;</span>
+              <Link href="/scout" className="hover:text-white transition-colors">
+                Scout
+              </Link>
+              <span className="text-brand-border">&bull;</span>
+              <Link href="/profile" className="hover:text-white transition-colors">
+                Profile
+              </Link>
+              <span className="text-brand-border">&bull;</span>
+              <Link href="/history" className="hover:text-white transition-colors">
+                Logs
+              </Link>
+            </nav>
+          </div>
+
+          {/* Live system state chip */}
+          <div className="flex items-center gap-3 text-[11px] font-mono text-brand-muted">
+            <div className="flex items-center gap-2 bg-brand-card/80 px-3 py-1 rounded-xl border border-brand-border">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-green"></span>
+              </span>
+              <span className="text-brand-subtext">Scraper Engine Online</span>
+            </div>
+            <span className="hidden md:inline text-brand-border">&bull;</span>
+            <span className="hidden md:inline">Built for Cinephiles</span>
           </div>
         </div>
 
-        {/* Live system state chip */}
-        <div className="flex items-center gap-4 text-[11px] font-mono text-brand-muted">
-          <div className="flex items-center gap-1.5 bg-brand-card/80 px-2.5 py-1 rounded-lg border border-brand-border">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></span>
-            <span className="text-brand-subtext">Scraper Engine Online</span>
+        {/* Colophon & legal / data provider attribution */}
+        <div className="mt-6 pt-6 border-t border-brand-border/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-brand-muted font-mono text-center sm:text-left">
+          <div>
+            Not affiliated with or endorsed by Letterboxd Limited. All film metadata and posters &copy; their respective owners.
           </div>
-          <span className="hidden sm:inline">&bull;</span>
-          <span className="hidden sm:inline">Built for Cinephiles</span>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 pt-4 border-t border-brand-border/40 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] text-brand-muted font-mono">
-        <div>Not affiliated with or endorsed by Letterboxd Limited. All film metadata and posters &copy; their respective owners.</div>
-        <div className="text-brand-subtext flex items-center gap-1">
-          <span>Letterboxd &bull; TMDB</span>
+          <div className="flex items-center gap-2 text-brand-subtext shrink-0">
+            <a
+              href="https://letterboxd.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white hover:underline transition-colors"
+            >
+              Letterboxd
+            </a>
+            <span className="text-brand-border">&bull;</span>
+            <a
+              href="https://www.themoviedb.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white hover:underline transition-colors"
+            >
+              TMDB
+            </a>
+          </div>
         </div>
       </div>
     </footer>
   );
 }
+
