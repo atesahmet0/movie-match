@@ -24,7 +24,7 @@ export default function ScoutForm({
   initialSentiment = "liked",
   initialPages = 2,
   initialLimit = 10,
-  initialIncludeBio = true,
+  initialIncludeBio = false,
   className = "",
 }: ScoutFormProps) {
   const form = useScoutForm({

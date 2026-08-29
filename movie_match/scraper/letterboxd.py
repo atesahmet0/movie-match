@@ -471,7 +471,7 @@ class LetterboxdScraper:
         just pinned favorites.
         """
         start_time = time.time()
-        clean_slugs = [extract_slug_from_input(f) for f in query.films if f.strip()]
+        clean_slugs = list(dict.fromkeys(extract_slug_from_input(f) for f in query.films if f.strip()))
         if not clean_slugs:
             return [], ScanStats()
 
@@ -492,7 +492,7 @@ class LetterboxdScraper:
                 explicit_slugs=clean_slugs,
             )
             # Use the expanded film list from the fingerprint
-            clean_slugs = fingerprint.film_slugs
+            clean_slugs = list(dict.fromkeys(fingerprint.film_slugs))
         else:
             # No source user — build minimal fingerprint from explicit slugs
             fingerprint = build_fingerprint(

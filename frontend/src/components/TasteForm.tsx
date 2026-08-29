@@ -169,31 +169,47 @@ export default function TasteForm({
     if (!slug) return;
     setIsAddingFilm(true);
 
+    const cleanSlug = slug.trim().toLowerCase().replace(/\/+$/, "").split("/").pop() || slug.trim().toLowerCase();
+    if (!cleanSlug) return;
+
+    if (selectedFilms.some((f) => f.slug.toLowerCase() === cleanSlug)) {
+      setComboboxValue("");
+      return;
+    }
+
+    setIsAddingFilm(true);
+
     if (filmMeta) {
-      addFilm({
-        slug: filmMeta.slug,
-        title: filmMeta.title,
-        year: filmMeta.year,
-      });
+      const metaSlug = (filmMeta.slug || cleanSlug).trim().toLowerCase();
+      if (!selectedFilms.some((f) => f.slug.toLowerCase() === metaSlug)) {
+        addFilm({
+          slug: metaSlug,
+          title: filmMeta.title || metaSlug,
+          year: filmMeta.year,
+        });
+      }
       setComboboxValue("");
       setIsAddingFilm(false);
       return;
     }
 
     try {
-      const meta = await fetchFilmInfo(slug);
+      const meta = await fetchFilmInfo(cleanSlug);
       if (meta && meta.slug) {
-        addFilm({
-          slug: meta.slug,
-          title: meta.title || meta.slug,
-          year: meta.year,
-          poster_url: meta.poster_url,
-        });
+        const resolvedSlug = meta.slug.trim().toLowerCase();
+        if (!selectedFilms.some((f) => f.slug.toLowerCase() === resolvedSlug)) {
+          addFilm({
+            slug: resolvedSlug,
+            title: meta.title || resolvedSlug,
+            year: meta.year,
+            poster_url: meta.poster_url,
+          });
+        }
       } else {
-        addFilm({ slug, title: slug });
+        addFilm({ slug: cleanSlug, title: cleanSlug.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase()) });
       }
     } catch {
-      addFilm({ slug, title: slug });
+      addFilm({ slug: cleanSlug, title: cleanSlug });
     } finally {
       setComboboxValue("");
       setIsAddingFilm(false);
@@ -255,7 +271,8 @@ export default function TasteForm({
     e.preventDefault();
     if (selectedFilms.length === 0) return;
 
-    const filmsParam = selectedFilms.map((f) => f.slug).join(",");
+    const uniqueSlugs = Array.from(new Set(selectedFilms.map((f) => f.slug.trim()).filter(Boolean)));
+    const filmsParam = uniqueSlugs.join(",");
     const locParam = locations.join(",");
 
     startTransition(() => {

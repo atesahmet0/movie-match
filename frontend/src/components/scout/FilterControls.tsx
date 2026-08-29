@@ -10,8 +10,8 @@ export interface FilterControlsProps {
   onMaxPagesChange: (val: number) => void;
   limit: number;
   onLimitChange: (val: number) => void;
-  includeBio: boolean;
-  onIncludeBioChange: (val: boolean) => void;
+  includeBio?: boolean;
+  onIncludeBioChange?: (val: boolean) => void;
 }
 
 export function FilterControls({
@@ -21,8 +21,6 @@ export function FilterControls({
   onMaxPagesChange,
   limit,
   onLimitChange,
-  includeBio,
-  onIncludeBioChange,
 }: FilterControlsProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
@@ -104,19 +102,6 @@ export function FilterControls({
             <option value={100}>100 Matches 🔒</option>
           </select>
         </div>
-      </div>
-
-      <div className="flex items-center space-x-2.5 pt-1">
-        <input
-          type="checkbox"
-          id="scout-bio-checkbox"
-          checked={includeBio}
-          onChange={(e) => onIncludeBioChange(e.target.checked)}
-          className="rounded bg-brand-darker border-brand-border text-brand-green focus:ring-0 w-4 h-4 cursor-pointer accent-brand-green"
-        />
-        <label htmlFor="scout-bio-checkbox" className="text-xs text-brand-subtext cursor-pointer select-none">
-          Search member profile bio in addition to location field
-        </label>
       </div>
 
       {/* Upcoming Feature Early Access Modal */}

@@ -57,16 +57,26 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ? parseInt(resolvedParams.limit_matches) || 10
       : 10;
 
-  let filmList = filmsParam
-    .split(",")
-    .map((f) => f.trim())
-    .filter(Boolean);
+  let filmList = Array.from(
+    new Set(
+      filmsParam
+        .split(",")
+        .map((f) => f.trim().toLowerCase().replace(/\/+$/, "").split("/").pop())
+        .filter(Boolean) as string[]
+    )
+  );
 
   if (userParam && filmList.length === 0) {
     try {
       const userProfile = await fetchUserProfile(userParam);
       if (userProfile?.profile?.favorite_films && userProfile.profile.favorite_films.length > 0) {
-        filmList = userProfile.profile.favorite_films.map((f: UserFilmItem) => f.slug);
+        filmList = Array.from(
+          new Set(
+            userProfile.profile.favorite_films
+              .map((f: UserFilmItem) => f.slug.trim().toLowerCase().replace(/\/+$/, "").split("/").pop())
+              .filter(Boolean) as string[]
+          )
+        );
         if (!locationParam && userProfile.profile.location) {
           locationParam = userProfile.profile.location;
         }
@@ -91,6 +101,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         min_shared_films: minSharedParam,
         max_pages_per_film: maxPagesParam,
         limit_matches: limitParam,
+        include_bio: false,
         source_username: userParam || undefined,
       });
     } catch (err: unknown) {

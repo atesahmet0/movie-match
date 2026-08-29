@@ -150,7 +150,7 @@ ANYWHERE_KEYWORDS: Set[str] = {
 class LocationMatcher:
     """Matches user profile locations and bios against target queries with intelligent geo-aliasing."""
 
-    def __init__(self, query: str = "Anywhere", include_bio: bool = True):
+    def __init__(self, query: str = "Anywhere", include_bio: bool = False):
         self.raw_query = (query or "").strip()
         self.include_bio = include_bio
 

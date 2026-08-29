@@ -39,17 +39,21 @@ export async function generateMetadata({ searchParams }: ScoutPageProps): Promis
 
 export default async function ScoutPage({ searchParams }: ScoutPageProps) {
   const resolvedParams = await searchParams;
-  const rawFilmsParam =
+  const filmsParam =
     typeof resolvedParams.films === "string"
       ? resolvedParams.films
       : typeof resolvedParams.film === "string"
       ? resolvedParams.film
       : "";
 
-  const filmList = rawFilmsParam
-    .split(",")
-    .map((f) => f.trim())
-    .filter(Boolean);
+  const filmList = Array.from(
+    new Set(
+      filmsParam
+        .split(",")
+        .map((f) => f.trim().toLowerCase().replace(/\/+$/, "").split("/").pop())
+        .filter(Boolean) as string[]
+    )
+  );
 
   const locationParam =
     typeof resolvedParams.location === "string" ? resolvedParams.location.trim() : "Anywhere";
@@ -65,8 +69,8 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
     typeof resolvedParams.limit === "string" ? parseInt(resolvedParams.limit) || 10 : 10;
   const includeBioParam =
     typeof resolvedParams.include_bio === "string"
-      ? resolvedParams.include_bio !== "false"
-      : true;
+      ? resolvedParams.include_bio === "true"
+      : false;
 
   let singleSearchResponse = null;
   let tasteMatchResponse = null;

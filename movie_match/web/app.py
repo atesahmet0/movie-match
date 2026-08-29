@@ -51,7 +51,7 @@ async def api_search(
     rating: Optional[str] = Query(None, description="Optional star rating (e.g. 5, 4.5, 0.5-2)"),
     max_pages: int = Query(2, ge=1, le=20),
     limit: int = Query(10, ge=1, le=500),
-    include_bio: bool = Query(True),
+    include_bio: bool = Query(False),
 ):
     query = SearchQuery(
         film_input=film,

@@ -57,7 +57,7 @@ class SearchQuery(BaseModel):
     location_query: str = "Anywhere"
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None
-    include_bio: bool = True
+    include_bio: bool = False
     max_pages: int = 2
     limit_matches: int = 10
     concurrency: int = 15
@@ -123,7 +123,7 @@ class MultiFilmMatchQuery(BaseModel):
     min_shared_films: int = 1
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None
-    include_bio: bool = True
+    include_bio: bool = False
     max_pages_per_film: int = 2
     limit_matches: int = 10
     concurrency: int = 15
