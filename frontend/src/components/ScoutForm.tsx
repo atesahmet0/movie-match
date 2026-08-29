@@ -1,620 +1,119 @@
 /* Hallmark · component: ScoutForm · genre: atmospheric · theme: Midnight Cinema
- * motion: chip-pop · layout-transition · live-stepper · button-lift
+ * architecture: Compound Components & Custom Hooks
  */
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Search,
-  Loader2,
-  Clapperboard,
-  Film,
-  Sparkles,
-  MapPin,
-  CheckCircle2,
-  Globe,
-  Users,
-  Layers,
-  Plus,
-  X,
-  Trash2,
-} from "lucide-react";
-import { fetchFilmInfo } from "@/lib/api";
-import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
-import { FilmCombobox } from "@/components/ui/FilmCombobox";
+import React from "react";
+import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { motion, AnimatePresence } from "framer-motion";
+import { useScoutForm, UseScoutFormProps } from "@/lib/hooks/use-scout-form";
+import {
+  FilmSelector,
+  LocationPicker,
+  FilterControls,
+  StatusProgress,
+} from "@/components/scout";
 
-interface ScoutFormProps {
-  initialFilms: string[];
-  initialLocation: string;
-  initialSentiment: string;
-  initialPages: number;
-  initialLimit: number;
-  initialIncludeBio: boolean;
+export interface ScoutFormProps extends UseScoutFormProps {
+  className?: string;
 }
 
-const PRESET_LOCATIONS = [
-  "Anywhere",
-  "Turkey",
-  "Ankara",
-  "Istanbul",
-  "London",
-  "Berlin",
-  "New York",
-  "Tokyo",
-  "Paris",
-];
-
-const POPULAR_SUGGESTIONS: FilmSearchResult[] = [
-  { slug: "parasite-2019", title: "Parasite", year: 2019, director: "Bong Joon-ho", film_url: "https://letterboxd.com/film/parasite-2019/" },
-  { slug: "interstellar", title: "Interstellar", year: 2014, director: "Christopher Nolan", film_url: "https://letterboxd.com/film/interstellar/" },
-  { slug: "the-substance", title: "The Substance", year: 2024, director: "Coralie Fargeat", film_url: "https://letterboxd.com/film/the-substance/" },
-  { slug: "fight-club", title: "Fight Club", year: 1999, director: "David Fincher", film_url: "https://letterboxd.com/film/fight-club/" },
-  { slug: "dune-part-two", title: "Dune: Part Two", year: 2024, director: "Denis Villeneuve", film_url: "https://letterboxd.com/film/dune-part-two/" },
-  { slug: "spirited-away", title: "Spirited Away", year: 2001, director: "Hayao Miyazaki", film_url: "https://letterboxd.com/film/spirited-away/" },
-];
-
 export default function ScoutForm({
-  initialFilms,
-  initialLocation,
-  initialSentiment,
-  initialPages,
-  initialLimit,
-  initialIncludeBio,
+  initialFilms = ["parasite-2019"],
+  initialLocation = "Anywhere",
+  initialSentiment = "liked",
+  initialPages = 3,
+  initialLimit = 50,
+  initialIncludeBio = true,
+  className = "",
 }: ScoutFormProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-
-  const [selectedFilms, setSelectedFilms] = useState<SelectedFilmChip[]>([]);
-  const [comboboxValue, setComboboxValue] = useState("");
-  const [isAddingFilm, setIsAddingFilm] = useState(false);
-
-  const parseInitialLocations = (raw: string): string[] => {
-    const split = (raw || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    return split.length > 0 ? split : ["Anywhere"];
-  };
-
-  const [locations, setLocations] = useState<string[]>(
-    parseInitialLocations(initialLocation)
-  );
-  const [locationInput, setLocationInput] = useState("");
-
-  const [sentiment, setSentiment] = useState(initialSentiment || "liked");
-  const [maxPages, setMaxPages] = useState(initialPages || 3);
-  const [limit, setLimit] = useState(initialLimit || 50);
-  const [includeBio, setIncludeBio] = useState(initialIncludeBio !== false);
-
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [statusStep, setStatusStep] = useState(0);
-
-  useEffect(() => {
-    if (initialFilms && initialFilms.length > 0 && selectedFilms.length === 0) {
-      initialFilms.forEach((slug) => {
-        if (slug) {
-          fetchFilmInfo(slug).then((meta) => {
-            if (meta && meta.slug) {
-              setSelectedFilms((prev) => {
-                if (prev.some((f) => f.slug === meta.slug)) return prev;
-                return [
-                  ...prev,
-                  {
-                    slug: meta.slug,
-                    title: meta.title || meta.slug,
-                    year: meta.year,
-                    poster_url: meta.poster_url,
-                  },
-                ];
-              });
-            } else {
-              setSelectedFilms((prev) => [
-                ...prev,
-                { slug, title: slug },
-              ]);
-            }
-          });
-        }
-      });
-    }
-  }, [initialFilms]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isPending) {
-      setElapsedSeconds(0);
-      setStatusStep(1);
-      const startTime = Date.now();
-      interval = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        setElapsedSeconds(elapsed);
-        if (elapsed > 1.2 && elapsed <= 3.5) setStatusStep(2);
-        else if (elapsed > 3.5 && elapsed <= 7.0) setStatusStep(3);
-        else if (elapsed > 7.0) setStatusStep(4);
-      }, 100);
-    } else {
-      setStatusStep(0);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isPending]);
-
-  const handleAddFilmFromCombobox = async (slug: string, filmMeta?: FilmSearchResult) => {
-    if (!slug) return;
-    setIsAddingFilm(true);
-
-    if (filmMeta) {
-      setSelectedFilms((prev) => {
-        if (prev.some((f) => f.slug === filmMeta.slug)) return prev;
-        return [...prev, { slug: filmMeta.slug, title: filmMeta.title, year: filmMeta.year }];
-      });
-      setComboboxValue("");
-      setIsAddingFilm(false);
-      return;
-    }
-
-    try {
-      const meta = await fetchFilmInfo(slug);
-      if (meta && meta.slug) {
-        setSelectedFilms((prev) => {
-          if (prev.some((f) => f.slug === meta.slug)) return prev;
-          return [
-            ...prev,
-            {
-              slug: meta.slug,
-              title: meta.title || meta.slug,
-              year: meta.year,
-              poster_url: meta.poster_url,
-            },
-          ];
-        });
-      } else {
-        setSelectedFilms((prev) => [...prev, { slug, title: slug }]);
-      }
-    } catch {
-      setSelectedFilms((prev) => [...prev, { slug, title: slug }]);
-    } finally {
-      setComboboxValue("");
-      setIsAddingFilm(false);
-    }
-  };
-
-  const handleRemoveFilm = (slugToRemove: string) => {
-    setSelectedFilms((prev) => prev.filter((f) => f.slug !== slugToRemove));
-  };
-
-  const handleAddLocation = (loc: string) => {
-    const clean = loc.trim();
-    if (!clean) return;
-
-    if (clean.toLowerCase() === "anywhere") {
-      setLocations(["Anywhere"]);
-      setLocationInput("");
-      return;
-    }
-
-    setLocations((prev) => {
-      const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
-      if (filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
-        return filtered;
-      }
-      return [...filtered, clean];
-    });
-    setLocationInput("");
-  };
-
-  const handleRemoveLocation = (locToRemove: string) => {
-    setLocations((prev) => {
-      const filtered = prev.filter((l) => l !== locToRemove);
-      return filtered.length > 0 ? filtered : ["Anywhere"];
-    });
-  };
-
-  const handleTogglePresetLocation = (loc: string) => {
-    if (loc === "Anywhere") {
-      setLocations(["Anywhere"]);
-      return;
-    }
-
-    setLocations((prev) => {
-      const withoutAnywhere = prev.filter((l) => l !== "Anywhere");
-      if (withoutAnywhere.includes(loc)) {
-        const next = withoutAnywhere.filter((l) => l !== loc);
-        return next.length > 0 ? next : ["Anywhere"];
-      } else {
-        return [...withoutAnywhere, loc];
-      }
-    });
-  };
-
-  const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      handleAddLocation(locationInput);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedFilms.length === 0) return;
-
-    const filmsParam = selectedFilms.map((f) => f.slug).join(",");
-    const locParam = locations.join(",");
-
-    startTransition(() => {
-      router.push(
-        `/scout?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
-          locParam
-        )}&sentiment=${sentiment}&max_pages=${maxPages}&limit=${limit}&include_bio=${includeBio}`
-      );
-    });
-  };
+  const form = useScoutForm({
+    initialFilms,
+    initialLocation,
+    initialSentiment,
+    initialPages,
+    initialLimit,
+    initialIncludeBio,
+  });
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className={`space-y-6 max-w-4xl mx-auto ${className}`}>
       <div className="glass-card p-6 sm:p-8 rounded-3xl border border-brand-border/90 shadow-2xl">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Section 1: Film Selector */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                <Film className="w-4 h-4 text-brand-green" />
-                <span>Target Films ({selectedFilms.length} Selected)</span>
-              </label>
-              {selectedFilms.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedFilms([])}
-                  className="text-xs text-brand-muted hover:text-red-400 transition flex items-center space-x-1 font-mono cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear All</span>
-                </button>
-              )}
-            </div>
+        <form onSubmit={form.handleSubmit} className="space-y-6">
+          {/* Compound 1: Film Selector */}
+          <FilmSelector
+            selectedFilms={form.selectedFilms}
+            comboboxValue={form.comboboxValue}
+            isAddingFilm={form.isAddingFilm}
+            onAddFilm={form.addFilm}
+            onRemoveFilm={form.removeFilm}
+            onClearFilms={form.clearFilms}
+          />
 
-            {/* Selected Chips */}
-            <div className="min-h-[56px] p-3 rounded-2xl bg-brand-darker border border-brand-border flex flex-wrap items-center gap-2">
-              <AnimatePresence mode="popLayout">
-                {selectedFilms.map((film) => (
-                  <motion.div
-                    key={film.slug}
-                    layout
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    className="inline-flex items-center space-x-2 bg-brand-card border border-brand-border hover:border-brand-borderLight pl-3 pr-2 py-1.5 rounded-xl text-xs font-semibold text-white shadow-sm font-display"
-                  >
-                    <Clapperboard className="w-3.5 h-3.5 text-brand-green shrink-0" />
-                    <span className="truncate max-w-[200px]">
-                      {film.title || film.slug}
-                      {film.year && (
-                        <span className="text-brand-muted font-mono font-normal ml-1">
-                          ({film.year})
-                        </span>
-                      )}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFilm(film.slug)}
-                      className="text-brand-muted hover:text-red-400 p-0.5 rounded-md hover:bg-brand-cardHover transition cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+          {/* Compound 2: Location Picker */}
+          <LocationPicker
+            locations={form.locations}
+            locationInput={form.locationInput}
+            onLocationInputChange={form.setLocationInput}
+            onAddLocation={form.addLocation}
+            onRemoveLocation={form.removeLocation}
+            onTogglePresetLocation={form.togglePresetLocation}
+          />
 
-              {selectedFilms.length === 0 && (
-                <span className="text-xs text-brand-muted px-2 italic select-none">
-                  Search a movie below or pick from quick suggestions to add to your scouting matrix.
-                </span>
-              )}
-            </div>
+          {/* Compound 3: Filter Controls */}
+          <FilterControls
+            sentiment={form.sentiment}
+            onSentimentChange={form.setSentiment}
+            maxPages={form.maxPages}
+            onMaxPagesChange={form.setMaxPages}
+            limit={form.limit}
+            onLimitChange={form.setLimit}
+            includeBio={form.includeBio}
+            onIncludeBioChange={form.setIncludeBio}
+          />
 
-            {/* Instant Film Combobox */}
-            <FilmCombobox
-              value={comboboxValue}
-              onChange={handleAddFilmFromCombobox}
-              placeholder="Search Letterboxd film title (e.g. Parasite, Alien, Dune)..."
-              disabled={isAddingFilm}
-            />
-
-            {/* Quick Suggestions */}
-            <div className="space-y-1.5 pt-1">
-              <span className="text-[11px] font-semibold text-brand-muted uppercase tracking-wider block font-mono">
-                Popular Quick Targets:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {POPULAR_SUGGESTIONS.map((film) => {
-                  const alreadyAdded = selectedFilms.some((f) => f.slug === film.slug);
-                  return (
-                    <button
-                      key={film.slug}
-                      type="button"
-                      disabled={alreadyAdded}
-                      onClick={() =>
-                        setSelectedFilms((prev) => {
-                          if (prev.some((f) => f.slug === film.slug)) return prev;
-                          return [...prev, { slug: film.slug, title: film.title, year: film.year }];
-                        })
-                      }
-                      className={`px-3 py-1 rounded-xl text-xs transition flex items-center space-x-1.5 font-mono ${
-                        alreadyAdded
-                          ? "bg-brand-darker text-brand-muted border border-brand-border opacity-45 cursor-not-allowed"
-                          : "bg-brand-card text-brand-text border border-brand-border hover:border-brand-green hover:text-brand-green cursor-pointer"
-                      }`}
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>{film.title}</span>
-                      {film.year && <span className="text-[10px] text-brand-muted">({film.year})</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Location Filter */}
-          <div className="space-y-3 pt-4 border-t border-brand-border/80">
-            <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-              <MapPin className="w-4 h-4 text-brand-blue" />
-              <span>Target Locations & Cities</span>
-            </label>
-
-            <div className="min-h-[50px] p-2.5 rounded-2xl bg-brand-darker border border-brand-border flex flex-wrap items-center gap-2">
-              {locations.map((loc) => (
-                <span
-                  key={loc}
-                  className="inline-flex items-center space-x-1.5 bg-brand-card border border-brand-border px-3 py-1 rounded-xl text-xs font-semibold text-brand-green font-mono"
-                >
-                  <MapPin className="w-3 h-3 text-brand-green" />
-                  <span>{loc}</span>
-                  {locations.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveLocation(loc)}
-                      className="text-brand-muted hover:text-red-400 ml-1 cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </span>
-              ))}
-
-              <input
-                type="text"
-                value={locationInput}
-                onChange={(e) => setLocationInput(e.target.value)}
-                onKeyDown={handleLocationKeyDown}
-                onBlur={() => {
-                  if (locationInput.trim()) handleAddLocation(locationInput);
-                }}
-                placeholder={locations.length === 0 ? "Type city (e.g. Ankara) and press Enter" : "Add another location..."}
-                className="bg-transparent border-none text-xs sm:text-sm text-white placeholder:text-brand-muted focus:outline-none flex-1 min-w-[140px] px-2 py-1"
-              />
-            </div>
-
-            {/* Preset Buttons */}
-            <div className="flex flex-wrap gap-1.5">
-              {PRESET_LOCATIONS.map((loc) => {
-                const active = locations.some((l) => l.toLowerCase() === loc.toLowerCase());
-                return (
-                  <button
-                    key={loc}
-                    type="button"
-                    onClick={() => handleTogglePresetLocation(loc)}
-                    className={`px-3 py-1 rounded-xl border text-xs font-mono transition cursor-pointer flex items-center space-x-1.5 ${
-                      active
-                        ? "bg-brand-green text-black font-bold border-brand-green"
-                        : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white hover:border-brand-borderLight"
-                    }`}
-                  >
-                    <span>{loc}</span>
-                    {active && <CheckCircle2 className="w-3 h-3 text-black" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Section 3: Fine Tuning */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-brand-border/80">
-            <div>
-              <label className="block text-xs font-semibold text-white mb-1.5 font-display">
-                Sentiment Filter
-              </label>
-              <select
-                value={sentiment}
-                onChange={(e) => setSentiment(e.target.value)}
-                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-green/60 focus:border-brand-green/80 cursor-pointer font-medium"
-              >
-                <option value="liked">Liked / High Rating (4-5 Stars)</option>
-                <option value="disliked">Disliked / Low Rating (0.5-2 Stars)</option>
-                <option value="all">All Members (Watched / Rated)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-white mb-1.5 font-display">
-                Scan Depth
-              </label>
-              <select
-                value={maxPages}
-                onChange={(e) => setMaxPages(parseInt(e.target.value) || 3)}
-                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-green/60 focus:border-brand-green/80 cursor-pointer font-medium"
-              >
-                <option value={2}>2 Pages per film (~150 candidates)</option>
-                <option value={3}>3 Pages per film (~225 candidates)</option>
-                <option value={5}>5 Pages per film (~375 candidates)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-white mb-1.5 font-display">
-                Matches Limit
-              </label>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(parseInt(e.target.value) || 50)}
-                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-green/60 focus:border-brand-green/80 cursor-pointer font-medium"
-              >
-                <option value={25}>Stop at 25 Matches</option>
-                <option value={50}>Stop at 50 Matches</option>
-                <option value={100}>Stop at 100 Matches</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2.5 pt-1">
-            <input
-              type="checkbox"
-              id="scout-bio-checkbox"
-              checked={includeBio}
-              onChange={(e) => setIncludeBio(e.target.checked)}
-              className="rounded bg-brand-darker border-brand-border text-brand-green focus:ring-0 w-4 h-4 cursor-pointer accent-brand-green"
-            />
-            <label htmlFor="scout-bio-checkbox" className="text-xs text-brand-subtext cursor-pointer select-none">
-              Search member profile bio in addition to location field
-            </label>
-          </div>
-
+          {/* Submit Action */}
           <Button
             type="submit"
             variant="cinema"
             size="lg"
-            disabled={isPending || selectedFilms.length === 0}
+            disabled={form.isPending || form.selectedFilms.length === 0}
             className="w-full h-13 text-sm sm:text-base font-bold shadow-xl shadow-brand-green/20"
-            leftIcon={isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+            leftIcon={
+              form.isPending ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Search className="w-5 h-5" />
+              )
+            }
           >
-            {isPending ? (
-              <span>Scouting Letterboxd... ({elapsedSeconds.toFixed(1)}s)</span>
+            {form.isPending ? (
+              <span>Scouting Letterboxd... ({form.elapsedSeconds.toFixed(1)}s)</span>
             ) : (
-              <span>Start Scout ({selectedFilms.length} {selectedFilms.length === 1 ? "Film" : "Films"})</span>
+              <span>
+                Start Scout ({form.selectedFilms.length}{" "}
+                {form.selectedFilms.length === 1 ? "Film" : "Films"})
+              </span>
             )}
           </Button>
         </form>
       </div>
 
-      {/* Dynamic Scouting Status Panel with Animated Radar */}
-      {isPending && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-6 border-brand-green/40 space-y-4 rounded-3xl"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-border pb-3">
-            <div className="flex items-center space-x-3">
-              <span className="relative flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-brand-green"></span>
-              </span>
-              <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2 font-display">
-                  <span>Scouting Letterboxd Members</span>
-                  <span className="text-xs font-mono text-brand-green font-normal">
-                    &bull; {selectedFilms.length} Films in {locations.join(", ")}
-                  </span>
-                </h4>
-                <p className="text-[11px] text-brand-subtext">
-                  Bypassing rate limits & scanning member network across target films and locations
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border text-xs font-mono">
-              <span className="text-brand-muted">Elapsed:</span>
-              <span className="font-bold text-brand-green">{elapsedSeconds.toFixed(1)}s</span>
-            </div>
-          </div>
-
-          {/* Stepper Status Progression */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
-            <div
-              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
-                statusStep >= 1
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
-              }`}
-            >
-              {statusStep > 1 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
-              ) : (
-                <Globe className="w-4 h-4 text-brand-green animate-pulse shrink-0" />
-              )}
-              <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs font-display">1. Connection</span>
-                <span className="text-[10px] text-brand-subtext block truncate font-mono">{selectedFilms.length} target films</span>
-              </div>
-            </div>
-
-            <div
-              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
-                statusStep >= 2
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
-              }`}
-            >
-              {statusStep > 2 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
-              ) : statusStep === 2 ? (
-                <Loader2 className="w-4 h-4 text-brand-orange animate-spin shrink-0" />
-              ) : (
-                <Layers className="w-4 h-4 shrink-0" />
-              )}
-              <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs font-display">2. Reviews & Likes</span>
-                <span className="text-[10px] text-brand-subtext block truncate font-mono">Parsing {maxPages} pages/film</span>
-              </div>
-            </div>
-
-            <div
-              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
-                statusStep >= 3
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
-              }`}
-            >
-              {statusStep > 3 ? (
-                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
-              ) : statusStep === 3 ? (
-                <Loader2 className="w-4 h-4 text-brand-blue animate-spin shrink-0" />
-              ) : (
-                <Users className="w-4 h-4 shrink-0" />
-              )}
-              <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs font-display">3. Member Profiles</span>
-                <span className="text-[10px] text-brand-subtext block truncate font-mono">{locations.join(", ")}</span>
-              </div>
-            </div>
-
-            <div
-              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
-                statusStep >= 4
-                  ? "bg-brand-card border-brand-green/60 text-white"
-                  : "bg-brand-darker border-brand-border text-brand-muted"
-              }`}
-            >
-              {statusStep >= 4 ? (
-                <Loader2 className="w-4 h-4 text-brand-green animate-spin shrink-0" />
-              ) : (
-                <Sparkles className="w-4 h-4 shrink-0" />
-              )}
-              <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs font-display">4. Filtering</span>
-                <span className="text-[10px] text-brand-subtext block truncate font-mono">Rendering matches</span>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      {/* Compound 4: Dynamic Live Scouting Status Progression */}
+      <StatusProgress
+        isPending={form.isPending}
+        elapsedSeconds={form.elapsedSeconds}
+        statusStep={form.statusStep}
+        selectedFilmsCount={form.selectedFilms.length}
+        locations={form.locations}
+        maxPages={form.maxPages}
+      />
     </div>
   );
 }
+
+// Attach Compound Subcomponents
+ScoutForm.FilmSelector = FilmSelector;
+ScoutForm.LocationPicker = LocationPicker;
+ScoutForm.FilterControls = FilterControls;
+ScoutForm.StatusProgress = StatusProgress;

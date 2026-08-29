@@ -36,12 +36,13 @@ def test_parse_film_page():
         <meta property="og:title" content="Vampire Hunter D: Bloodlust (2000)" />
         <meta name="twitter:data1" content="Yoshiaki Kawajiri" />
         <meta name="twitter:data2" content="4.0 out of 5" />
-        <meta property="og:image" content="https://img.ltrbxd.com/poster.jpg" />
+        <meta property="og:image" content="https://img.ltrbxd.com/social-backdrop.jpg" />
       </head>
       <body>
         <h1 class="headline-1 film-title">Vampire Hunter D: Bloodlust</h1>
         <div class="releaseyear"><a>2000</a></div>
         <div class="creatorlist"><a href="/director/yoshiaki-kawajiri/">Yoshiaki Kawajiri</a></div>
+        <div class="film-poster"><img src="https://img.ltrbxd.com/theatrical-vertical-poster.jpg" alt="Vampire Hunter D" /></div>
       </body>
     </html>
     """
@@ -51,6 +52,25 @@ def test_parse_film_page():
     assert film.year == 2000
     assert film.director == "Yoshiaki Kawajiri"
     assert film.rating == 4.0
+    # Asserts that vertical theatrical poster is prioritized over social backdrop og:image
+    assert film.poster_url == "https://img.ltrbxd.com/theatrical-vertical-poster.jpg"
+
+
+def test_parse_film_page_og_fallback():
+    mock_html = """
+    <html>
+      <head>
+        <meta property="og:title" content="Alien (1979)" />
+        <meta property="og:image" content="https://img.ltrbxd.com/social-backdrop.jpg" />
+      </head>
+      <body>
+        <h1 class="headline-1 film-title">Alien</h1>
+      </body>
+    </html>
+    """
+    film = parse_film_page(mock_html, "alien")
+    assert film.slug == "alien"
+    assert film.poster_url == "https://img.ltrbxd.com/social-backdrop.jpg"
 
 
 def test_parse_users_from_rating_page():

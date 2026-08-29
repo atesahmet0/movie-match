@@ -1,71 +1,65 @@
 /* Hallmark · component: FilmCombobox · genre: atmospheric · theme: Midnight Cinema
+ * architecture: TanStack Query Cached Autocomplete
  */
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Film, Loader2, X, Check, Clapperboard } from "lucide-react";
-import { searchFilms } from "@/lib/api";
+import { useFilmSearch } from "@/lib/hooks/use-film-queries";
 import { FilmSearchResult } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface FilmComboboxProps {
-  value: string;
+  value?: string;
   onChange: (slug: string, filmMeta?: FilmSearchResult) => void;
   placeholder?: string;
   disabled?: boolean;
 }
 
 export function FilmCombobox({
-  value,
+  value = "",
   onChange,
   placeholder = "Search Letterboxd movie (e.g. Parasite or past URL)",
   disabled = false,
 }: FilmComboboxProps) {
   const [query, setQuery] = useState(value);
-  const [results, setResults] = useState<FilmSearchResult[]>([]);
+  const [debouncedQuery, setDebouncedQuery] = useState(value);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Sync with value prop from parent (e.g. when cleared)
   useEffect(() => {
     setQuery(value);
+    setDebouncedQuery(value);
   }, [value]);
 
+  // Debounce input for Letterboxd search queries
   useEffect(() => {
-    if (!query.trim() || query.length < 2) {
-      setResults([]);
-      setIsLoading(false);
-      return;
-    }
-
-    if (query === value && !isOpen) {
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setIsLoading(true);
-      try {
-        const cleanSearch = query
-          .replace(/^https?:\/\/letterboxd\.com\/film\//, "")
-          .replace(/\/$/, "");
-        const resultsList = await searchFilms(cleanSearch, 8);
-        if (resultsList && resultsList.length > 0) {
-          setResults(resultsList);
-          setIsOpen(true);
-        } else {
-          setResults([]);
-        }
-      } catch (err) {
-        console.error("Film search failed:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 220);
-
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 200);
     return () => clearTimeout(timer);
   }, [query]);
+
+  const cleanSearch = debouncedQuery
+    .replace(/^https?:\/\/letterboxd\.com\/film\//, "")
+    .replace(/\/$/, "")
+    .trim();
+
+  // TanStack Query handles caching, deduplication & loading states
+  const { data: results = [], isLoading } = useFilmSearch(
+    cleanSearch,
+    8
+  );
+
+  // Open dropdown when search results arrive for active typing
+  useEffect(() => {
+    if (results.length > 0 && query.trim().length >= 2) {
+      setIsOpen(true);
+    }
+  }, [results, query]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -81,35 +75,40 @@ export function FilmCombobox({
   }, []);
 
   const handleSelect = (film: FilmSearchResult) => {
-    setQuery(film.slug);
     onChange(film.slug, film);
+    setQuery("");
+    setDebouncedQuery("");
     setIsOpen(false);
     setSelectedIndex(-1);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!isOpen || results.length === 0) return;
-
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown" && isOpen && results.length > 0) {
       e.preventDefault();
       setSelectedIndex((prev) => (prev < results.length - 1 ? prev + 1 : 0));
-    } else if (e.key === "ArrowUp") {
+    } else if (e.key === "ArrowUp" && isOpen && results.length > 0) {
       e.preventDefault();
       setSelectedIndex((prev) => (prev > 0 ? prev - 1 : results.length - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (selectedIndex >= 0 && selectedIndex < results.length) {
+      if (isOpen && selectedIndex >= 0 && selectedIndex < results.length) {
         handleSelect(results[selectedIndex]);
       } else {
         const rawSlug = query
           .replace(/^https?:\/\/letterboxd\.com\/film\//, "")
           .replace(/\/$/, "")
           .trim();
-        onChange(rawSlug);
-        setIsOpen(false);
+        if (rawSlug) {
+          onChange(rawSlug);
+          setQuery("");
+          setDebouncedQuery("");
+          setIsOpen(false);
+          setSelectedIndex(-1);
+        }
       }
     } else if (e.key === "Escape") {
       setIsOpen(false);
+      setSelectedIndex(-1);
     }
   };
 
@@ -126,10 +125,11 @@ export function FilmCombobox({
           disabled={disabled}
           onChange={(e) => {
             setQuery(e.target.value);
-            onChange(e.target.value);
           }}
           onFocus={() => {
-            if (results.length > 0) setIsOpen(true);
+            if (results.length > 0 && query.trim().length >= 2) {
+              setIsOpen(true);
+            }
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -145,9 +145,9 @@ export function FilmCombobox({
               type="button"
               onClick={() => {
                 setQuery("");
-                onChange("");
-                setResults([]);
+                setDebouncedQuery("");
                 setIsOpen(false);
+                setSelectedIndex(-1);
                 inputRef.current?.focus();
               }}
               className="text-brand-muted hover:text-white p-1 rounded-md transition-colors cursor-pointer"
@@ -174,7 +174,6 @@ export function FilmCombobox({
               </div>
               {results.map((film, index) => {
                 const isSelected = index === selectedIndex;
-                const isCurrent = film.slug === value;
                 return (
                   <button
                     key={film.slug}
@@ -206,10 +205,6 @@ export function FilmCombobox({
                         )}
                       </div>
                     </div>
-
-                    {isCurrent && (
-                      <Check className="w-4 h-4 text-brand-green shrink-0 ml-2" />
-                    )}
                   </button>
                 );
               })}

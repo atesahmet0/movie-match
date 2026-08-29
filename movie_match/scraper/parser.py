@@ -57,19 +57,54 @@ def parse_film_page(html: str, slug: str) -> FilmMetadata:
         except ValueError:
             pass
 
-    # Poster
+    # 1st Priority: Clean 2:3 Vertical Theatrical Poster Element
     poster_url = None
-    og_img = tree.css_first("meta[property='og:image'], meta[name='twitter:image']")
-    if og_img and og_img.attributes.get("content"):
-        content_url = og_img.attributes.get("content")
-        if "empty-poster" not in content_url:
-            poster_url = content_url
-    if not poster_url:
-        poster_el = tree.css_first(".film-poster img, .image img")
-        if poster_el:
-            src = poster_el.attributes.get("src")
+    for sel in [
+        ".film-poster img",
+        ".poster img",
+        "section.poster img",
+        "[data-component-class='LazyPoster'] img",
+        ".image img",
+        "img.really-lazy-load",
+        "#poster img",
+    ]:
+        for el in tree.css(sel):
+            src = el.attributes.get("src") or el.attributes.get("data-src") or el.attributes.get("data-original")
             if src and "empty-poster" not in src:
-                poster_url = src
+                if src.startswith("//"):
+                    src = f"https:{src}"
+                if src.startswith("http"):
+                    poster_url = src
+                    break
+        if poster_url:
+            break
+
+    # 2nd Priority: JSON-LD Structured Data Image
+    if not poster_url:
+        for script in tree.css('script[type="application/ld+json"]'):
+            try:
+                import json
+                script_text = script.text()
+                if script_text:
+                    ld = json.loads(script_text)
+                    if isinstance(ld, dict) and ld.get("image"):
+                        img_cand = ld["image"]
+                        if isinstance(img_cand, str) and "empty-poster" not in img_cand and img_cand.startswith("http"):
+                            poster_url = img_cand
+                            break
+            except Exception:
+                pass
+
+    # 3rd Priority: OpenGraph / Twitter Social Share Backdrop Fallback
+    if not poster_url:
+        og_img = tree.css_first("meta[property='og:image'], meta[name='twitter:image']")
+        if og_img and og_img.attributes.get("content"):
+            content_url = og_img.attributes.get("content")
+            if "empty-poster" not in content_url:
+                if content_url.startswith("//"):
+                    content_url = f"https:{content_url}"
+                if content_url.startswith("http"):
+                    poster_url = content_url
 
     return FilmMetadata(
         slug=slug,
@@ -267,9 +302,14 @@ def parse_user_profile_detail(html: str, username: str) -> UserProfileDetail:
             if m.group(2):
                 year = int(m.group(2))
 
-        poster_url = img.attributes.get("src", "") if img else ""
-        if "empty-poster" in poster_url:
-            poster_url = None
+        poster_url = None
+        if img:
+            p_src = img.attributes.get("src") or img.attributes.get("data-src") or img.attributes.get("data-original") or ""
+            if p_src and "empty-poster" not in p_src:
+                if p_src.startswith("//"):
+                    p_src = f"https:{p_src}"
+                if p_src.startswith("http"):
+                    poster_url = p_src
 
         favorite_films.append(UserFilmItem(
             slug=slug,
@@ -325,9 +365,14 @@ def parse_user_films_page(html: str) -> List[UserFilmItem]:
             if m.group(2):
                 year = int(m.group(2))
 
-        poster_url = img.attributes.get("src", "") if img else ""
-        if "empty-poster" in poster_url:
-            poster_url = None
+        poster_url = None
+        if img:
+            p_src = img.attributes.get("src") or img.attributes.get("data-src") or img.attributes.get("data-original") or ""
+            if p_src and "empty-poster" not in p_src:
+                if p_src.startswith("//"):
+                    p_src = f"https:{p_src}"
+                if p_src.startswith("http"):
+                    poster_url = p_src
 
         # Find enclosing li for rating & liked
         parent = item.parent
