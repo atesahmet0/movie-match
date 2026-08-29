@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from movie_match.cache.db import CacheDB
-from movie_match.models import MultiFilmMatchQuery, SearchQuery, SentimentType
+from movie_match.models import MultiFilmMatchQuery, SearchQuery, SentimentType, WaitlistRequest
 from movie_match.scraper.letterboxd import LetterboxdScraper
 from movie_match.scraper.parser import extract_slug_from_input
 
@@ -49,8 +49,8 @@ async def api_search(
     location: str = Query("Anywhere", description="Target location query (e.g. Anywhere, Turkey, Ankara)"),
     sentiment: SentimentType = Query(SentimentType.LIKED, description="Sentiment: liked, disliked, all"),
     rating: Optional[str] = Query(None, description="Optional star rating (e.g. 5, 4.5, 0.5-2)"),
-    max_pages: int = Query(3, ge=1, le=20),
-    limit: int = Query(50, ge=1, le=500),
+    max_pages: int = Query(2, ge=1, le=20),
+    limit: int = Query(10, ge=1, le=500),
     include_bio: bool = Query(True),
 ):
     query = SearchQuery(
@@ -210,5 +210,35 @@ async def api_search_films(
     async with LetterboxdScraper() as scraper:
         results = await scraper.search_films(q, limit=limit)
     return {"status": "success", "query": q, "results": results}
+
+
+@app.post("/api/waitlist")
+async def api_save_waitlist(req: WaitlistRequest):
+    """Save email lead to database waitlist for upcoming features."""
+    email = req.email.strip()
+    if not email or "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    cache = CacheDB()
+    await cache.init()
+    lead_id = await cache.save_waitlist_lead(email=email, feature=req.feature or "extended_tier")
+    await cache.close()
+
+    return {
+        "status": "success",
+        "lead_id": lead_id,
+        "message": "Thank you! You have been added to the early access waitlist.",
+    }
+
+
+@app.get("/api/waitlist")
+async def api_get_waitlist(limit: int = Query(100, ge=1, le=500)):
+    """Retrieve saved waitlist leads."""
+    cache = CacheDB()
+    await cache.init()
+    leads = await cache.get_waitlist_leads(limit=limit)
+    await cache.close()
+    return {"status": "success", "leads": leads, "count": len(leads)}
+
 
 

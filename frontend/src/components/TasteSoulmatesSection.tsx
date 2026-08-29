@@ -138,7 +138,7 @@ export default function TasteSoulmatesSection({
       router.push(
         `/?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
           loc
-        )}&user=${encodeURIComponent(userProfile.username)}&minShared=${minShared}&maxPages=2`
+        )}&user=${encodeURIComponent(userProfile.username)}&minShared=${minShared}&maxPages=2&limit=10`
       );
     });
   };

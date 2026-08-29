@@ -50,6 +50,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       : typeof resolvedParams.max_pages === "string"
       ? parseInt(resolvedParams.max_pages) || 2
       : 2;
+  const limitParam =
+    typeof resolvedParams.limit === "string"
+      ? parseInt(resolvedParams.limit) || 10
+      : typeof resolvedParams.limit_matches === "string"
+      ? parseInt(resolvedParams.limit_matches) || 10
+      : 10;
 
   let filmList = filmsParam
     .split(",")
@@ -84,7 +90,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         location_query: locationParam,
         min_shared_films: minSharedParam,
         max_pages_per_film: maxPagesParam,
-        limit_matches: 50,
+        limit_matches: limitParam,
         source_username: userParam || undefined,
       });
     } catch (err: unknown) {

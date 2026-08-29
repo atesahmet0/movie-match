@@ -58,9 +58,14 @@ class SearchQuery(BaseModel):
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None
     include_bio: bool = True
-    max_pages: int = 5
-    limit_matches: int = 50
+    max_pages: int = 2
+    limit_matches: int = 10
     concurrency: int = 15
+
+
+class WaitlistRequest(BaseModel):
+    email: str
+    feature: Optional[str] = "extended_tier"
 
 
 class UserFilmItem(BaseModel):
@@ -119,8 +124,8 @@ class MultiFilmMatchQuery(BaseModel):
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None
     include_bio: bool = True
-    max_pages_per_film: int = 3
-    limit_matches: int = 50
+    max_pages_per_film: int = 2
+    limit_matches: int = 10
     concurrency: int = 15
     source_username: Optional[str] = None
 

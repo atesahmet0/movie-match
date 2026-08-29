@@ -6,15 +6,14 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { User, Sparkles, Search, Clock, X, Menu } from "lucide-react";
+import { Sparkles, Search, X, Menu } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { motion, AnimatePresence } from "framer-motion";
-import { Badge } from "@/components/ui/badge";
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { selectedFilms, activeUsername, setActiveUsername } = useTaste();
+  const { activeUsername, setActiveUsername } = useTaste();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -29,28 +28,13 @@ export default function Navbar() {
       fullLabel: "Movie Match",
       icon: Sparkles,
       isActive: pathname === "/" || pathname === "/taste",
-      badgeCount: selectedFilms.length,
     },
     {
       href: "/scout",
-      label: "Scout",
-      fullLabel: "Scout Cinema",
+      label: "Find Members",
+      fullLabel: "Find Members",
       icon: Search,
       isActive: pathname.startsWith("/scout"),
-    },
-    {
-      href: activeUsername ? `/profile?user=${encodeURIComponent(activeUsername)}` : "/profile",
-      label: "Profile",
-      fullLabel: "My Profile",
-      icon: User,
-      isActive: pathname.startsWith("/profile"),
-    },
-    {
-      href: "/history",
-      label: "Logs",
-      fullLabel: "Search Logs",
-      icon: Clock,
-      isActive: pathname.startsWith("/history"),
     },
   ];
 
@@ -90,50 +74,27 @@ export default function Navbar() {
                 )}
                 <Icon className="w-3.5 h-3.5 shrink-0" />
                 <span>{item.fullLabel}</span>
-
-                {item.badgeCount !== undefined && item.badgeCount > 0 && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono ${
-                      item.isActive
-                        ? "bg-black text-brand-green"
-                        : "bg-brand-orange text-white shadow-sm"
-                    }`}
-                  >
-                    {item.badgeCount}
-                  </motion.span>
-                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* User Status / Connect Pill */}
+        {/* Right Status / Mobile Menu Trigger */}
         <div className="flex items-center gap-2">
-          {activeUsername ? (
+          {activeUsername && (
             <div className="flex items-center space-x-2 bg-brand-card/90 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-borderLight transition-colors">
               <div className="w-2 h-2 rounded-full bg-brand-green animate-pulse"></div>
-              <Link href={`/profile?user=${encodeURIComponent(activeUsername)}`} className="text-xs font-bold text-white font-mono hover:text-brand-green transition-colors">
+              <span className="text-xs font-bold text-white font-mono">
                 @{activeUsername}
-              </Link>
+              </span>
               <button
                 onClick={handleLogout}
                 className="text-brand-muted hover:text-brand-orange ml-1 p-0.5 transition-colors cursor-pointer"
-                title="Disconnect profile"
+                title="Disconnect user"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-          ) : (
-            <Link
-              href="/profile"
-              className="text-xs text-brand-subtext hover:text-white bg-brand-card border border-brand-border px-3 py-1.5 rounded-xl transition-colors font-medium flex items-center gap-1.5"
-            >
-              <User className="w-3.5 h-3.5 text-brand-green" />
-              <span className="hidden sm:inline">Connect Profile</span>
-              <span className="sm:hidden">Profile</span>
-            </Link>
           )}
 
           {/* Mobile Menu Trigger */}
@@ -175,17 +136,6 @@ export default function Navbar() {
                     <Icon className="w-4 h-4" />
                     <span>{item.fullLabel}</span>
                   </div>
-                  {item.badgeCount !== undefined && item.badgeCount > 0 && (
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
-                        item.isActive
-                          ? "bg-black text-brand-green"
-                          : "bg-brand-orange text-white"
-                      }`}
-                    >
-                      {item.badgeCount}
-                    </span>
-                  )}
                 </Link>
               );
             })}

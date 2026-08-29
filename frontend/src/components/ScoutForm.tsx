@@ -22,8 +22,8 @@ export default function ScoutForm({
   initialFilms = ["parasite-2019"],
   initialLocation = "Anywhere",
   initialSentiment = "liked",
-  initialPages = 3,
-  initialLimit = 50,
+  initialPages = 2,
+  initialLimit = 10,
   initialIncludeBio = true,
   className = "",
 }: ScoutFormProps) {

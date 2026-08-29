@@ -32,7 +32,7 @@ export async function generateMetadata({ searchParams }: ScoutPageProps): Promis
   }
 
   return {
-    title: "Scout Cinema Lovers by Location — MovieMatch",
+    title: "Find Members by Location — MovieMatch",
     description: "Filter cinephiles by movie, location, and sentiment.",
   };
 }
@@ -57,12 +57,12 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
     typeof resolvedParams.sentiment === "string" ? resolvedParams.sentiment : "liked";
   const maxPagesParam =
     typeof resolvedParams.max_pages === "string"
-      ? parseInt(resolvedParams.max_pages) || 3
+      ? parseInt(resolvedParams.max_pages) || 2
       : typeof resolvedParams.maxPages === "string"
-      ? parseInt(resolvedParams.maxPages) || 3
-      : 3;
+      ? parseInt(resolvedParams.maxPages) || 2
+      : 2;
   const limitParam =
-    typeof resolvedParams.limit === "string" ? parseInt(resolvedParams.limit) || 50 : 50;
+    typeof resolvedParams.limit === "string" ? parseInt(resolvedParams.limit) || 10 : 10;
   const includeBioParam =
     typeof resolvedParams.include_bio === "string"
       ? resolvedParams.include_bio !== "false"
@@ -120,7 +120,7 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
       <div className="text-center max-w-2xl mx-auto py-2">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2 flex items-center justify-center gap-2.5 font-display">
           <Clapperboard className="w-6 h-6 sm:w-7 sm:h-7 text-brand-green" />
-          <span>Scout <span className="text-brand-green">Film Lovers</span></span>
+          <span>Find <span className="text-brand-green">Members</span></span>
         </h1>
         <p className="text-brand-subtext text-xs sm:text-sm leading-relaxed">
           Filter Letterboxd fans across any movies, world cities, and sentiment criteria simultaneously.

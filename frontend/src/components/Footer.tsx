@@ -21,19 +21,11 @@ export default function Footer() {
 
             <nav className="flex items-center gap-3 text-xs text-brand-subtext font-medium">
               <Link href="/" className="hover:text-white transition-colors">
-                Match
+                Movie Match
               </Link>
               <span className="text-brand-border">&bull;</span>
               <Link href="/scout" className="hover:text-white transition-colors">
-                Scout
-              </Link>
-              <span className="text-brand-border">&bull;</span>
-              <Link href="/profile" className="hover:text-white transition-colors">
-                Profile
-              </Link>
-              <span className="text-brand-border">&bull;</span>
-              <Link href="/history" className="hover:text-white transition-colors">
-                Logs
+                Find Members
               </Link>
             </nav>
           </div>
@@ -45,7 +37,7 @@ export default function Footer() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-green"></span>
               </span>
-              <span className="text-brand-subtext">Scraper Engine Online</span>
+              <span className="text-brand-subtext">Everything is Working</span>
             </div>
             <span className="hidden md:inline text-brand-border">&bull;</span>
             <span className="hidden md:inline">Built for Cinephiles</span>

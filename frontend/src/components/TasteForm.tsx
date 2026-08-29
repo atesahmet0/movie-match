@@ -21,6 +21,7 @@ import { useTaste } from "@/lib/taste-context";
 import { fetchFilmInfo } from "@/lib/api";
 import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
 import { FilmCombobox } from "@/components/ui/FilmCombobox";
+import UpcomingFeatureModal from "@/components/UpcomingFeatureModal";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface TasteFormProps {
@@ -28,6 +29,7 @@ interface TasteFormProps {
   initialLocation: string;
   initialMinShared: number;
   initialPages: number;
+  initialLimit?: number;
 }
 
 const PRESET_LOCATIONS = [
@@ -56,6 +58,7 @@ export default function TasteForm({
   initialLocation,
   initialMinShared,
   initialPages,
+  initialLimit = 10,
 }: TasteFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -80,6 +83,39 @@ export default function TasteForm({
 
   const [minShared, setMinShared] = useState(initialMinShared || 1);
   const [maxPages, setMaxPages] = useState(initialPages || 2);
+  const [limit, setLimit] = useState(initialLimit || 10);
+
+  // Upcoming feature modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalDesc, setModalDesc] = useState("");
+  const [modalKey, setModalKey] = useState("");
+
+  const handleDepthChange = (val: string) => {
+    if (val === "extended") {
+      setModalTitle("Extended Scan Depth");
+      setModalDesc(
+        "Extended scan depth parses up to 5+ pages of user ratings per film (~400 candidates/film) to discover deeply hidden taste twins. Enter your email to be notified when Extended Tier goes live!"
+      );
+      setModalKey("extended_scan_depth");
+      setModalOpen(true);
+      return;
+    }
+    setMaxPages(2);
+  };
+
+  const handleLimitChange = (val: number) => {
+    if (val !== 10) {
+      setModalTitle(`${val} Matches Limit`);
+      setModalDesc(
+        `High-volume match scouting (${val} matches) requires dedicated scraper clusters and is currently in early access. Enter your email to join the waitlist!`
+      );
+      setModalKey(`matches_limit_${val}`);
+      setModalOpen(true);
+      return;
+    }
+    setLimit(10);
+  };
 
   // Live status progress
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -226,7 +262,7 @@ export default function TasteForm({
       router.push(
         `/?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
           locParam
-        )}&min_shared=${minShared}&max_pages=${maxPages}`
+        )}&min_shared=${minShared}&max_pages=${maxPages}&limit=${limit}`
       );
     });
   };
@@ -404,20 +440,20 @@ export default function TasteForm({
           </div>
 
           {/* Section 3: Fine Tuning Parameters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#2c3440]">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-[#2c3440]">
             <div>
               <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
-                <span>Minimum Shared Films</span>
+                <span>Min Shared Films</span>
                 <span className="text-[#00e054] font-mono font-bold">{minShared} / {selectedFilms.length || 1}</span>
               </label>
               <select
                 value={minShared}
                 onChange={(e) => setMinShared(parseInt(e.target.value) || 1)}
-                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054] cursor-pointer"
               >
                 {Array.from({ length: Math.max(selectedFilms.length, 1) }, (_, i) => i + 1).map((num) => (
                   <option key={num} value={num}>
-                    At least {num} {num === 1 ? "film" : "films"} in common
+                    At least {num} {num === 1 ? "film" : "films"}
                   </option>
                 ))}
               </select>
@@ -425,18 +461,33 @@ export default function TasteForm({
 
             <div>
               <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
-                <span>Scan Depth per Film</span>
-                <span className="text-[#40bcf4] font-mono font-bold">{maxPages} Pages</span>
+                <span>Scan Depth</span>
+                <span className="text-[#40bcf4] font-mono font-bold">Basic (2 pgs)</span>
               </label>
               <select
-                value={maxPages}
-                onChange={(e) => setMaxPages(parseInt(e.target.value) || 2)}
-                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
+                value={maxPages >= 4 ? "extended" : "basic"}
+                onChange={(e) => handleDepthChange(e.target.value)}
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054] cursor-pointer"
               >
-                <option value={1}>1 Page (~50 candidates / film)</option>
-                <option value={2}>2 Pages (~150 candidates / film)</option>
-                <option value={3}>3 Pages (~250 candidates / film)</option>
-                <option value={5}>5 Pages (~400 candidates / film)</option>
+                <option value="basic">Basic (150 candidates/film) — Default</option>
+                <option value="extended">Extended (400+ candidates/film) 🔒</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
+                <span>Matches Limit</span>
+                <span className="text-[#ff8000] font-mono font-bold">{limit} Matches</span>
+              </label>
+              <select
+                value={limit}
+                onChange={(e) => handleLimitChange(parseInt(e.target.value) || 10)}
+                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054] cursor-pointer"
+              >
+                <option value={10}>10 Matches (Default)</option>
+                <option value={25}>25 Matches 🔒</option>
+                <option value={50}>50 Matches 🔒</option>
+                <option value={100}>100 Matches 🔒</option>
               </select>
             </div>
           </div>
@@ -574,6 +625,15 @@ export default function TasteForm({
           </div>
         </motion.div>
       )}
+
+      {/* Upcoming Feature Early Access Modal */}
+      <UpcomingFeatureModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        featureTitle={modalTitle}
+        featureDescription={modalDesc}
+        featureKey={modalKey}
+      />
     </div>
   );
 }
