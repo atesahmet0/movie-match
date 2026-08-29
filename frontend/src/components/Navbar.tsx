@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { User, Sparkles, Search, Clock, X, Film, Menu } from "lucide-react";
+import { User, Sparkles, Search, Clock, X, Menu } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -57,19 +57,14 @@ export default function Navbar() {
   return (
     <header className="glass-nav sticky top-0 z-50 transition-all duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Brand Logo with Custom MovieMatch Icon */}
+        {/* Brand Logo */}
         <Link
           href="/"
-          className="flex items-center space-x-3 cursor-pointer select-none group"
+          className="flex items-center cursor-pointer select-none group"
         >
-          <div className="w-8 h-8 rounded-xl bg-brand-green/10 border border-brand-green/30 flex items-center justify-center text-brand-green group-hover:border-brand-green group-hover:bg-brand-green/20 transition-all duration-200">
-            <Film className="w-4 h-4 text-brand-green group-hover:scale-110 transition-transform duration-200" />
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-display">
-              Movie<span className="text-brand-green">Match</span>
-            </span>
-          </div>
+          <span className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-display">
+            Movie<span className="text-brand-green">Match</span>
+          </span>
         </Link>
 
         {/* Desktop Navigation Floating Pill */}

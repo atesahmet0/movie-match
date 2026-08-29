@@ -21,6 +21,7 @@ class UserProfile(BaseModel):
     profile_url: str = ""
     is_pro: bool = False
     is_patron: bool = False
+    favorite_films: List["UserFilmItem"] = Field(default_factory=list)
     fetched_at: Optional[float] = None
 
 
@@ -89,6 +90,7 @@ class FilmInteraction(BaseModel):
     user_liked: Optional[bool] = None
     user_review: Optional[str] = None
     found_via: str = ""
+    is_favorite: bool = False
 
 
 class TasteMatchResult(BaseModel):
@@ -103,6 +105,8 @@ class TasteMatchResult(BaseModel):
     shared_films: List[FilmInteraction] = Field(default_factory=list)
     shared_films_count: int = 0
     compatibility_score: float = 0.0
+    intensity_score: float = 0.0
+    affinity_score: float = 0.0
     total_target_films: int = 0
 
 
@@ -116,6 +120,7 @@ class MultiFilmMatchQuery(BaseModel):
     max_pages_per_film: int = 3
     limit_matches: int = 50
     concurrency: int = 15
+    source_username: Optional[str] = None
 
 
 class ScanStats(BaseModel):

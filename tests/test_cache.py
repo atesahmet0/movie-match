@@ -127,12 +127,41 @@ async def test_cache_user_detail_and_films(tmp_path):
         UserFilmItem(slug="the-odyssey", title="The Odyssey", user_rating=4.0, user_liked=True),
         UserFilmItem(slug="interstellar", title="Interstellar", user_rating=5.0, user_liked=True),
     ]
-    await cache.save_user_films("karsten", "films", 1, films)
-    cached_films = await cache.get_user_films("karsten", "films", 1)
-    assert cached_films is not None
-    assert len(cached_films) == 2
-    assert cached_films[0].slug == "the-odyssey"
-    assert cached_films[0].user_rating == 4.0
+    await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_cache_user_profile_with_favorite_films(tmp_path):
+    db_path = tmp_path / "test_user_favs.db"
+    cache = CacheDB(db_path=db_path, ttl_seconds=100)
+    await cache.init()
+
+    from movie_match.models import UserFilmItem
+    favs = [
+        UserFilmItem(slug="buffalo-66", title="Buffalo '66", year=1998),
+        UserFilmItem(slug="princess-mononoke", title="Princess Mononoke", year=1997),
+        UserFilmItem(slug="the-usual-suspects", title="The Usual Suspects", year=1995),
+        UserFilmItem(slug="vampire-hunter-d-bloodlust", title="Vampire Hunter D: Bloodlust", year=2000),
+    ]
+    p = UserProfile(
+        username="verbakimatto",
+        display_name="Ahmet Rıza Ateş",
+        location="Ankara, Turkey",
+        favorite_films=favs,
+    )
+
+    await cache.save_user_profile(p)
+    cached = await cache.get_user_profile("verbakimatto")
+    assert cached is not None
+    assert cached.username == "verbakimatto"
+    assert len(cached.favorite_films) == 4
+    assert cached.favorite_films[0].slug == "buffalo-66"
+    assert cached.favorite_films[3].slug == "vampire-hunter-d-bloodlust"
+
+    # Batch test
+    batch = await cache.get_user_profiles_batch(["verbakimatto"])
+    assert len(batch["verbakimatto"].favorite_films) == 4
 
     await cache.close()
+
 

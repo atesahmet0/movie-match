@@ -183,6 +183,16 @@ async def api_clear_history():
     return {"status": "success", "message": "Search history cleared."}
 
 
+@app.post("/api/cache/clear")
+async def api_clear_cache():
+    """Clear local SQLite database cache."""
+    cache = CacheDB()
+    await cache.init()
+    await cache.clear_cache()
+    await cache.close()
+    return {"status": "success", "message": "Local cache cleared successfully."}
+
+
 @app.get("/api/film-info")
 async def api_film_info(film: str = Query(...)):
     slug = extract_slug_from_input(film)

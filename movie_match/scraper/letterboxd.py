@@ -5,6 +5,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from movie_match.cache.db import CacheDB
 from movie_match.matcher.location import LocationMatcher
+from movie_match.matcher.scoring import FilmSignals, compute_compatibility_score
 from movie_match.matcher.sentiment import SentimentPlan, rating_to_stars_text
 from movie_match.models import (
     FilmInteraction,
@@ -70,15 +71,26 @@ class LetterboxdScraper:
         await self.cache.save_film_metadata(meta)
         return meta
 
-    async def fetch_user_profile(self, username: str) -> Optional[UserProfile]:
+    async def fetch_user_profile(self, username: str, force_refresh: bool = False) -> Optional[UserProfile]:
         """Fetch a user profile with multi-tier cache lookup."""
-        cached = await self.cache.get_user_profile(username)
-        if cached:
-            return cached
+        if not force_refresh:
+            cached = await self.cache.get_user_profile(username)
+            if cached and cached.favorite_films:
+                return cached
+            if cached:
+                cached_detail = await self.cache.get_user_profile_detail(username)
+                if cached_detail and cached_detail.favorite_films:
+                    cached.favorite_films = cached_detail.favorite_films
+                    await self.cache.save_user_profile(cached)
+                    return cached
 
         url = f"https://letterboxd.com/{username.lower()}/"
         resp = await self.client.get(url)
         if not resp or resp.status_code != 200:
+            if not force_refresh:
+                cached = await self.cache.get_user_profile(username)
+                if cached:
+                    return cached
             return None
 
         profile = parse_user_profile_page(resp.text, username)
@@ -406,6 +418,44 @@ class LetterboxdScraper:
             await self.resolve_posters_batch(films[:36])
         await self.cache.save_user_films(clean_user, category, page, films)
         return films
+    @staticmethod
+    def _cross_check_favorites(
+        username: str,
+        favorite_films: List[UserFilmItem],
+        target_slugs: List[str],
+        film_title_map: Dict[str, str],
+        interactions: List[FilmInteraction],
+    ) -> None:
+        """Cross-check a user's pinned favorites against target film slugs.
+
+        Appends FilmInteraction entries for any matching favorites not already recorded.
+        Uses is_favorite=True and preserves the user's actual rating (None if unknown)
+        instead of fabricating a 5★ rating.
+        """
+        if not favorite_films:
+            return
+        for fav in favorite_films:
+            if fav.slug in target_slugs:
+                if not any(i.film_slug == fav.slug for i in interactions):
+                    interactions.append(
+                        FilmInteraction(
+                            film_slug=fav.slug,
+                            film_title=fav.title or film_title_map.get(
+                                fav.slug, fav.slug.replace("-", " ").title()
+                            ),
+                            user_rating=fav.user_rating,
+                            user_rating_stars=fav.user_rating_stars or "",
+                            user_liked=True,
+                            found_via="Pinned Favorite",
+                            is_favorite=True,
+                        )
+                    )
+                else:
+                    # Mark existing interaction as favorite if found
+                    for i in interactions:
+                        if i.film_slug == fav.slug:
+                            i.is_favorite = True
+                            break
 
     async def find_taste_matches(
         self,
@@ -420,6 +470,11 @@ class LetterboxdScraper:
         if not clean_slugs:
             return [], ScanStats()
 
+        # Resolve source username for self-exclusion
+        source_user_lower: Optional[str] = None
+        if query.source_username:
+            source_user_lower = query.source_username.strip().lower().lstrip("@") or None
+
         matcher = LocationMatcher(query.location_query, include_bio=query.include_bio)
         sentiment_plan = SentimentPlan(query.sentiment, query.rating_range)
 
@@ -431,10 +486,43 @@ class LetterboxdScraper:
         user_film_interactions: Dict[str, List[FilmInteraction]] = {}
         user_profile_cache: Dict[str, Tuple[UserProfile, str, List[str]]] = {}
         all_evaluated_usernames: Set[str] = set()
+        film_title_map: Dict[str, str] = {}
+
+        def _register_location_match(
+            u: str,
+            profile: UserProfile,
+            matched_text: str,
+            fields: List[str],
+            slug: str,
+            film_title: str,
+            cand: Dict,
+        ) -> None:
+            """Register a location-matched user and their film interaction."""
+            user_profile_cache[u] = (profile, matched_text, fields)
+            if u not in user_film_interactions:
+                user_film_interactions[u] = []
+            if not any(i.film_slug == slug for i in user_film_interactions[u]):
+                user_film_interactions[u].append(
+                    FilmInteraction(
+                        film_slug=slug,
+                        film_title=film_title,
+                        user_rating=cand.get("user_rating"),
+                        user_rating_stars=cand.get("user_rating_stars", ""),
+                        user_liked=cand.get("user_liked"),
+                        user_review=cand.get("user_review"),
+                        found_via=cand.get("found_via", ""),
+                    )
+                )
+            # Cross-check favorites (unified helper)
+            self._cross_check_favorites(
+                u, profile.favorite_films, clean_slugs,
+                film_title_map, user_film_interactions[u],
+            )
 
         for film_idx, slug in enumerate(clean_slugs, 1):
             film_meta = await self.get_film_info(slug)
             film_title = film_meta.title or slug.replace("-", " ").title()
+            film_title_map[slug] = film_title
             endpoints = sentiment_plan.get_film_endpoints(slug)[:2]
 
             for endpoint_suffix, desc in endpoints:
@@ -495,23 +583,10 @@ class LetterboxdScraper:
                     for u, profile in cached_profiles.items():
                         is_match, fields, matched_text = matcher.match(profile.location, profile.bio)
                         if is_match:
-                            user_profile_cache[u] = (profile, matched_text, fields)
-                            if u not in user_film_interactions:
-                                user_film_interactions[u] = []
-                            cand = page_candidates[u]
-                            # Avoid duplicate interaction entries for the same film
-                            if not any(i.film_slug == slug for i in user_film_interactions[u]):
-                                user_film_interactions[u].append(
-                                    FilmInteraction(
-                                        film_slug=slug,
-                                        film_title=film_title,
-                                        user_rating=cand.get("user_rating"),
-                                        user_rating_stars=cand.get("user_rating_stars", ""),
-                                        user_liked=cand.get("user_liked"),
-                                        user_review=cand.get("user_review"),
-                                        found_via=cand.get("found_via", ""),
-                                    )
-                                )
+                            _register_location_match(
+                                u, profile, matched_text, fields,
+                                slug, film_title, page_candidates[u],
+                            )
 
                     # Fetch uncached profiles concurrently in chunks
                     batch_size = 25
@@ -536,22 +611,10 @@ class LetterboxdScraper:
                         for p in valid_profiles:
                             is_match, fields, matched_text = matcher.match(p.location, p.bio)
                             if is_match:
-                                user_profile_cache[p.username] = (p, matched_text, fields)
-                                if p.username not in user_film_interactions:
-                                    user_film_interactions[p.username] = []
-                                cand = page_candidates[p.username]
-                                if not any(i.film_slug == slug for i in user_film_interactions[p.username]):
-                                    user_film_interactions[p.username].append(
-                                        FilmInteraction(
-                                            film_slug=slug,
-                                            film_title=film_title,
-                                            user_rating=cand.get("user_rating"),
-                                            user_rating_stars=cand.get("user_rating_stars", ""),
-                                            user_liked=cand.get("user_liked"),
-                                            user_review=cand.get("user_review"),
-                                            found_via=cand.get("found_via", ""),
-                                        )
-                                    )
+                                _register_location_match(
+                                    p.username, p, matched_text, fields,
+                                    slug, film_title, page_candidates[p.username],
+                                )
 
                     if progress_callback:
                         progress_callback(
@@ -561,15 +624,68 @@ class LetterboxdScraper:
                             len([u for u, ints in user_film_interactions.items() if len(ints) >= query.min_shared_films]),
                         )
 
-        # Assemble and rank taste match results
+        # Cross-reference candidate profile details / library for all location matches
+        for u_name, (p, matched_text, fields) in list(user_profile_cache.items()):
+            if u_name not in user_film_interactions:
+                user_film_interactions[u_name] = []
+
+            # Check favorites on profile (unified helper)
+            self._cross_check_favorites(
+                u_name, p.favorite_films, clean_slugs,
+                film_title_map, user_film_interactions[u_name],
+            )
+
+            # Check cached detail (favorites + top rated + liked + recent)
+            cached_detail = await self.cache.get_user_profile_detail(u_name)
+            if cached_detail:
+                self._cross_check_favorites(
+                    u_name, cached_detail.favorite_films, clean_slugs,
+                    film_title_map, user_film_interactions[u_name],
+                )
+                all_lib_films = (
+                    (cached_detail.top_rated_films or [])
+                    + (cached_detail.liked_films or [])
+                    + (cached_detail.recent_films or [])
+                )
+                for lf in all_lib_films:
+                    if lf.slug in clean_slugs:
+                        if not any(i.film_slug == lf.slug for i in user_film_interactions[u_name]):
+                            user_film_interactions[u_name].append(
+                                FilmInteraction(
+                                    film_slug=lf.slug,
+                                    film_title=lf.title or film_title_map.get(lf.slug, lf.slug.replace("-", " ").title()),
+                                    user_rating=lf.user_rating,
+                                    user_rating_stars=lf.user_rating_stars,
+                                    user_liked=lf.user_liked,
+                                    found_via="User Library / Liked",
+                                )
+                            )
+
+        # Assemble and rank taste match results using weighted scoring model
         results: List[TasteMatchResult] = []
         total_films_count = len(clean_slugs)
 
         for u, interactions in user_film_interactions.items():
+            # Exclude source user from their own results
+            if source_user_lower and u.lower() == source_user_lower:
+                continue
             if len(interactions) >= query.min_shared_films and u in user_profile_cache:
                 p, matched_text, fields = user_profile_cache[u]
-                shared_count = len(interactions)
-                score = round((shared_count / total_films_count) * 100, 1)
+
+                # Build scoring signals from interactions
+                film_signals = [
+                    FilmSignals(
+                        user_rating=fi.user_rating,
+                        user_liked=fi.user_liked,
+                        is_favorite=fi.is_favorite,
+                        found_via=fi.found_via,
+                    )
+                    for fi in interactions
+                ]
+                overall, _breadth, intensity_pct, affinity_pct = compute_compatibility_score(
+                    film_signals, total_films_count,
+                )
+
                 results.append(
                     TasteMatchResult(
                         username=p.username,
@@ -581,14 +697,16 @@ class LetterboxdScraper:
                         matched_location=matched_text,
                         matched_fields=fields,
                         shared_films=interactions,
-                        shared_films_count=shared_count,
-                        compatibility_score=score,
+                        shared_films_count=len(interactions),
+                        compatibility_score=overall,
+                        intensity_score=intensity_pct,
+                        affinity_score=affinity_pct,
                         total_target_films=total_films_count,
                     )
                 )
 
-        # Sort by shared films count descending, then compatibility score descending
-        results.sort(key=lambda r: (r.shared_films_count, r.compatibility_score), reverse=True)
+        # Sort by compatibility score descending (the weighted model already encodes breadth)
+        results.sort(key=lambda r: (r.compatibility_score, r.shared_films_count), reverse=True)
         stats.matches_count = len(results)
         stats.elapsed_seconds = time.time() - start_time
 

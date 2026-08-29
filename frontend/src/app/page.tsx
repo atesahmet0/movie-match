@@ -4,7 +4,7 @@ import { Metadata } from "next";
 import { fetchTasteMatch, fetchUserProfile } from "@/lib/api";
 import TasteSoulmatesSection from "@/components/TasteSoulmatesSection";
 import TasteMatchCard from "@/components/TasteMatchCard";
-import { Sparkles, Heart, Compass } from "lucide-react";
+import { Heart, Compass } from "lucide-react";
 import { UserFilmItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +85,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         min_shared_films: minSharedParam,
         max_pages_per_film: maxPagesParam,
         limit_matches: 50,
+        source_username: userParam || undefined,
       });
     } catch (err: unknown) {
       errorMsg = err instanceof Error ? err.message : "Error executing movie match search";
@@ -95,8 +96,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header Intro */}
       <div className="text-center max-w-2xl mx-auto py-2">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2 flex items-center justify-center gap-2.5 font-display">
-          <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-brand-green" />
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2 flex items-center justify-center font-display">
           <span>Movie <span className="text-brand-green">Match</span></span>
         </h1>
         <p className="text-brand-subtext text-xs sm:text-sm leading-relaxed">

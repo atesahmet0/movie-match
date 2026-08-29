@@ -208,80 +208,30 @@ def parse_users_from_reviews_page(html: str) -> List[Dict]:
     return results
 
 
-def parse_user_profile_page(html: str, username: str) -> UserProfile:
-    """Extract location, bio, display name, avatar, and badges from user profile HTML."""
-    tree = HTMLParser(html)
-
-    # Display name
-    name_el = tree.css_first("h1.person-display-name .label, .displayname .label, .profile-name h1, .title-1")
-    display_name = name_el.text(strip=True) if name_el else username
-
-    # Location
-    location = ""
-    for meta in tree.css(".profile-metadata .metadatum, .profile-metadata div, .person-summary .location, .has-icon .location"):
-        if meta.css_first("a"):
-            continue
-        label_span = meta.css_first("span.label, span")
-        text = label_span.text(strip=True) if label_span else meta.text(strip=True)
-        if text and not text.startswith("@") and not "." in text:
-            location = text
-            break
-        elif text:
-            location = text
-
-    # Bio
-    bio = ""
-    bio_el = tree.css_first(".profile-bio, section.profile-bio, .person-bio, .bio")
-    if bio_el:
-        bio = bio_el.text(strip=True)
-
-    # Avatar
-    avatar_url = ""
-    avatar_el = tree.css_first(".profile-avatar img, .avatar.-large img, .avatar img")
-    if avatar_el:
-        avatar_url = avatar_el.attributes.get("src", "")
-
-    # Badges
-    is_pro = bool(tree.css_first(".badge.-pro"))
-    is_patron = bool(tree.css_first(".badge.-patron"))
-
-    return UserProfile(
-        username=username.lower(),
-        display_name=display_name,
-        location=location,
-        bio=bio,
-        avatar_url=avatar_url,
-        profile_url=f"https://letterboxd.com/{username.lower()}/",
-        is_pro=is_pro,
-        is_patron=is_patron,
-    )
-
-
-def parse_user_profile_detail(html: str, username: str) -> UserProfileDetail:
-    """Extract full user profile including 4 pinned favorite films and profile statistics."""
-    base_profile = parse_user_profile_page(html, username)
-    tree = HTMLParser(html)
-
-    # Stats
-    stats = {}
-    for stat_el in tree.css(".profile-stats .profile-statistic, .stats-list .profile-statistic"):
-        val_el = stat_el.css_first(".value")
-        desc_el = stat_el.css_first(".definition")
-        if val_el and desc_el:
-            val_txt = val_el.text(strip=True).replace(",", "")
-            desc_txt = desc_el.text(strip=True).lower().replace(" ", "_")
-            stats[desc_txt] = val_txt
-
-    # 4 Pinned Favorite Films
+def extract_favorite_films_from_tree(tree: HTMLParser) -> List[UserFilmItem]:
+    """Extract up to 4 pinned favorite films from user profile HTML."""
     favorite_films: List[UserFilmItem] = []
     seen_favs = set()
-    for item in tree.css("#favourites [data-component-class='LazyPoster'], section#favourites [data-component-class='LazyPoster'], #favourites .film-poster, .favourites .film-poster"):
+    for item in tree.css(
+        "#favourites [data-component-class='LazyPoster'], "
+        "section#favourites [data-component-class='LazyPoster'], "
+        "#favourites .film-poster, "
+        ".favourites .film-poster, "
+        "#favourites li, "
+        "section#favourites li"
+    ):
         slug = item.attributes.get("data-item-slug") or item.attributes.get("data-film-slug")
         if not slug:
             target = item.attributes.get("data-target-link", "")
             m = re.search(r"/film/([^/?#]+)", target)
             if m:
                 slug = m.group(1)
+        if not slug:
+            a_el = item.css_first("a[href*='/film/']")
+            if a_el:
+                m = re.search(r"/film/([^/?#]+)", a_el.attributes.get("href", ""))
+                if m:
+                    slug = m.group(1)
         if not slug:
             continue
         slug = slug.lower().strip()
@@ -320,6 +270,77 @@ def parse_user_profile_detail(html: str, username: str) -> UserProfileDetail:
             film_url=f"https://letterboxd.com/film/{slug}/",
         ))
 
+    return favorite_films
+
+
+def parse_user_profile_page(html: str, username: str) -> UserProfile:
+    """Extract location, bio, display name, avatar, badges, and favorite films from user profile HTML."""
+    tree = HTMLParser(html)
+
+    # Display name
+    name_el = tree.css_first("h1.person-display-name .label, .displayname .label, .profile-name h1, .title-1")
+    display_name = name_el.text(strip=True) if name_el else username
+
+    # Location
+    location = ""
+    for meta in tree.css(".profile-metadata .metadatum, .profile-metadata div, .person-summary .location, .has-icon .location"):
+        if meta.css_first("a"):
+            continue
+        label_span = meta.css_first("span.label, span")
+        text = label_span.text(strip=True) if label_span else meta.text(strip=True)
+        if text and not text.startswith("@") and not "." in text:
+            location = text
+            break
+        elif text:
+            location = text
+
+    # Bio
+    bio = ""
+    bio_el = tree.css_first(".profile-bio, section.profile-bio, .person-bio, .bio")
+    if bio_el:
+        bio = bio_el.text(strip=True)
+
+    # Avatar
+    avatar_url = ""
+    avatar_el = tree.css_first(".profile-avatar img, .avatar.-large img, .avatar img")
+    if avatar_el:
+        avatar_url = avatar_el.attributes.get("src", "")
+
+    # Badges
+    is_pro = bool(tree.css_first(".badge.-pro"))
+    is_patron = bool(tree.css_first(".badge.-patron"))
+
+    # 4 Pinned Favorite Films
+    favorite_films = extract_favorite_films_from_tree(tree)
+
+    return UserProfile(
+        username=username.lower(),
+        display_name=display_name,
+        location=location,
+        bio=bio,
+        avatar_url=avatar_url,
+        profile_url=f"https://letterboxd.com/{username.lower()}/",
+        is_pro=is_pro,
+        is_patron=is_patron,
+        favorite_films=favorite_films,
+    )
+
+
+def parse_user_profile_detail(html: str, username: str) -> UserProfileDetail:
+    """Extract full user profile including 4 pinned favorite films and profile statistics."""
+    base_profile = parse_user_profile_page(html, username)
+    tree = HTMLParser(html)
+
+    # Stats
+    stats = {}
+    for stat_el in tree.css(".profile-stats .profile-statistic, .stats-list .profile-statistic"):
+        val_el = stat_el.css_first(".value")
+        desc_el = stat_el.css_first(".definition")
+        if val_el and desc_el:
+            val_txt = val_el.text(strip=True).replace(",", "")
+            desc_txt = desc_el.text(strip=True).lower().replace(" ", "_")
+            stats[desc_txt] = val_txt
+
     return UserProfileDetail(
         username=base_profile.username,
         display_name=base_profile.display_name,
@@ -329,8 +350,8 @@ def parse_user_profile_detail(html: str, username: str) -> UserProfileDetail:
         profile_url=base_profile.profile_url,
         is_pro=base_profile.is_pro,
         is_patron=base_profile.is_patron,
+        favorite_films=base_profile.favorite_films,
         stats=stats,
-        favorite_films=favorite_films,
     )
 
 

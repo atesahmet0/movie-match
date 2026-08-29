@@ -119,6 +119,28 @@ SHORT_ABBREVIATIONS: Set[str] = {
     "tr", "us", "la", "de", "fr", "ca", "it", "es", "au", "06", "34", "35"
 }
 
+# Common dictionary words that collide with geo-names — excluded from bio matching
+# to prevent false positives (e.g. Dutch "van" matching Turkish city Van)
+BIO_BLOCKLIST: Set[str] = {
+    "van",       # Dutch "of/from" — collides with Van (Turkey)
+    "nice",      # English adjective — collides with Nice (France)
+    "bath",      # English noun — collides with Bath (UK)
+    "lima",      # Spanish "file/lime" — collides with Lima (Peru)
+    "reading",   # English verb — collides with Reading (UK)
+    "orange",    # English noun — collides with Orange (France/USA)
+    "mobile",    # English adjective — collides with Mobile (Alabama)
+    "concord",   # English noun — collides with Concord (USA)
+    "troy",      # English name — collides with Troy (USA)
+    "dover",     # English name — collides with Dover (UK/USA)
+    "oxford",    # could appear in "Oxford comma" etc. — keep for location, block for bio
+    "florence",  # common first name — collides with Florence (Italy)
+    "jordan",    # common first name — collides with Jordan (country)
+    "chad",      # common first name — collides with Chad (country)
+    "georgia",   # common first name — collides with Georgia (country/state)
+    "Adelaide",  # common first name — collides with Adelaide (Australia)
+    "milan",     # common name — collides with Milan (Italy)
+}
+
 
 ANYWHERE_KEYWORDS: Set[str] = {
     "anywhere", "worldwide", "global", "all", "*", "everywhere", "any", "world", ""
@@ -148,8 +170,11 @@ class LocationMatcher:
             for sq in sub_queries:
                 self.location_tokens.update(self._build_target_tokens_for_single(normalize_text(sq)))
 
-            # For bio matching, exclude short 2-letter abbreviations that collide with common words
-            self.bio_tokens: Set[str] = {t for t in self.location_tokens if len(t) > 2 and t not in SHORT_ABBREVIATIONS}
+            # For bio matching, exclude short abbreviations AND common words that collide with geo-names
+            self.bio_tokens: Set[str] = {
+                t for t in self.location_tokens
+                if len(t) > 2 and t not in SHORT_ABBREVIATIONS and t not in BIO_BLOCKLIST
+            }
             self.loc_pattern = self._compile_pattern(self.location_tokens)
             self.bio_pattern = self._compile_pattern(self.bio_tokens) if self.bio_tokens else None
         else:
