@@ -1,10 +1,12 @@
+/* Hallmark · page: /scout · macrostructure: Workbench · theme: Midnight Cinema
+ */
 import { Metadata } from "next";
 import { fetchSingleSearch, fetchTasteMatch } from "@/lib/api";
 import ScoutForm from "@/components/ScoutForm";
 import ScoutResultCard from "@/components/ScoutResultCard";
 import TasteMatchCard from "@/components/TasteMatchCard";
 import ExportButtons from "@/components/ExportButtons";
-import { Clapperboard } from "lucide-react";
+import { Clapperboard, Compass, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +26,13 @@ export async function generateMetadata({ searchParams }: ScoutPageProps): Promis
 
   if (rawFilms) {
     return {
-      title: `Scout fans of ${rawFilms} in ${location} - MovieMatch`,
+      title: `Scout fans of ${rawFilms} in ${location} — MovieMatch`,
       description: `Find Letterboxd members in ${location} who watched and rated ${rawFilms}.`,
     };
   }
 
   return {
-    title: "Scout Film Lovers by Location - MovieMatch",
+    title: "Scout Cinema Lovers by Location — MovieMatch",
     description: "Filter Letterboxd members by movie, location, and sentiment.",
   };
 }
@@ -54,7 +56,11 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
   const sentimentParam =
     typeof resolvedParams.sentiment === "string" ? resolvedParams.sentiment : "liked";
   const maxPagesParam =
-    typeof resolvedParams.max_pages === "string" ? parseInt(resolvedParams.max_pages) || 3 : 3;
+    typeof resolvedParams.max_pages === "string"
+      ? parseInt(resolvedParams.max_pages) || 3
+      : typeof resolvedParams.maxPages === "string"
+      ? parseInt(resolvedParams.maxPages) || 3
+      : 3;
   const limitParam =
     typeof resolvedParams.limit === "string" ? parseInt(resolvedParams.limit) || 50 : 50;
   const includeBioParam =
@@ -109,21 +115,21 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
     : singleSearchResponse?.stats?.elapsed_seconds || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl mx-auto">
       {/* Intro Header */}
-      <div className="text-center max-w-2xl mx-auto">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-1 flex items-center justify-center gap-2">
+      <div className="text-center max-w-2xl mx-auto py-2">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2 flex items-center justify-center gap-2.5 font-display">
           <Clapperboard className="w-6 h-6 sm:w-7 sm:h-7 text-brand-green" />
-          <span>Scout Film Lovers</span>
+          <span>Scout <span className="text-brand-green">Film Lovers</span></span>
         </h1>
-        <p className="text-brand-subtext text-xs sm:text-sm">
-          Scout Letterboxd fans across multiple films, locations, and sentiment filters simultaneously.
+        <p className="text-brand-subtext text-xs sm:text-sm leading-relaxed">
+          Filter Letterboxd fans across any movies, world cities, and sentiment criteria simultaneously.
         </p>
       </div>
 
       {/* Multi-Film Scout Form */}
       <ScoutForm
-        initialFilms={filmList.length > 0 ? filmList : ["vampire-hunter-d-bloodlust"]}
+        initialFilms={filmList.length > 0 ? filmList : ["parasite-2019"]}
         initialLocation={locationParam}
         initialSentiment={sentimentParam}
         initialPages={maxPagesParam}
@@ -132,24 +138,27 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
       />
 
       {errorMsg && (
-        <div className="solid-card rounded-2xl p-5 max-w-4xl mx-auto text-center border-red-500/50 text-red-400 text-sm">
+        <div className="solid-card rounded-2xl p-5 max-w-4xl mx-auto text-center border-red-500/50 text-red-400 text-xs sm:text-sm font-mono">
           {errorMsg}
         </div>
       )}
 
       {/* Multi-Film Stats Bar */}
       {(singleSearchResponse || tasteMatchResponse) && (
-        <div className="solid-card rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 max-w-6xl mx-auto">
+        <div className="glass-card rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-brand-border/90">
           <div>
-            <h3 className="text-sm font-bold text-white">
-              Found {totalMatches} Matches across {filmList.length} {filmList.length === 1 ? "Film" : "Films"} in {locationParam}
+            <h3 className="text-sm sm:text-base font-bold text-white font-display flex items-center gap-2">
+              <Users className="w-4 h-4 text-brand-green" />
+              <span>
+                Found {totalMatches} Matches across {filmList.length} {filmList.length === 1 ? "Film" : "Films"} in {locationParam}
+              </span>
             </h3>
-            <p className="text-xs text-brand-subtext">
+            <p className="text-xs text-brand-subtext mt-1">
               Scanned {totalScanned} candidate members across target interaction pages.
             </p>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 shrink-0">
             {singleSearchResponse && (
               <ExportButtons
                 filmSlug={singleSearchResponse.film?.slug || filmList[0]}
@@ -157,7 +166,7 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
                 matches={singleSearchResponse.matches}
               />
             )}
-            <span className="text-xs font-mono text-brand-green font-bold bg-brand-darker px-2.5 py-1 rounded-lg border border-brand-border">
+            <span className="text-xs font-mono text-brand-green font-bold bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border">
               {elapsedSec.toFixed(2)}s
             </span>
           </div>
@@ -166,7 +175,7 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
 
       {/* Multi-Film Results Grid */}
       {isMulti && tasteMatchResponse && tasteMatchResponse.matches.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {tasteMatchResponse.matches.map((match, idx) => (
             <TasteMatchCard key={match.username} match={match} index={idx} />
           ))}
@@ -175,20 +184,21 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
 
       {/* Single-Film Results Grid */}
       {!isMulti && singleSearchResponse && singleSearchResponse.matches.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
-          {singleSearchResponse.matches.map((match) => (
-            <ScoutResultCard key={match.username} match={match} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {singleSearchResponse.matches.map((match, idx) => (
+            <ScoutResultCard key={match.username} match={match} index={idx} />
           ))}
         </div>
       )}
 
       {/* Empty State */}
       {(singleSearchResponse || tasteMatchResponse) && totalMatches === 0 && (
-        <div className="text-center py-12 solid-card rounded-2xl max-w-4xl mx-auto">
-          <p className="font-semibold text-white">
+        <div className="text-center py-16 glass-card rounded-3xl space-y-3">
+          <Compass className="w-10 h-10 mx-auto text-brand-muted opacity-40" />
+          <p className="font-bold text-white text-base font-display">
             No matching members found in &quot;{locationParam}&quot;.
           </p>
-          <p className="text-xs text-brand-subtext mt-1">
+          <p className="text-xs text-brand-subtext max-w-md mx-auto leading-relaxed">
             Try increasing Scan Depth, adding more film targets, or setting Location to &quot;Anywhere&quot;.
           </p>
         </div>

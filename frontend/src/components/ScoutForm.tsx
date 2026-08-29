@@ -1,3 +1,6 @@
+/* Hallmark · component: ScoutForm · genre: atmospheric · theme: Midnight Cinema
+ * motion: chip-pop · layout-transition · live-stepper · button-lift
+ */
 "use client";
 
 import React, { useState, useEffect, useTransition } from "react";
@@ -20,6 +23,9 @@ import {
 import { fetchFilmInfo } from "@/lib/api";
 import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
 import { FilmCombobox } from "@/components/ui/FilmCombobox";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ScoutFormProps {
@@ -36,15 +42,15 @@ const PRESET_LOCATIONS = [
   "Turkey",
   "Ankara",
   "Istanbul",
-  "USA",
-  "UK",
-  "Germany",
-  "Berlin",
   "London",
+  "Berlin",
+  "New York",
+  "Tokyo",
+  "Paris",
 ];
 
 const POPULAR_SUGGESTIONS: FilmSearchResult[] = [
-  { slug: "alien", title: "Alien", year: 1979, director: "Ridley Scott", film_url: "https://letterboxd.com/film/alien/" },
+  { slug: "parasite-2019", title: "Parasite", year: 2019, director: "Bong Joon-ho", film_url: "https://letterboxd.com/film/parasite-2019/" },
   { slug: "interstellar", title: "Interstellar", year: 2014, director: "Christopher Nolan", film_url: "https://letterboxd.com/film/interstellar/" },
   { slug: "the-substance", title: "The Substance", year: 2024, director: "Coralie Fargeat", film_url: "https://letterboxd.com/film/the-substance/" },
   { slug: "fight-club", title: "Fight Club", year: 1999, director: "David Fincher", film_url: "https://letterboxd.com/film/fight-club/" },
@@ -67,7 +73,6 @@ export default function ScoutForm({
   const [comboboxValue, setComboboxValue] = useState("");
   const [isAddingFilm, setIsAddingFilm] = useState(false);
 
-  // Multi-location chips
   const parseInitialLocations = (raw: string): string[] => {
     const split = (raw || "")
       .split(",")
@@ -86,11 +91,9 @@ export default function ScoutForm({
   const [limit, setLimit] = useState(initialLimit || 50);
   const [includeBio, setIncludeBio] = useState(initialIncludeBio !== false);
 
-  // Live status progress
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [statusStep, setStatusStep] = useState(0);
 
-  // Initialize films on load
   useEffect(() => {
     if (initialFilms && initialFilms.length > 0 && selectedFilms.length === 0) {
       initialFilms.forEach((slug) => {
@@ -121,7 +124,6 @@ export default function ScoutForm({
     }
   }, [initialFilms]);
 
-  // Handle timer during scan
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isPending) {
@@ -256,29 +258,29 @@ export default function ScoutForm({
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="glass-card p-6 sm:p-8">
+      <div className="glass-card p-6 sm:p-8 rounded-3xl border border-brand-border/90 shadow-2xl">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Section 1: Film Selector */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Film className="w-4 h-4 text-[#00e054]" />
-                Target Films ({selectedFilms.length} Selected)
+              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <Film className="w-4 h-4 text-brand-green" />
+                <span>Target Films ({selectedFilms.length} Selected)</span>
               </label>
               {selectedFilms.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setSelectedFilms([])}
-                  className="text-xs text-[#667788] hover:text-red-400 transition flex items-center space-x-1"
+                  className="text-xs text-brand-muted hover:text-red-400 transition flex items-center space-x-1 font-mono cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear</span>
+                  <span>Clear All</span>
                 </button>
               )}
             </div>
 
             {/* Selected Chips */}
-            <div className="min-h-[56px] p-3 rounded-2xl bg-[#14181c] border border-[#2c3440] flex flex-wrap items-center gap-2">
+            <div className="min-h-[56px] p-3 rounded-2xl bg-brand-darker border border-brand-border flex flex-wrap items-center gap-2">
               <AnimatePresence mode="popLayout">
                 {selectedFilms.map((film) => (
                   <motion.div
@@ -288,13 +290,13 @@ export default function ScoutForm({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    className="inline-flex items-center space-x-2 bg-[#1b2228] border border-[#2c3440] hover:border-[#3d4957] pl-3 pr-2 py-1.5 rounded-xl text-xs font-semibold text-white shadow-sm"
+                    className="inline-flex items-center space-x-2 bg-brand-card border border-brand-border hover:border-brand-borderLight pl-3 pr-2 py-1.5 rounded-xl text-xs font-semibold text-white shadow-sm font-display"
                   >
-                    <Clapperboard className="w-3.5 h-3.5 text-[#00e054] shrink-0" />
+                    <Clapperboard className="w-3.5 h-3.5 text-brand-green shrink-0" />
                     <span className="truncate max-w-[200px]">
                       {film.title || film.slug}
                       {film.year && (
-                        <span className="text-[#99aabb] font-normal ml-1">
+                        <span className="text-brand-muted font-mono font-normal ml-1">
                           ({film.year})
                         </span>
                       )}
@@ -302,7 +304,7 @@ export default function ScoutForm({
                     <button
                       type="button"
                       onClick={() => handleRemoveFilm(film.slug)}
-                      className="text-[#667788] hover:text-red-400 p-0.5 rounded-md hover:bg-[#222b33] transition"
+                      className="text-brand-muted hover:text-red-400 p-0.5 rounded-md hover:bg-brand-cardHover transition cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -311,8 +313,8 @@ export default function ScoutForm({
               </AnimatePresence>
 
               {selectedFilms.length === 0 && (
-                <span className="text-xs text-[#667788] px-2 italic select-none">
-                  Search a movie below or choose from popular suggestions.
+                <span className="text-xs text-brand-muted px-2 italic select-none">
+                  Search a movie below or pick from quick suggestions to add to your scouting matrix.
                 </span>
               )}
             </div>
@@ -321,14 +323,14 @@ export default function ScoutForm({
             <FilmCombobox
               value={comboboxValue}
               onChange={handleAddFilmFromCombobox}
-              placeholder="Search Letterboxd film title (e.g. Interstellar, Alien, Dune)..."
+              placeholder="Search Letterboxd film title (e.g. Parasite, Alien, Dune)..."
               disabled={isAddingFilm}
             />
 
             {/* Quick Suggestions */}
             <div className="space-y-1.5 pt-1">
-              <span className="text-[11px] font-semibold text-[#667788] uppercase tracking-wider block">
-                Popular Quick Picks:
+              <span className="text-[11px] font-semibold text-brand-muted uppercase tracking-wider block font-mono">
+                Popular Quick Targets:
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {POPULAR_SUGGESTIONS.map((film) => {
@@ -344,15 +346,15 @@ export default function ScoutForm({
                           return [...prev, { slug: film.slug, title: film.title, year: film.year }];
                         })
                       }
-                      className={`px-3 py-1 rounded-xl text-xs transition flex items-center space-x-1.5 ${
+                      className={`px-3 py-1 rounded-xl text-xs transition flex items-center space-x-1.5 font-mono ${
                         alreadyAdded
-                          ? "bg-[#14181c] text-[#667788] border border-[#2c3440] opacity-50 cursor-not-allowed"
-                          : "bg-[#1b2228] text-[#e1e7ed] border border-[#2c3440] hover:border-[#00e054] hover:text-[#00e054] cursor-pointer"
+                          ? "bg-brand-darker text-brand-muted border border-brand-border opacity-45 cursor-not-allowed"
+                          : "bg-brand-card text-brand-text border border-brand-border hover:border-brand-green hover:text-brand-green cursor-pointer"
                       }`}
                     >
                       <Plus className="w-3 h-3" />
                       <span>{film.title}</span>
-                      {film.year && <span className="text-[10px] text-[#667788]">({film.year})</span>}
+                      {film.year && <span className="text-[10px] text-brand-muted">({film.year})</span>}
                     </button>
                   );
                 })}
@@ -361,25 +363,25 @@ export default function ScoutForm({
           </div>
 
           {/* Section 2: Location Filter */}
-          <div className="space-y-3 pt-4 border-t border-[#2c3440]">
-            <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-[#40bcf4]" />
-              Target Locations
+          <div className="space-y-3 pt-4 border-t border-brand-border/80">
+            <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+              <MapPin className="w-4 h-4 text-brand-blue" />
+              <span>Target Locations & Cities</span>
             </label>
 
-            <div className="min-h-[50px] p-2.5 rounded-2xl bg-[#14181c] border border-[#2c3440] flex flex-wrap items-center gap-2">
+            <div className="min-h-[50px] p-2.5 rounded-2xl bg-brand-darker border border-brand-border flex flex-wrap items-center gap-2">
               {locations.map((loc) => (
                 <span
                   key={loc}
-                  className="inline-flex items-center space-x-1.5 bg-[#1b2228] border border-[#2c3440] px-3 py-1 rounded-xl text-xs font-semibold text-[#00e054]"
+                  className="inline-flex items-center space-x-1.5 bg-brand-card border border-brand-border px-3 py-1 rounded-xl text-xs font-semibold text-brand-green font-mono"
                 >
-                  <MapPin className="w-3 h-3" />
+                  <MapPin className="w-3 h-3 text-brand-green" />
                   <span>{loc}</span>
                   {locations.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveLocation(loc)}
-                      className="text-[#667788] hover:text-red-400 ml-1"
+                      className="text-brand-muted hover:text-red-400 ml-1 cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -396,7 +398,7 @@ export default function ScoutForm({
                   if (locationInput.trim()) handleAddLocation(locationInput);
                 }}
                 placeholder={locations.length === 0 ? "Type city (e.g. Ankara) and press Enter" : "Add another location..."}
-                className="bg-transparent border-none text-xs sm:text-sm text-white placeholder-[#667788] focus:outline-none flex-1 min-w-[140px] px-2 py-1"
+                className="bg-transparent border-none text-xs sm:text-sm text-white placeholder:text-brand-muted focus:outline-none flex-1 min-w-[140px] px-2 py-1"
               />
             </div>
 
@@ -409,14 +411,14 @@ export default function ScoutForm({
                     key={loc}
                     type="button"
                     onClick={() => handleTogglePresetLocation(loc)}
-                    className={`px-3 py-1 rounded-xl border text-xs transition cursor-pointer flex items-center space-x-1.5 ${
+                    className={`px-3 py-1 rounded-xl border text-xs font-mono transition cursor-pointer flex items-center space-x-1.5 ${
                       active
-                        ? "bg-[#00e054] text-[#0d1114] font-bold border-[#00e054]"
-                        : "bg-[#14181c] text-[#99aabb] border-[#2c3440] hover:text-white hover:border-[#3d4957]"
+                        ? "bg-brand-green text-black font-bold border-brand-green"
+                        : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white hover:border-brand-borderLight"
                     }`}
                   >
                     <span>{loc}</span>
-                    {active && <CheckCircle2 className="w-3 h-3 text-[#0d1114]" />}
+                    {active && <CheckCircle2 className="w-3 h-3 text-black" />}
                   </button>
                 );
               })}
@@ -424,15 +426,15 @@ export default function ScoutForm({
           </div>
 
           {/* Section 3: Fine Tuning */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-[#2c3440]">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-brand-border/80">
             <div>
-              <label className="block text-xs font-semibold text-white mb-1.5">
+              <label className="block text-xs font-semibold text-white mb-1.5 font-display">
                 Sentiment Filter
               </label>
               <select
                 value={sentiment}
                 onChange={(e) => setSentiment(e.target.value)}
-                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
+                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-green/60 focus:border-brand-green/80 cursor-pointer font-medium"
               >
                 <option value="liked">Liked / High Rating (4-5 Stars)</option>
                 <option value="disliked">Disliked / Low Rating (0.5-2 Stars)</option>
@@ -441,13 +443,13 @@ export default function ScoutForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-white mb-1.5">
+              <label className="block text-xs font-semibold text-white mb-1.5 font-display">
                 Scan Depth
               </label>
               <select
                 value={maxPages}
                 onChange={(e) => setMaxPages(parseInt(e.target.value) || 3)}
-                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
+                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-green/60 focus:border-brand-green/80 cursor-pointer font-medium"
               >
                 <option value={2}>2 Pages per film (~150 candidates)</option>
                 <option value={3}>3 Pages per film (~225 candidates)</option>
@@ -456,13 +458,13 @@ export default function ScoutForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-white mb-1.5">
+              <label className="block text-xs font-semibold text-white mb-1.5 font-display">
                 Matches Limit
               </label>
               <select
                 value={limit}
                 onChange={(e) => setLimit(parseInt(e.target.value) || 50)}
-                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054]"
+                className="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-green/60 focus:border-brand-green/80 cursor-pointer font-medium"
               >
                 <option value={25}>Stop at 25 Matches</option>
                 <option value={50}>Stop at 50 Matches</option>
@@ -471,36 +473,33 @@ export default function ScoutForm({
             </div>
           </div>
 
-          <div className="flex items-center space-x-2 pt-1">
+          <div className="flex items-center space-x-2.5 pt-1">
             <input
               type="checkbox"
               id="scout-bio-checkbox"
               checked={includeBio}
               onChange={(e) => setIncludeBio(e.target.checked)}
-              className="rounded bg-[#14181c] border-[#2c3440] text-[#00e054] focus:ring-0 w-4 h-4 cursor-pointer"
+              className="rounded bg-brand-darker border-brand-border text-brand-green focus:ring-0 w-4 h-4 cursor-pointer accent-brand-green"
             />
-            <label htmlFor="scout-bio-checkbox" className="text-xs text-[#99aabb] cursor-pointer">
+            <label htmlFor="scout-bio-checkbox" className="text-xs text-brand-subtext cursor-pointer select-none">
               Search member profile bio in addition to location field
             </label>
           </div>
 
-          <button
+          <Button
             type="submit"
+            variant="cinema"
+            size="lg"
             disabled={isPending || selectedFilms.length === 0}
-            className="w-full bg-gradient-to-r from-[#00e054] to-[#00b844] hover:from-[#00b844] hover:to-[#009e3a] disabled:opacity-50 text-[#0d1114] font-extrabold py-3.5 px-6 rounded-2xl transition duration-150 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer shadow-xl shadow-[#00e054]/15"
+            className="w-full h-13 text-sm sm:text-base font-bold shadow-xl shadow-brand-green/20"
+            leftIcon={isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
           >
             {isPending ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Scouting Letterboxd... ({elapsedSeconds.toFixed(1)}s)</span>
-              </>
+              <span>Scouting Letterboxd... ({elapsedSeconds.toFixed(1)}s)</span>
             ) : (
-              <>
-                <Search className="w-5 h-5" />
-                <span>Start Scout ({selectedFilms.length} {selectedFilms.length === 1 ? "Film" : "Films"})</span>
-              </>
+              <span>Start Scout ({selectedFilms.length} {selectedFilms.length === 1 ? "Film" : "Films"})</span>
             )}
-          </button>
+          </Button>
         </form>
       </div>
 
@@ -509,108 +508,108 @@ export default function ScoutForm({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-6 border-[#00e054]/40 space-y-4"
+          className="glass-card p-6 border-brand-green/40 space-y-4 rounded-3xl"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2c3440] pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-border pb-3">
             <div className="flex items-center space-x-3">
               <span className="relative flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00e054] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00e054]"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-brand-green"></span>
               </span>
               <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Scouting Letterboxd</span>
-                  <span className="text-xs font-mono text-[#00e054]">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2 font-display">
+                  <span>Scouting Letterboxd Members</span>
+                  <span className="text-xs font-mono text-brand-green font-normal">
                     &bull; {selectedFilms.length} Films in {locations.join(", ")}
                   </span>
                 </h4>
-                <p className="text-[11px] text-[#99aabb]">
+                <p className="text-[11px] text-brand-subtext">
                   Bypassing rate limits & scanning member network across target films and locations
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 bg-[#14181c] px-3 py-1.5 rounded-xl border border-[#2c3440] text-xs font-mono">
-              <span className="text-[#667788]">Elapsed:</span>
-              <span className="font-bold text-[#00e054]">{elapsedSeconds.toFixed(1)}s</span>
+            <div className="flex items-center space-x-2 bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border text-xs font-mono">
+              <span className="text-brand-muted">Elapsed:</span>
+              <span className="font-bold text-brand-green">{elapsedSeconds.toFixed(1)}s</span>
             </div>
           </div>
 
           {/* Stepper Status Progression */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
             <div
-              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
+              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 1
-                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
-                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
+                  ? "bg-brand-card border-brand-green/60 text-white"
+                  : "bg-brand-darker border-brand-border text-brand-muted"
               }`}
             >
               {statusStep > 1 ? (
-                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
               ) : (
-                <Globe className="w-4 h-4 text-[#00e054] animate-pulse shrink-0" />
+                <Globe className="w-4 h-4 text-brand-green animate-pulse shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">1. Connection</span>
-                <span className="text-[10px] text-[#99aabb] block truncate">{selectedFilms.length} target films</span>
+                <span className="block font-semibold truncate text-xs font-display">1. Connection</span>
+                <span className="text-[10px] text-brand-subtext block truncate font-mono">{selectedFilms.length} target films</span>
               </div>
             </div>
 
             <div
-              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
+              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 2
-                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
-                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
+                  ? "bg-brand-card border-brand-green/60 text-white"
+                  : "bg-brand-darker border-brand-border text-brand-muted"
               }`}
             >
               {statusStep > 2 ? (
-                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
               ) : statusStep === 2 ? (
-                <Loader2 className="w-4 h-4 text-[#ff8000] animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-brand-orange animate-spin shrink-0" />
               ) : (
                 <Layers className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">2. Reviews & Likes</span>
-                <span className="text-[10px] text-[#99aabb] block truncate">Parsing {maxPages} pages/film</span>
+                <span className="block font-semibold truncate text-xs font-display">2. Reviews & Likes</span>
+                <span className="text-[10px] text-brand-subtext block truncate font-mono">Parsing {maxPages} pages/film</span>
               </div>
             </div>
 
             <div
-              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
+              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 3
-                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
-                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
+                  ? "bg-brand-card border-brand-green/60 text-white"
+                  : "bg-brand-darker border-brand-border text-brand-muted"
               }`}
             >
               {statusStep > 3 ? (
-                <CheckCircle2 className="w-4 h-4 text-[#00e054] shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
               ) : statusStep === 3 ? (
-                <Loader2 className="w-4 h-4 text-[#40bcf4] animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-brand-blue animate-spin shrink-0" />
               ) : (
                 <Users className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">3. Member Profiles</span>
-                <span className="text-[10px] text-[#99aabb] block truncate">{locations.join(", ")}</span>
+                <span className="block font-semibold truncate text-xs font-display">3. Member Profiles</span>
+                <span className="text-[10px] text-brand-subtext block truncate font-mono">{locations.join(", ")}</span>
               </div>
             </div>
 
             <div
-              className={`p-3 rounded-xl border flex items-center space-x-2.5 transition ${
+              className={`p-3 rounded-2xl border flex items-center space-x-2.5 transition ${
                 statusStep >= 4
-                  ? "bg-[#1b2228] border-[#00e054]/60 text-white"
-                  : "bg-[#14181c] border-[#2c3440] text-[#667788]"
+                  ? "bg-brand-card border-brand-green/60 text-white"
+                  : "bg-brand-darker border-brand-border text-brand-muted"
               }`}
             >
               {statusStep >= 4 ? (
-                <Loader2 className="w-4 h-4 text-[#00e054] animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 text-brand-green animate-spin shrink-0" />
               ) : (
                 <Sparkles className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">4. Filtering</span>
-                <span className="text-[10px] text-[#99aabb] block truncate">Rendering matches</span>
+                <span className="block font-semibold truncate text-xs font-display">4. Filtering</span>
+                <span className="text-[10px] text-brand-subtext block truncate font-mono">Rendering matches</span>
               </div>
             </div>
           </div>

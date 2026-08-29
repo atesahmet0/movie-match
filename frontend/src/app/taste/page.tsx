@@ -1,8 +1,10 @@
+/* Hallmark · page: /taste · macrostructure: Workbench · theme: Midnight Cinema
+ */
 import { Metadata } from "next";
 import { fetchTasteMatch, fetchUserProfile } from "@/lib/api";
 import TasteSoulmatesSection from "@/components/TasteSoulmatesSection";
 import TasteMatchCard from "@/components/TasteMatchCard";
-import { Sparkles, Heart } from "lucide-react";
+import { Sparkles, Heart, Film, MapPin, Users, Compass } from "lucide-react";
 import { UserFilmItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +20,13 @@ export async function generateMetadata({ searchParams }: TastePageProps): Promis
 
   if (user) {
     return {
-      title: `Taste Soulmates for @${user} in ${location} - MovieMatch`,
+      title: `Taste Soulmates for @${user} in ${location} — MovieMatch`,
       description: `Find Letterboxd members in ${location} who share the favorite films of @${user}.`,
     };
   }
 
   return {
-    title: "Letterboxd Taste Soulmates - Match by Favorite Films",
+    title: "Letterboxd Taste Soulmates — MovieMatch",
     description:
       "Find local film lovers who share your 4 pinned favorite movies, ranked strictly by compatibility match ratio.",
   };
@@ -37,16 +39,23 @@ export default async function TastePage({ searchParams }: TastePageProps) {
   let locationParam =
     typeof resolvedParams.location === "string" ? resolvedParams.location : "";
   const minSharedParam =
-    typeof resolvedParams.minShared === "string" ? parseInt(resolvedParams.minShared) || 1 : 1;
+    typeof resolvedParams.minShared === "string"
+      ? parseInt(resolvedParams.minShared) || 1
+      : typeof resolvedParams.min_shared === "string"
+      ? parseInt(resolvedParams.min_shared) || 1
+      : 1;
   const maxPagesParam =
-    typeof resolvedParams.maxPages === "string" ? parseInt(resolvedParams.maxPages) || 2 : 2;
+    typeof resolvedParams.maxPages === "string"
+      ? parseInt(resolvedParams.maxPages) || 2
+      : typeof resolvedParams.max_pages === "string"
+      ? parseInt(resolvedParams.max_pages) || 2
+      : 2;
 
   let filmList = filmsParam
     .split(",")
     .map((f) => f.trim())
     .filter(Boolean);
 
-  // If user param was provided but no films yet, fetch user profile favorites
   if (userParam && filmList.length === 0) {
     try {
       const userProfile = await fetchUserProfile(userParam);
@@ -83,19 +92,19 @@ export default async function TastePage({ searchParams }: TastePageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header Intro */}
-      <div className="text-center max-w-2xl mx-auto">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-1 flex items-center justify-center gap-2">
+      <div className="text-center max-w-2xl mx-auto py-2">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2 flex items-center justify-center gap-2.5 font-display">
           <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-brand-green" />
-          <span>Taste Soulmates</span>
+          <span>Taste <span className="text-brand-green">Soulmates</span></span>
         </h1>
-        <p className="text-brand-subtext text-xs sm:text-sm">
-          Discover members who love the same movies you do, ranked by compatibility match ratio.
+        <p className="text-brand-subtext text-xs sm:text-sm leading-relaxed">
+          Discover cinephiles who love the exact same movies you do, ranked by compatibility match ratio.
         </p>
       </div>
 
-      {/* 1-Click Soulmates Match Section */}
+      {/* 1-Click Soulmates Match Studio */}
       <TasteSoulmatesSection
         initialUser={userParam}
         initialLocation={locationParam}
@@ -104,33 +113,33 @@ export default async function TastePage({ searchParams }: TastePageProps) {
       />
 
       {errorMsg && (
-        <div className="solid-card rounded-2xl p-5 max-w-4xl mx-auto text-center border-red-500/50 text-red-400 text-sm">
+        <div className="solid-card rounded-2xl p-5 max-w-4xl mx-auto text-center border-red-500/50 text-red-400 text-xs sm:text-sm font-mono">
           {errorMsg}
         </div>
       )}
 
       {/* Taste Stats Bar */}
       {tasteResponse && (
-        <div className="solid-card rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 max-w-4xl mx-auto">
+        <div className="glass-card rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-4xl mx-auto border border-brand-border/90">
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-              <Heart className="w-4 h-4 text-brand-green fill-brand-green" />
+            <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 font-display">
+              <Heart className="w-4 h-4 text-brand-green fill-brand-green shrink-0" />
               <span>
-                Found {tasteResponse.matches_count} Soulmates across {filmList.length} Favorite Films in {locationParam}
+                Found {tasteResponse.matches_count} Soulmates in {locationParam}
               </span>
             </h3>
-            <p className="text-xs text-brand-subtext mt-0.5">
-              Scanned {tasteResponse.stats?.total_users_discovered || 0} candidate members &bull; Ranked by match percentage
+            <p className="text-xs text-brand-subtext mt-1">
+              Scanned {tasteResponse.stats?.total_users_discovered || 0} candidate members across {filmList.length} cornerstone films &bull; Ranked by percentage
             </p>
           </div>
-          <div className="flex items-center space-x-4 text-xs font-mono">
-            <div>
+          <div className="flex items-center space-x-3 text-xs font-mono shrink-0">
+            <div className="bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border">
               Time:{" "}
               <span className="text-brand-green font-bold">
                 {(tasteResponse.stats?.elapsed_seconds || 0).toFixed(2)}s
               </span>
             </div>
-            <div>
+            <div className="bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border">
               Soulmates:{" "}
               <span className="text-brand-green font-bold">
                 {tasteResponse.matches_count}
@@ -151,12 +160,13 @@ export default async function TastePage({ searchParams }: TastePageProps) {
 
       {/* Empty State */}
       {tasteResponse && tasteResponse.matches.length === 0 && (
-        <div className="text-center py-12 solid-card rounded-2xl max-w-4xl mx-auto">
-          <p className="font-semibold text-white">
+        <div className="text-center py-16 glass-card rounded-3xl max-w-4xl mx-auto space-y-3">
+          <Compass className="w-10 h-10 mx-auto text-brand-muted opacity-40" />
+          <p className="font-bold text-white text-base font-display">
             No soulmates found sharing these favorite films in &quot;{locationParam}&quot;.
           </p>
-          <p className="text-xs text-brand-subtext mt-1">
-            Try setting location to &quot;Anywhere&quot; or matching at least 1 film.
+          <p className="text-xs text-brand-subtext max-w-md mx-auto leading-relaxed">
+            Try setting location to &quot;Anywhere&quot; or lowering the minimum matching requirement to 1 film.
           </p>
         </div>
       )}

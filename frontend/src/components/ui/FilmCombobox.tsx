@@ -1,9 +1,12 @@
+/* Hallmark · component: FilmCombobox · genre: atmospheric · theme: Midnight Cinema
+ */
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Film, Search, Loader2, X, Check, Clapperboard } from "lucide-react";
+import { Film, Loader2, X, Check, Clapperboard } from "lucide-react";
 import { searchFilms } from "@/lib/api";
 import { FilmSearchResult } from "@/lib/types";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface FilmComboboxProps {
   value: string;
@@ -15,7 +18,7 @@ interface FilmComboboxProps {
 export function FilmCombobox({
   value,
   onChange,
-  placeholder = "Search Letterboxd movie (e.g. Interstellar or past URL)",
+  placeholder = "Search Letterboxd movie (e.g. Parasite or past URL)",
   disabled = false,
 }: FilmComboboxProps) {
   const [query, setQuery] = useState(value);
@@ -26,12 +29,10 @@ export function FilmCombobox({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync external value
   useEffect(() => {
     setQuery(value);
   }, [value]);
 
-  // Debounced search
   useEffect(() => {
     if (!query.trim() || query.length < 2) {
       setResults([]);
@@ -39,7 +40,6 @@ export function FilmCombobox({
       return;
     }
 
-    // If query looks like a full URL or exact slug without spaces, don't auto-fetch if already selected
     if (query === value && !isOpen) {
       return;
     }
@@ -47,7 +47,9 @@ export function FilmCombobox({
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const cleanSearch = query.replace(/^https?:\/\/letterboxd\.com\/film\//, "").replace(/\/$/, "");
+        const cleanSearch = query
+          .replace(/^https?:\/\/letterboxd\.com\/film\//, "")
+          .replace(/\/$/, "");
         const resultsList = await searchFilms(cleanSearch, 8);
         if (resultsList && resultsList.length > 0) {
           setResults(resultsList);
@@ -60,15 +62,17 @@ export function FilmCombobox({
       } finally {
         setIsLoading(false);
       }
-    }, 250);
+    }, 220);
 
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Click outside to close
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -97,8 +101,10 @@ export function FilmCombobox({
       if (selectedIndex >= 0 && selectedIndex < results.length) {
         handleSelect(results[selectedIndex]);
       } else {
-        // Use current text as slug
-        const rawSlug = query.replace(/^https?:\/\/letterboxd\.com\/film\//, "").replace(/\/$/, "").trim();
+        const rawSlug = query
+          .replace(/^https?:\/\/letterboxd\.com\/film\//, "")
+          .replace(/\/$/, "")
+          .trim();
         onChange(rawSlug);
         setIsOpen(false);
       }
@@ -110,8 +116,8 @@ export function FilmCombobox({
   return (
     <div ref={containerRef} className="relative w-full">
       <div className="relative flex items-center">
-        <div className="absolute left-3.5 text-[#667788] pointer-events-none">
-          <Film className="w-5 h-5 text-[#00e054]" />
+        <div className="absolute left-3.5 text-brand-muted pointer-events-none">
+          <Film className="w-4 h-4 text-brand-green" />
         </div>
         <input
           ref={inputRef}
@@ -127,11 +133,13 @@ export function FilmCombobox({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full bg-[#14181c] border border-[#2c3440] rounded-xl pl-11 pr-10 py-3 text-white placeholder-[#667788] text-sm md:text-base focus:outline-none focus:border-[#00e054] focus:ring-1 focus:ring-[#00e054] transition-all disabled:opacity-50"
+          className="w-full bg-brand-darker border border-brand-border rounded-xl pl-10 pr-10 py-2.5 text-white placeholder:text-brand-muted text-xs sm:text-sm font-medium focus:outline-none focus:border-brand-green/80 focus:ring-2 focus:ring-brand-green/30 transition-all disabled:opacity-50"
         />
 
         <div className="absolute right-3 flex items-center gap-1.5">
-          {isLoading && <Loader2 className="w-4 h-4 text-[#00e054] animate-spin" />}
+          {isLoading && (
+            <Loader2 className="w-3.5 h-3.5 text-brand-green animate-spin" />
+          )}
           {query && !disabled && (
             <button
               type="button"
@@ -142,65 +150,73 @@ export function FilmCombobox({
                 setIsOpen(false);
                 inputRef.current?.focus();
               }}
-              className="text-[#667788] hover:text-white p-1 rounded-md transition-colors"
+              className="text-brand-muted hover:text-white p-1 rounded-md transition-colors cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
       {/* Autocomplete Dropdown Menu */}
-      {isOpen && results.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 mt-2 bg-[#1b2228] border border-[#2c3440] rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto animate-in fade-in-0 zoom-in-95 backdrop-blur-xl">
-          <div className="p-1.5 space-y-1">
-            <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#667788]">
-              Letterboxd Matches
-            </div>
-            {results.map((film, index) => {
-              const isSelected = index === selectedIndex;
-              const isCurrent = film.slug === value;
-              return (
-                <button
-                  key={film.slug}
-                  type="button"
-                  onClick={() => handleSelect(film)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
-                    isSelected
-                      ? "bg-[#2c3440] text-white"
-                      : "text-[#e1e7ed] hover:bg-[#222b33]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded bg-[#14181c] border border-[#2c3440] flex items-center justify-center shrink-0 text-[#00e054]">
-                      <Clapperboard className="w-4 h-4" />
-                    </div>
-                    <div className="truncate">
-                      <div className="font-semibold text-sm text-white truncate flex items-center gap-2">
-                        <span>{film.title}</span>
-                        {film.year && (
-                          <span className="text-xs text-[#99aabb] font-normal">
-                            ({film.year})
-                          </span>
+      <AnimatePresence>
+        {isOpen && results.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 left-0 right-0 mt-2 bg-brand-card/95 border border-brand-border rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto backdrop-blur-xl"
+          >
+            <div className="p-1.5 space-y-1">
+              <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono">
+                Letterboxd Suggestions
+              </div>
+              {results.map((film, index) => {
+                const isSelected = index === selectedIndex;
+                const isCurrent = film.slug === value;
+                return (
+                  <button
+                    key={film.slug}
+                    type="button"
+                    onClick={() => handleSelect(film)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-brand-border text-white"
+                        : "text-brand-text hover:bg-brand-cardHover"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-10 rounded bg-brand-darker border border-brand-border flex items-center justify-center shrink-0 text-brand-green overflow-hidden">
+                        <Clapperboard className="w-4 h-4" />
+                      </div>
+                      <div className="truncate">
+                        <div className="font-semibold text-xs sm:text-sm text-white truncate flex items-center gap-1.5">
+                          <span>{film.title}</span>
+                          {film.year && (
+                            <span className="text-[11px] text-brand-subtext font-mono font-normal">
+                              ({film.year})
+                            </span>
+                          )}
+                        </div>
+                        {film.director && (
+                          <div className="text-[11px] text-brand-muted truncate">
+                            Dir. {film.director}
+                          </div>
                         )}
                       </div>
-                      {film.director && (
-                        <div className="text-xs text-[#667788] truncate">
-                          Dir. {film.director}
-                        </div>
-                      )}
                     </div>
-                  </div>
 
-                  {isCurrent && (
-                    <Check className="w-4 h-4 text-[#00e054] shrink-0 ml-2" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                    {isCurrent && (
+                      <Check className="w-4 h-4 text-brand-green shrink-0 ml-2" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

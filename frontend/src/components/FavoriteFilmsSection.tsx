@@ -1,3 +1,6 @@
+/* Hallmark · component: FavoriteFilmsSection · genre: atmospheric · theme: Midnight Cinema
+ * motion: stagger-grid · button-lift
+ */
 "use client";
 
 import React from "react";
@@ -6,6 +9,7 @@ import { Star, Sparkles } from "lucide-react";
 import { UserFilmItem } from "@/lib/types";
 import { useTaste } from "@/lib/taste-context";
 import FilmCard from "./FilmCard";
+import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
 interface FavoriteFilmsSectionProps {
@@ -42,30 +46,32 @@ export default function FavoriteFilmsSection({
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-brand-card/60 p-4 rounded-2xl border border-brand-border/80">
         <div>
           <div className="flex items-center space-x-2">
-            <Star className="w-4 h-4 text-[#00e054] fill-[#00e054]" />
-            <h2 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
-              Pinned Favorites
+            <Star className="w-4 h-4 text-brand-green fill-brand-green" />
+            <h2 className="text-base sm:text-lg font-extrabold text-white tracking-tight font-display">
+              Pinned 4 Favorites
             </h2>
           </div>
-          <p className="text-xs text-[#99aabb]">
-            Your top 4 Letterboxd favorites. Find local members who share your exact taste.
+          <p className="text-xs text-brand-subtext mt-0.5">
+            Your top Letterboxd cornerstones. Instant 1-click match with locals sharing this exact matrix.
           </p>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="cinema"
+          size="default"
           onClick={handleMatchAllFavorites}
-          className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#00e054] to-[#00b844] hover:from-[#00b844] hover:to-[#009e3a] text-[#0d1114] font-extrabold text-xs transition flex items-center space-x-2 cursor-pointer shadow-lg shadow-[#00e054]/15"
+          leftIcon={<Sparkles className="w-4 h-4" />}
+          className="self-start sm:self-auto shrink-0"
         >
-          <Sparkles className="w-4 h-4" />
-          <span>Find My Taste Soulmates (1-Click)</span>
-        </button>
+          Find Soulmates (1-Click)
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {favoriteFilms.map((film, idx) => (
           <motion.div
             key={film.slug}

@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { Outfit, JetBrains_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Outfit, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -7,7 +7,13 @@ import { TasteProvider } from "@/lib/taste-context";
 
 const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-outfit",
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -17,17 +23,24 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#14181c",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export const metadata: Metadata = {
-  title: "Letterboxd Movie Matcher",
+  title: "MovieMatch — Letterboxd Taste Soulmates & Cinema Scout",
   description:
-    "Connect your Letterboxd profile to scout and match with film lovers in your area based on shared movie tastes.",
+    "Connect your Letterboxd profile to match with local film lovers based on your 4 pinned favorites and shared movie taste.",
   referrer: "no-referrer",
-  keywords: ["Letterboxd", "Movie Match", "Taste Matcher", "Film Community", "Soulmates"],
+  keywords: ["Letterboxd", "Movie Match", "Taste Matcher", "Film Community", "Soulmates", "Cinema"],
   authors: [{ name: "Ates" }],
   openGraph: {
-    title: "Letterboxd Movie Matcher",
+    title: "MovieMatch — Letterboxd Taste Soulmates & Cinema Scout",
     description:
-      "Connect your Letterboxd profile to scout and match with film lovers in your area based on shared movie tastes.",
+      "Connect your Letterboxd profile to match with local film lovers based on your 4 pinned favorites and shared movie taste.",
     type: "website",
   },
 };
@@ -38,19 +51,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark scroll-smooth">
       <head>
         <meta name="referrer" content="no-referrer" />
       </head>
       <body
-        className={`${outfit.variable} ${jetbrainsMono.variable} min-h-screen flex flex-col justify-between selection:bg-brand-green selection:text-black font-sans antialiased`}
+        className={`${outfit.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} min-h-screen flex flex-col justify-between bg-brand-dark text-[#e1e7ed] font-sans antialiased selection:bg-brand-green selection:text-black overflow-x-clip`}
       >
         <TasteProvider>
-          <Navbar />
-          <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
-            {children}
-          </main>
-          <Footer />
+          <div className="relative min-h-screen flex flex-col justify-between">
+            {/* Ambient Background Noise & Subtle Glow */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-40">
+              <div className="absolute -top-[30%] left-[10%] w-[600px] h-[600px] rounded-full bg-brand-green/5 blur-[120px]" />
+              <div className="absolute top-[40%] -right-[10%] w-[500px] h-[500px] rounded-full bg-brand-orange/5 blur-[140px]" />
+              <div className="absolute bottom-[10%] left-[20%] w-[550px] h-[550px] rounded-full bg-brand-blue/5 blur-[130px]" />
+            </div>
+
+            <Navbar />
+            <main className="relative z-10 flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+              {children}
+            </main>
+            <Footer />
+          </div>
         </TasteProvider>
       </body>
     </html>

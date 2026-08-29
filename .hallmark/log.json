@@ -1,0 +1,13 @@
+[
+  {
+    "date": "2026-08-29",
+    "macrostructure": "Workbench",
+    "theme": "Midnight Cinema",
+    "genre": "atmospheric",
+    "nav": "N5 Floating Pill",
+    "footer": "Ft5 Statement Colophon",
+    "enrichment": "none (typography + cinema poster matrix)",
+    "brief": "MovieMatch — Letterboxd Taste Soulmates & Cinema Scout overhaul using ShadCN and Framer Motion",
+    "slop_test": "58/58 pass"
+  }
+]

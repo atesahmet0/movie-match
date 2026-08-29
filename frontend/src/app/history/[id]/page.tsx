@@ -1,3 +1,5 @@
+/* Hallmark · page: /history/[id] · macrostructure: Workbench · theme: Midnight Cinema
+ */
 import { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -5,6 +7,7 @@ import { ArrowLeft, Clock, MapPin } from "lucide-react";
 import { fetchHistoryItem } from "@/lib/api";
 import ScoutResultCard from "@/components/ScoutResultCard";
 import ExportButtons from "@/components/ExportButtons";
+import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +18,7 @@ interface HistoryDetailPageProps {
 export async function generateMetadata({ params }: HistoryDetailPageProps): Promise<Metadata> {
   const resolvedParams = await params;
   return {
-    title: `Historical Search #${resolvedParams.id} - Letterboxd Movie Matcher`,
+    title: `Historical Search #${resolvedParams.id} — MovieMatch`,
   };
 }
 
@@ -35,7 +38,7 @@ export default async function HistoryDetailPage({ params }: HistoryDetailPagePro
       <div className="flex items-center justify-between">
         <Link
           href="/history"
-          className="inline-flex items-center space-x-1.5 text-xs text-brand-subtext hover:text-white transition"
+          className="inline-flex items-center space-x-1.5 text-xs text-brand-subtext hover:text-white transition font-mono bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Search History</span>
@@ -43,23 +46,23 @@ export default async function HistoryDetailPage({ params }: HistoryDetailPagePro
       </div>
 
       {/* History Item Summary Header */}
-      <div className="solid-card rounded-2xl p-6 sm:p-7">
+      <div className="glass-card rounded-3xl p-6 sm:p-7 border border-brand-border/90">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-white">
+            <div className="flex items-center space-x-2.5">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-white font-display">
                 {item.film_title || item.film_slug}
               </h1>
-              <span className="text-xs font-mono text-brand-subtext">
+              <span className="text-xs font-mono text-brand-muted">
                 ({item.film_slug})
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-brand-subtext">
-              <span className="inline-flex items-center space-x-1 text-gray-300">
+            <div className="flex flex-wrap items-center gap-2.5 mt-2.5 text-xs text-brand-subtext font-mono">
+              <Badge variant="location" className="text-xs py-0.5 px-2">
                 <MapPin className="w-3.5 h-3.5 text-brand-green" />
                 <span>{item.location_query}</span>
-              </span>
+              </Badge>
               <span>&bull;</span>
               <span>Sentiment: <strong className="text-white">{item.sentiment}</strong></span>
               {item.rating_range && (
@@ -69,14 +72,14 @@ export default async function HistoryDetailPage({ params }: HistoryDetailPagePro
                 </>
               )}
               <span>&bull;</span>
-              <span className="inline-flex items-center space-x-1">
+              <span className="inline-flex items-center space-x-1 text-brand-muted">
                 <Clock className="w-3.5 h-3.5" />
                 <span>{new Date(item.created_at * 1000).toLocaleString()}</span>
               </span>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 shrink-0">
             <ExportButtons
               filmSlug={item.film_slug}
               stats={{
@@ -91,9 +94,9 @@ export default async function HistoryDetailPage({ params }: HistoryDetailPagePro
               }}
               matches={matches}
             />
-            <span className="px-3 py-1 bg-brand-darker text-brand-green border border-brand-border rounded-lg text-xs font-bold font-mono">
+            <Badge variant="matchHigh" className="text-xs px-3 py-1.5 font-mono">
               {matches.length} Matches
-            </span>
+            </Badge>
           </div>
         </div>
       </div>
@@ -101,15 +104,16 @@ export default async function HistoryDetailPage({ params }: HistoryDetailPagePro
       {/* Matches Grid */}
       {matches.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {matches.map((match) => (
-            <ScoutResultCard key={match.username} match={match} />
+          {matches.map((match, idx) => (
+            <ScoutResultCard key={match.username} match={match} index={idx} />
           ))}
         </div>
       ) : (
-        <div className="text-center py-12 solid-card rounded-2xl text-xs text-brand-muted">
+        <div className="text-center py-16 glass-card rounded-3xl text-xs text-brand-muted">
           No matches stored for this historical search.
         </div>
       )}
     </div>
   );
 }
+

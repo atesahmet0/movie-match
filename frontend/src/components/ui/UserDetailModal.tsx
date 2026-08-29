@@ -1,15 +1,16 @@
+/* Hallmark · component: UserDetailModal · genre: atmospheric · theme: Midnight Cinema
+ */
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   MapPin,
   ExternalLink,
@@ -43,16 +44,17 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="text-left space-y-4">
           <div className="flex items-start gap-4">
-            <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-[#2c3440] bg-[#1b2228] shrink-0 shadow-lg">
+            <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-brand-border bg-brand-card shrink-0 shadow-xl">
               {user.avatar_url ? (
-                <Image
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
                   src={user.avatar_url}
                   alt={user.display_name || user.username}
-                  fill
-                  className="object-cover"
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-lg font-bold text-[#667788]">
+                <div className="w-full h-full flex items-center justify-center text-lg font-bold text-brand-muted">
                   {(user.display_name || user.username).charAt(0).toUpperCase()}
                 </div>
               )}
@@ -60,17 +62,17 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <DialogTitle className="text-xl font-bold text-white">
+                <DialogTitle className="text-lg sm:text-xl font-bold text-white">
                   {user.display_name || user.username}
                 </DialogTitle>
                 {isTasteMatch && (
                   <Badge
                     variant={
                       matchResult.compatibility_score >= 75
-                        ? "success"
+                        ? "matchHigh"
                         : matchResult.compatibility_score >= 50
-                        ? "info"
-                        : "warning"
+                        ? "matchMedium"
+                        : "matchLow"
                     }
                   >
                     {matchResult.compatibility_score}% Compatibility
@@ -78,12 +80,14 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                 )}
               </div>
 
-              <div className="text-sm text-[#99aabb] flex items-center gap-2 mt-0.5">
-                <span>@{user.username}</span>
+              <div className="text-xs text-brand-subtext flex items-center gap-2 mt-1">
+                <span className="font-mono">@{user.username}</span>
                 {user.location && (
-                  <span className="flex items-center gap-1 text-xs text-[#667788]">
-                    <MapPin className="w-3.5 h-3.5 text-[#00e054]" />
-                    <span className="text-[#00e054] font-medium">{user.matched_location || user.location}</span>
+                  <span className="flex items-center gap-1 text-xs text-brand-muted">
+                    <MapPin className="w-3.5 h-3.5 text-brand-green" />
+                    <span className="text-brand-green font-medium">
+                      {user.matched_location || user.location}
+                    </span>
                   </span>
                 )}
               </div>
@@ -93,108 +97,120 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
 
         {/* Bio */}
         {user.bio && (
-          <div className="bg-[#1b2228] border border-[#2c3440] rounded-xl p-3.5 text-sm text-[#e1e7ed] italic relative">
-            <Quote className="w-4 h-4 text-[#667788] absolute top-2 right-2 opacity-30" />
+          <div className="bg-brand-card border border-brand-border rounded-xl p-3.5 text-xs sm:text-sm text-[#e1e7ed] italic relative">
+            <Quote className="w-4 h-4 text-brand-muted absolute top-2 right-2 opacity-30" />
             <p className="leading-relaxed whitespace-pre-wrap">{user.bio}</p>
           </div>
         )}
 
         {/* Scout Result Single Film Details */}
-        {!isTasteMatch && (scoutResult.user_rating_stars || scoutResult.user_liked || scoutResult.user_review) && (
-          <div className="bg-[#1b2228] border border-[#2c3440] rounded-xl p-4 space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#667788] flex items-center gap-1.5">
-              <Film className="w-3.5 h-3.5 text-[#00e054]" />
-              Film Interaction
-            </div>
-            <div className="flex items-center gap-3">
-              {scoutResult.user_rating_stars && (
-                <span className="text-[#00e054] text-base font-bold flex items-center gap-1">
-                  <Star className="w-4 h-4 fill-[#00e054]" />
-                  {scoutResult.user_rating_stars}
-                </span>
-              )}
-              {scoutResult.user_liked && (
-                <span className="text-[#ff8000] text-sm flex items-center gap-1 font-semibold">
-                  <Heart className="w-4 h-4 fill-[#ff8000]" />
-                  Liked
-                </span>
-              )}
-            </div>
-            {scoutResult.user_review && (
-              <div className="text-xs text-[#99aabb] bg-[#14181c] p-3 rounded-lg border border-[#2c3440]">
-                {scoutResult.user_review}
+        {!isTasteMatch &&
+          (scoutResult.user_rating_stars ||
+            scoutResult.user_liked ||
+            scoutResult.user_review) && (
+            <div className="bg-brand-card border border-brand-border rounded-xl p-4 space-y-3">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5 font-mono">
+                <Film className="w-3.5 h-3.5 text-brand-green" />
+                <span>Film Interaction</span>
               </div>
-            )}
-          </div>
-        )}
+              <div className="flex items-center gap-3">
+                {scoutResult.user_rating_stars && (
+                  <span className="text-brand-green text-sm font-bold flex items-center gap-1 font-mono">
+                    <Star className="w-4 h-4 fill-brand-green text-brand-green" />
+                    {scoutResult.user_rating_stars}
+                  </span>
+                )}
+                {scoutResult.user_liked && (
+                  <span className="text-brand-orange text-xs flex items-center gap-1 font-bold">
+                    <Heart className="w-4 h-4 fill-brand-orange text-brand-orange" />
+                    <span>Liked</span>
+                  </span>
+                )}
+              </div>
+              {scoutResult.user_review && (
+                <div className="text-xs text-brand-subtext bg-brand-darker p-3 rounded-lg border border-brand-border leading-relaxed">
+                  {scoutResult.user_review}
+                </div>
+              )}
+            </div>
+          )}
 
         {/* Taste Match Shared Films List */}
-        {isTasteMatch && matchResult.shared_films && matchResult.shared_films.length > 0 && (
-          <div className="space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#667788] flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#00e054]" />
-                Shared Films in Target Matrix ({matchResult.shared_films.length})
-              </span>
-            </div>
+        {isTasteMatch &&
+          matchResult.shared_films &&
+          matchResult.shared_films.length > 0 && (
+            <div className="space-y-2.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-brand-muted flex items-center justify-between font-mono">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-brand-green" />
+                  <span>Shared Films in Target Matrix ({matchResult.shared_films.length})</span>
+                </span>
+              </div>
 
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {matchResult.shared_films.map((film, idx) => (
-                <div
-                  key={idx}
-                  className="bg-[#1b2228] border border-[#2c3440] rounded-xl p-3 flex items-center justify-between gap-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <div className="font-semibold text-white truncate">
-                      {film.film_title || film.film_slug}
-                    </div>
-                    {film.found_via && (
-                      <div className="text-[11px] text-[#667788] capitalize">
-                        {film.found_via.replace("-", " ")}
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {matchResult.shared_films.map((film, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-bold text-white truncate">
+                        {film.film_title || film.film_slug}
                       </div>
-                    )}
-                  </div>
+                      {film.found_via && (
+                        <div className="text-[10px] text-brand-muted capitalize font-mono">
+                          {film.found_via.replace("-", " ")}
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    {film.user_rating_stars && (
-                      <span className="text-xs font-bold text-[#00e054] flex items-center gap-0.5">
-                        <Star className="w-3 h-3 fill-[#00e054]" />
-                        {film.user_rating_stars}
-                      </span>
-                    )}
-                    {film.user_liked && (
-                      <Heart className="w-3.5 h-3.5 text-[#ff8000] fill-[#ff8000]" />
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {film.user_rating_stars && (
+                        <span className="text-xs font-bold text-brand-green flex items-center gap-0.5 font-mono">
+                          <Star className="w-3 h-3 fill-brand-green text-brand-green" />
+                          {film.user_rating_stars}
+                        </span>
+                      )}
+                      {film.user_liked && (
+                        <Heart className="w-3.5 h-3.5 text-brand-orange fill-brand-orange" />
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3 pt-2">
-          <a
-            href={user.profile_url || `https://letterboxd.com/${user.username}/`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-[#00e054] hover:bg-[#00b844] text-[#0d1114] font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-lg shadow-[#00e054]/10"
+          <Button
+            asChild
+            variant="cinema"
+            className="flex-1"
           >
-            <ExternalLink className="w-4 h-4" />
-            Open on Letterboxd
-          </a>
+            <a
+              href={user.profile_url || `https://letterboxd.com/${user.username}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open on Letterboxd</span>
+            </a>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => {
               setActiveUsername(user.username);
               window.location.href = `/?user=${user.username}`;
             }}
-            className="bg-[#1b2228] hover:bg-[#222b33] border border-[#2c3440] hover:border-[#3d4957] text-[#e1e7ed] font-medium py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm transition-colors"
+            className="flex items-center justify-center gap-1.5"
           >
-            <UserCheck className="w-4 h-4 text-[#40bcf4]" />
-            Inspect Library
-          </button>
+            <UserCheck className="w-3.5 h-3.5 text-brand-blue" />
+            <span>Inspect Library</span>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

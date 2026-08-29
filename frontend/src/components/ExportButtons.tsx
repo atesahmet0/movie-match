@@ -1,7 +1,11 @@
+/* Hallmark · component: ExportButtons · genre: atmospheric · theme: Midnight Cinema
+ */
 "use client";
 
-import { Download } from "lucide-react";
+import React, { useState } from "react";
+import { Download, Check, FileJson, FileSpreadsheet } from "lucide-react";
 import { ScanStats, UserMatch } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 
 interface ExportButtonsProps {
   filmSlug: string;
@@ -10,6 +14,8 @@ interface ExportButtonsProps {
 }
 
 export default function ExportButtons({ filmSlug, stats, matches }: ExportButtonsProps) {
+  const [exportedFormat, setExportedFormat] = useState<"json" | "csv" | null>(null);
+
   const handleExportJSON = () => {
     const dataStr =
       "data:text/json;charset=utf-8," +
@@ -20,6 +26,9 @@ export default function ExportButtons({ filmSlug, stats, matches }: ExportButton
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+
+    setExportedFormat("json");
+    setTimeout(() => setExportedFormat(null), 2000);
   };
 
   const handleExportCSV = () => {
@@ -36,26 +45,34 @@ export default function ExportButtons({ filmSlug, stats, matches }: ExportButton
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+
+    setExportedFormat("csv");
+    setTimeout(() => setExportedFormat(null), 2000);
   };
 
   return (
     <div className="flex items-center space-x-2">
-      <button
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
         onClick={handleExportJSON}
-        className="px-3 py-1 bg-brand-darker hover:bg-brand-cardHover border border-brand-border rounded-lg text-xs font-mono text-brand-green flex items-center space-x-1 cursor-pointer"
-        title="Download JSON export"
+        leftIcon={exportedFormat === "json" ? <Check className="w-3 h-3 text-brand-green" /> : <FileJson className="w-3 h-3 text-brand-green" />}
+        className="font-mono text-xs"
       >
-        <Download className="w-3 h-3" />
-        <span>Export JSON</span>
-      </button>
-      <button
+        <span>{exportedFormat === "json" ? "Saved JSON" : "Export JSON"}</span>
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
         onClick={handleExportCSV}
-        className="px-3 py-1 bg-brand-darker hover:bg-brand-cardHover border border-brand-border rounded-lg text-xs font-mono text-brand-blue flex items-center space-x-1 cursor-pointer"
-        title="Download CSV export"
+        leftIcon={exportedFormat === "csv" ? <Check className="w-3 h-3 text-brand-blue" /> : <FileSpreadsheet className="w-3 h-3 text-brand-blue" />}
+        className="font-mono text-xs"
       >
-        <Download className="w-3 h-3" />
-        <span>Export CSV</span>
-      </button>
+        <span>{exportedFormat === "csv" ? "Saved CSV" : "Export CSV"}</span>
+      </Button>
     </div>
   );
 }

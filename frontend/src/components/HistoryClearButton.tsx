@@ -1,16 +1,19 @@
+/* Hallmark · component: HistoryClearButton · genre: atmospheric · theme: Midnight Cinema
+ */
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { clearHistory } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 export default function HistoryClearButton() {
   const router = useRouter();
   const [clearing, setClearing] = useState(false);
 
   const handleClear = async () => {
-    if (!confirm("Clear all previous search history?")) return;
+    if (!confirm("Are you sure you want to clear all previous Letterboxd search history?")) return;
     setClearing(true);
     await clearHistory();
     setClearing(false);
@@ -18,17 +21,17 @@ export default function HistoryClearButton() {
   };
 
   return (
-    <button
+    <Button
+      type="button"
+      variant="destructive"
+      size="sm"
       onClick={handleClear}
-      disabled={clearing}
-      className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+      isLoading={clearing}
+      loadingText="Clearing..."
+      leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+      className="font-mono text-xs"
     >
-      {clearing ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-      ) : (
-        <Trash2 className="w-3.5 h-3.5" />
-      )}
       <span>Clear History</span>
-    </button>
+    </Button>
   );
 }
