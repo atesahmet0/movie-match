@@ -91,6 +91,7 @@ class FilmInteraction(BaseModel):
     user_review: Optional[str] = None
     found_via: str = ""
     is_favorite: bool = False
+    film_tier: str = "unknown"  # "favorite" | "top_rated" | "liked" | "recent" | "unknown"
 
 
 class TasteMatchResult(BaseModel):
@@ -107,6 +108,7 @@ class TasteMatchResult(BaseModel):
     compatibility_score: float = 0.0
     intensity_score: float = 0.0
     affinity_score: float = 0.0
+    correlation_score: float = 0.0
     total_target_films: int = 0
 
 

@@ -143,8 +143,13 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
               <div className="text-[11px] font-bold uppercase tracking-wider text-brand-muted flex items-center justify-between font-mono">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-brand-green" />
-                  <span>Shared Films in Target Matrix ({matchResult.shared_films.length})</span>
+                  <span>Shared Films in Taste Matrix ({matchResult.shared_films.length})</span>
                 </span>
+                {matchResult.correlation_score > 0 && (
+                  <span className="text-[10px] text-brand-blue normal-case">
+                    Rating Agreement: {matchResult.correlation_score}%
+                  </span>
+                )}
               </div>
 
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -154,8 +159,23 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                     className="bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center justify-between gap-3 text-xs"
                   >
                     <div className="min-w-0">
-                      <div className="font-bold text-white truncate">
-                        {film.film_title || film.film_slug}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white truncate">
+                          {film.film_title || film.film_slug}
+                        </span>
+                        {film.film_tier && film.film_tier !== "unknown" && (
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold uppercase ${
+                            film.film_tier === "favorite"
+                              ? "bg-brand-orange/20 text-brand-orange border border-brand-orange/30"
+                              : film.film_tier === "top_rated"
+                              ? "bg-brand-green/20 text-brand-green border border-brand-green/30"
+                              : film.film_tier === "liked"
+                              ? "bg-brand-blue/20 text-brand-blue border border-brand-blue/30"
+                              : "bg-brand-darker text-brand-muted border border-brand-border"
+                          }`}>
+                            {film.film_tier.replace("_", " ")}
+                          </span>
+                        )}
                       </div>
                       {film.found_via && (
                         <div className="text-[10px] text-brand-muted capitalize font-mono">

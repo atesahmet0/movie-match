@@ -4,6 +4,7 @@ import asyncio
 import time
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from movie_match.cache.db import CacheDB
+from movie_match.matcher.fingerprint import TasteFingerprint, build_fingerprint
 from movie_match.matcher.location import LocationMatcher
 from movie_match.matcher.scoring import FilmSignals, compute_compatibility_score
 from movie_match.matcher.sentiment import SentimentPlan, rating_to_stars_text
@@ -464,6 +465,10 @@ class LetterboxdScraper:
     ) -> Tuple[List[TasteMatchResult], ScanStats]:
         """
         Search for users matching multiple target films in the specified location with Taste Compatibility score.
+
+        When source_username is provided, builds a TasteFingerprint from their full profile
+        (favorites + top-rated + liked + recent) to expand the matching universe beyond
+        just pinned favorites.
         """
         start_time = time.time()
         clean_slugs = [extract_slug_from_input(f) for f in query.films if f.strip()]
@@ -474,6 +479,26 @@ class LetterboxdScraper:
         source_user_lower: Optional[str] = None
         if query.source_username:
             source_user_lower = query.source_username.strip().lower().lstrip("@") or None
+
+        # --- Build Taste Fingerprint (expanded film pool) ---
+        fingerprint: Optional[TasteFingerprint] = None
+        if source_user_lower:
+            source_profile_detail = await self.get_user_full_profile(source_user_lower, include_films=True)
+            source_basic_profile = await self.fetch_user_profile(source_user_lower)
+            fingerprint = build_fingerprint(
+                username=source_user_lower,
+                profile_detail=source_profile_detail,
+                favorite_films=source_basic_profile.favorite_films if source_basic_profile else None,
+                explicit_slugs=clean_slugs,
+            )
+            # Use the expanded film list from the fingerprint
+            clean_slugs = fingerprint.film_slugs
+        else:
+            # No source user — build minimal fingerprint from explicit slugs
+            fingerprint = build_fingerprint(
+                username="",
+                explicit_slugs=clean_slugs,
+            )
 
         matcher = LocationMatcher(query.location_query, include_bio=query.include_bio)
         sentiment_plan = SentimentPlan(query.sentiment, query.rating_range)
@@ -511,6 +536,7 @@ class LetterboxdScraper:
                         user_liked=cand.get("user_liked"),
                         user_review=cand.get("user_review"),
                         found_via=cand.get("found_via", ""),
+                        film_tier=fingerprint.get_tier(slug) if fingerprint else "unknown",
                     )
                 )
             # Cross-check favorites (unified helper)
@@ -664,6 +690,7 @@ class LetterboxdScraper:
         # Assemble and rank taste match results using weighted scoring model
         results: List[TasteMatchResult] = []
         total_films_count = len(clean_slugs)
+        all_target_tiers = [fingerprint.get_tier(s) for s in clean_slugs] if fingerprint else None
 
         for u, interactions in user_film_interactions.items():
             # Exclude source user from their own results
@@ -672,18 +699,20 @@ class LetterboxdScraper:
             if len(interactions) >= query.min_shared_films and u in user_profile_cache:
                 p, matched_text, fields = user_profile_cache[u]
 
-                # Build scoring signals from interactions
+                # Build scoring signals from interactions, including source ratings and tiers
                 film_signals = [
                     FilmSignals(
                         user_rating=fi.user_rating,
                         user_liked=fi.user_liked,
                         is_favorite=fi.is_favorite,
                         found_via=fi.found_via,
+                        film_tier=fi.film_tier,
+                        source_rating=fingerprint.get_source_rating(fi.film_slug) if fingerprint else None,
                     )
                     for fi in interactions
                 ]
-                overall, _breadth, intensity_pct, affinity_pct = compute_compatibility_score(
-                    film_signals, total_films_count,
+                overall, _breadth, intensity_pct, affinity_pct, correlation_pct = compute_compatibility_score(
+                    film_signals, total_films_count, all_target_tiers,
                 )
 
                 results.append(
@@ -701,6 +730,7 @@ class LetterboxdScraper:
                         compatibility_score=overall,
                         intensity_score=intensity_pct,
                         affinity_score=affinity_pct,
+                        correlation_score=correlation_pct,
                         total_target_films=total_films_count,
                     )
                 )
