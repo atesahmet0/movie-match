@@ -24,18 +24,11 @@ export default function Navbar() {
 
   const navItems = [
     {
-      href: activeUsername ? `/?user=${encodeURIComponent(activeUsername)}` : "/",
-      label: "Profile",
-      fullLabel: "My Profile",
-      icon: User,
-      isActive: pathname === "/",
-    },
-    {
-      href: "/taste",
-      label: "Soulmates",
-      fullLabel: "Taste Soulmates",
+      href: "/",
+      label: "Match",
+      fullLabel: "Movie Match",
       icon: Sparkles,
-      isActive: pathname.startsWith("/taste"),
+      isActive: pathname === "/" || pathname === "/taste",
       badgeCount: selectedFilms.length,
     },
     {
@@ -44,6 +37,13 @@ export default function Navbar() {
       fullLabel: "Scout Cinema",
       icon: Search,
       isActive: pathname.startsWith("/scout"),
+    },
+    {
+      href: activeUsername ? `/profile?user=${encodeURIComponent(activeUsername)}` : "/profile",
+      label: "Profile",
+      fullLabel: "My Profile",
+      icon: User,
+      isActive: pathname.startsWith("/profile"),
     },
     {
       href: "/history",
@@ -57,23 +57,18 @@ export default function Navbar() {
   return (
     <header className="glass-nav sticky top-0 z-50 transition-all duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Brand Logo with Letterboxd Tri-Dot Signature */}
+        {/* Brand Logo with Custom MovieMatch Icon */}
         <Link
           href="/"
           className="flex items-center space-x-3 cursor-pointer select-none group"
         >
-          <div className="flex space-x-1 items-center">
-            <span className="w-2.5 h-2.5 rounded-full bg-brand-orange group-hover:scale-125 transition-transform duration-200"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-brand-green group-hover:scale-125 transition-transform duration-200 delay-75"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-brand-blue group-hover:scale-125 transition-transform duration-200 delay-150"></span>
+          <div className="w-8 h-8 rounded-xl bg-brand-green/10 border border-brand-green/30 flex items-center justify-center text-brand-green group-hover:border-brand-green group-hover:bg-brand-green/20 transition-all duration-200">
+            <Film className="w-4 h-4 text-brand-green group-hover:scale-110 transition-transform duration-200" />
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-display">
               Movie<span className="text-brand-green">Match</span>
             </span>
-            <Badge variant="outline" className="hidden lg:inline-flex text-[10px] font-mono py-0 text-brand-muted border-brand-border">
-              LETTERBOXD
-            </Badge>
           </div>
         </Link>
 
@@ -124,23 +119,25 @@ export default function Navbar() {
           {activeUsername ? (
             <div className="flex items-center space-x-2 bg-brand-card/90 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-borderLight transition-colors">
               <div className="w-2 h-2 rounded-full bg-brand-green animate-pulse"></div>
-              <span className="text-xs font-bold text-white font-mono">@{activeUsername}</span>
+              <Link href={`/profile?user=${encodeURIComponent(activeUsername)}`} className="text-xs font-bold text-white font-mono hover:text-brand-green transition-colors">
+                @{activeUsername}
+              </Link>
               <button
                 onClick={handleLogout}
                 className="text-brand-muted hover:text-brand-orange ml-1 p-0.5 transition-colors cursor-pointer"
-                title="Switch profile"
+                title="Disconnect profile"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           ) : (
             <Link
-              href="/"
+              href="/profile"
               className="text-xs text-brand-subtext hover:text-white bg-brand-card border border-brand-border px-3 py-1.5 rounded-xl transition-colors font-medium flex items-center gap-1.5"
             >
-              <Film className="w-3.5 h-3.5 text-brand-green" />
+              <User className="w-3.5 h-3.5 text-brand-green" />
               <span className="hidden sm:inline">Connect Profile</span>
-              <span className="sm:hidden">Connect</span>
+              <span className="sm:hidden">Profile</span>
             </Link>
           )}
 

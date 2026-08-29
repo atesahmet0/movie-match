@@ -143,7 +143,7 @@ export default function TasteMatchCard({ match, index }: TasteMatchCardProps) {
               rel="noopener noreferrer"
               className="inline-flex items-center space-x-1 text-xs font-semibold text-brand-green hover:text-brand-greenHover px-2.5 py-1.5 rounded-xl hover:bg-brand-green/10 transition"
             >
-              <span>Letterboxd</span>
+              <span>Profile</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </a>
           </div>

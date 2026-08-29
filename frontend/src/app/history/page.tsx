@@ -27,7 +27,7 @@ export default async function HistoryPage() {
             <span>Search <span className="text-brand-green">History</span></span>
           </h1>
           <p className="text-xs text-brand-subtext mt-1">
-            Review and inspect past Letterboxd scouts and recorded matches.
+            Review and inspect past scouts and recorded matches.
           </p>
         </div>
         {historyList.length > 0 && <HistoryClearButton />}
@@ -80,7 +80,7 @@ export default async function HistoryPage() {
             <Clock className="w-10 h-10 mx-auto text-brand-muted opacity-40 mb-1" />
             <p className="font-bold text-white text-base font-display">No previous searches recorded yet.</p>
             <p className="text-xs text-brand-subtext max-w-sm mx-auto">
-              Run a scout on the &quot;Scout Cinema&quot; or &quot;Taste Soulmates&quot; tab to save your match records.
+              Run a match or scout to save your match records.
             </p>
           </div>
         )}

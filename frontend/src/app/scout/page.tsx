@@ -27,13 +27,13 @@ export async function generateMetadata({ searchParams }: ScoutPageProps): Promis
   if (rawFilms) {
     return {
       title: `Scout fans of ${rawFilms} in ${location} — MovieMatch`,
-      description: `Find Letterboxd members in ${location} who watched and rated ${rawFilms}.`,
+      description: `Find cinephiles in ${location} who watched and rated ${rawFilms}.`,
     };
   }
 
   return {
     title: "Scout Cinema Lovers by Location — MovieMatch",
-    description: "Filter Letterboxd members by movie, location, and sentiment.",
+    description: "Filter cinephiles by movie, location, and sentiment.",
   };
 }
 

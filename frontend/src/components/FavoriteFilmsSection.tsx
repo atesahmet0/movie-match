@@ -41,7 +41,7 @@ export default function FavoriteFilmsSection({
     const filmsParam = favoriteFilms.map((f) => f.slug).join(",");
     const userParam = username ? `&user=${encodeURIComponent(username)}` : "";
     const locParam = userLocation ? `&location=${encodeURIComponent(userLocation)}` : "";
-    router.push(`/taste?films=${encodeURIComponent(filmsParam)}${userParam}${locParam}`);
+    router.push(`/?films=${encodeURIComponent(filmsParam)}${userParam}${locParam}`);
   };
 
   return (
@@ -55,7 +55,7 @@ export default function FavoriteFilmsSection({
             </h2>
           </div>
           <p className="text-xs text-brand-subtext mt-0.5">
-            Your top Letterboxd cornerstones. Instant 1-click match with locals sharing this exact matrix.
+            Your top cinema cornerstones. Instant 1-click match with locals sharing this exact matrix.
           </p>
         </div>
 
@@ -67,7 +67,7 @@ export default function FavoriteFilmsSection({
           leftIcon={<Sparkles className="w-4 h-4" />}
           className="self-start sm:self-auto shrink-0"
         >
-          Find Soulmates (1-Click)
+          Find Movie Matches (1-Click)
         </Button>
       </div>
 

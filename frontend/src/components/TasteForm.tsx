@@ -224,7 +224,7 @@ export default function TasteForm({
 
     startTransition(() => {
       router.push(
-        `/taste?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
+        `/?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
           locParam
         )}&min_shared=${minShared}&max_pages=${maxPages}`
       );
@@ -299,7 +299,7 @@ export default function TasteForm({
               <FilmCombobox
                 value={comboboxValue}
                 onChange={handleAddFilmFromCombobox}
-                placeholder="Search Letterboxd film to add to your taste basket..."
+                placeholder="Search movie title to add to your taste basket..."
                 disabled={isAddingFilm}
               />
             </div>
@@ -450,12 +450,12 @@ export default function TasteForm({
             {isPending ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Finding Taste Soulmates... ({elapsedSeconds.toFixed(1)}s)</span>
+                <span>Finding Movie Matches... ({elapsedSeconds.toFixed(1)}s)</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-5 h-5" />
-                <span>Find My Taste Soulmates ({selectedFilms.length} Films)</span>
+                <span>Find Movie Matches ({selectedFilms.length} Films)</span>
               </>
             )}
           </button>

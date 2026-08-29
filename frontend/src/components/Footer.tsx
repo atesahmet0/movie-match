@@ -10,15 +10,13 @@ export default function Footer() {
   return (
     <footer className="border-t border-brand-border/80 bg-brand-darker/90 py-8 mt-16 text-xs text-brand-muted relative z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Brand statement & Letterboxd tri-dot */}
+        {/* Brand statement */}
         <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-          <div className="flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-brand-orange"></span>
-            <span className="w-2 h-2 rounded-full bg-brand-green"></span>
-            <span className="w-2 h-2 rounded-full bg-brand-blue"></span>
+          <div className="w-5 h-5 rounded-lg bg-brand-green/10 border border-brand-green/30 flex items-center justify-center text-brand-green">
+            <Film className="w-3 h-3 text-brand-green" />
           </div>
           <div className="text-brand-subtext font-medium">
-            <span className="text-white font-bold font-display">MovieMatch</span> — Cinema Taste Soulmates & Letterboxd Scout
+            <span className="text-white font-bold font-display">MovieMatch</span> — Cinema Taste & Location Matching
           </div>
         </div>
 

@@ -87,10 +87,10 @@ export default function TasteSoulmatesSection({
           });
         }
       } else {
-        setProfileError(`Could not find public Letterboxd profile for @${clean}.`);
+        setProfileError(`Could not find public profile for @${clean}.`);
       }
     } catch {
-      setProfileError("Failed to fetch Letterboxd profile.");
+      setProfileError("Failed to fetch profile.");
     } finally {
       setIsLoadingProfile(false);
     }
@@ -127,7 +127,7 @@ export default function TasteSoulmatesSection({
 
     const favoriteSlugs = (userProfile.favorite_films || []).map((f) => f.slug);
     if (favoriteSlugs.length === 0) {
-      setProfileError("Your Letterboxd profile has no pinned 4 favorites yet. Please select films manually.");
+      setProfileError("Your profile has no pinned 4 favorites yet. Please select films manually.");
       return;
     }
 
@@ -136,7 +136,7 @@ export default function TasteSoulmatesSection({
 
     startTransition(() => {
       router.push(
-        `/taste?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
+        `/?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
           loc
         )}&user=${encodeURIComponent(userProfile.username)}&minShared=${minShared}&maxPages=2`
       );
@@ -348,13 +348,13 @@ export default function TasteSoulmatesSection({
                   <Radar className="w-5 h-5 text-black animate-spin" />
                   <span className="absolute w-2 h-2 rounded-full bg-brand-dark animate-ping" />
                 </div>
-                <span>Discovering Your Taste Soulmates... ({elapsedSeconds.toFixed(1)}s)</span>
+                <span>Discovering Movie Matches... ({elapsedSeconds.toFixed(1)}s)</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4.5 h-4.5" />
                 <span>
-                  Find My Taste Soulmates in {targetLocation || userProfile.location || "Anywhere"}
+                  Find Movie Matches in {targetLocation || userProfile.location || "Anywhere"}
                 </span>
                 <ArrowRight className="w-4.5 h-4.5" />
               </div>
@@ -366,10 +366,10 @@ export default function TasteSoulmatesSection({
         <div className="glass-card p-6 sm:p-8 space-y-4 text-center rounded-3xl border border-brand-border/90 shadow-2xl">
           <div className="max-w-md mx-auto">
             <h2 className="text-xl sm:text-2xl font-extrabold text-white mb-1.5 font-display">
-              Find Your <span className="text-brand-green">Letterboxd Taste Soulmates</span>
+              Find Your <span className="text-brand-green">Movie Matches</span>
             </h2>
             <p className="text-xs text-brand-subtext mb-6 leading-relaxed">
-              Enter your Letterboxd username to automatically load your 4 pinned favorite films and discover cinephiles who match your taste.
+              Enter your public username to automatically load your 4 pinned favorite movies and discover cinephiles who match your taste.
             </p>
 
             <form onSubmit={handleUserFormSubmit} className="space-y-3">
@@ -379,7 +379,7 @@ export default function TasteSoulmatesSection({
                   value={usernameInput}
                   onChange={(e) => setUsernameInput(e.target.value)}
                   required
-                  placeholder="your-letterboxd-username"
+                  placeholder="enter username (e.g. karsten)"
                   leftElement={<span className="font-mono text-brand-green font-bold text-sm">@</span>}
                   className="h-11 text-xs sm:text-sm pl-8.5"
                 />
@@ -392,7 +392,7 @@ export default function TasteSoulmatesSection({
                   className="h-11 px-5 whitespace-nowrap"
                   leftIcon={<Sparkles className="w-4 h-4" />}
                 >
-                  Find Soulmates
+                  Find Matches
                 </Button>
               </div>
 

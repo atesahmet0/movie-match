@@ -18,8 +18,8 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(
-    title="Letterboxd Movie Matcher",
-    description="Find Letterboxd users from specific locations who liked or disliked movies.",
+    title="Movie Match",
+    description="Find cinephiles from specific locations who share your movie tastes.",
     version="0.2.0",
 )
 

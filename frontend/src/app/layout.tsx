@@ -31,16 +31,16 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "MovieMatch — Letterboxd Taste Soulmates & Cinema Scout",
+  title: "MovieMatch — Cinema Taste & Location Matching",
   description:
-    "Connect your Letterboxd profile to match with local film lovers based on your 4 pinned favorites and shared movie taste.",
+    "Match with cinephiles in your city based on your favorite movies and shared cinema taste.",
   referrer: "no-referrer",
-  keywords: ["Letterboxd", "Movie Match", "Taste Matcher", "Film Community", "Soulmates", "Cinema"],
+  keywords: ["Movie Match", "Taste Matcher", "Film Community", "Cinephiles", "Cinema", "Movies"],
   authors: [{ name: "Ates" }],
   openGraph: {
-    title: "MovieMatch — Letterboxd Taste Soulmates & Cinema Scout",
+    title: "MovieMatch — Cinema Taste & Location Matching",
     description:
-      "Connect your Letterboxd profile to match with local film lovers based on your 4 pinned favorites and shared movie taste.",
+      "Match with cinephiles in your city based on your favorite movies and shared cinema taste.",
     type: "website",
   },
 };

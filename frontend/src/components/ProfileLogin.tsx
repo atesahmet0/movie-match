@@ -22,7 +22,7 @@ export default function ProfileLogin() {
     if (!clean) return;
     setLoading(true);
     setActiveUsername(clean);
-    router.push(`/?user=${encodeURIComponent(clean)}`);
+    router.push(`/profile?user=${encodeURIComponent(clean)}`);
   };
 
   const DEMO_PROFILES = [
@@ -54,11 +54,11 @@ export default function ProfileLogin() {
           </motion.div>
 
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2.5 font-display">
-            Connect Your <span className="text-brand-green">Letterboxd</span>
+            Connect Your <span className="text-brand-green">Profile</span>
           </h1>
 
           <p className="text-brand-subtext text-xs sm:text-sm mb-8 max-w-md mx-auto leading-relaxed">
-            Enter your public Letterboxd username to load your 4 pinned favorites, personal library, and scout cinephiles in your city who match your taste.
+            Enter your public username to load your 4 pinned favorites, personal library, and find cinephiles in your city who match your taste.
           </p>
 
           <form
@@ -85,7 +85,7 @@ export default function ProfileLogin() {
               variant="cinema"
               size="lg"
               isLoading={loading}
-              loadingText="Connecting Letterboxd..."
+              loadingText="Connecting Profile..."
               className="w-full h-12 text-sm font-bold shadow-lg shadow-brand-green/20"
               leftIcon={<Zap className="w-4 h-4" />}
             >
