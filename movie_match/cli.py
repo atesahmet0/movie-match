@@ -13,10 +13,10 @@ from movie_match.exporter.export import (
     export_to_markdown,
     render_rich_table,
 )
+from movie_match.logging import debug_tracker, is_debug_enabled, setup_logging
 from movie_match.models import SearchQuery, SentimentType
 from movie_match.scraper.letterboxd import LetterboxdScraper
 from movie_match.scraper.parser import extract_slug_from_input
-
 
 app = typer.Typer(
     name="movie-match",
@@ -79,7 +79,7 @@ def find_command(
         help="Number of concurrent anti-bot requests.",
     ),
     include_bio: bool = typer.Option(
-        True,
+        False,
         "--include-bio/--no-bio",
         help="Search user bio text in addition to the location metadata field.",
     ),
@@ -89,8 +89,24 @@ def find_command(
         "-o",
         help="Export results to a file (.json, .csv, or .md).",
     ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        "-d",
+        help="Enable detailed real-time debug logging and performance diagnostics.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose info logging.",
+    ),
 ):
     """Find users from LOCATION who liked or disliked FILM on Letterboxd."""
+    active_debug = debug or is_debug_enabled()
+    setup_logging(debug=active_debug, verbose=verbose, force_reconfigure=True)
+    debug_tracker.reset()
+
     # Resolve sentiment flags
     active_sentiment = sentiment
     if liked:
@@ -110,25 +126,34 @@ def find_command(
     )
 
     async def run():
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task_id = progress.add_task(f"Searching Letterboxd for '{location}'...", total=None)
-
-            def update_progress(desc: str, pages: int, candidates: int, matches: int):
-                progress.update(
-                    task_id,
-                    description=f"[cyan]{desc}[/cyan] | [yellow]{candidates} candidates[/yellow] | [green]{matches} matches[/green]",
-                )
-
+        if active_debug:
+            console.print(f"[bold cyan]🔍 Debug Mode Active:[/bold cyan] Streaming all HTTP requests, cache hits, retries, and matcher steps...\n")
             async with LetterboxdScraper(concurrency=concurrency) as scraper:
-                matches, stats = await scraper.find_users(query, progress_callback=update_progress)
+                matches, stats = await scraper.find_users(query)
+        else:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TimeElapsedColumn(),
+                console=console,
+            ) as progress:
+                task_id = progress.add_task(f"Searching Letterboxd for '{location}'...", total=None)
+
+                def update_progress(desc: str, pages: int, candidates: int, matches: int):
+                    progress.update(
+                        task_id,
+                        description=f"[cyan]{desc}[/cyan] | [yellow]{candidates} candidates[/yellow] | [green]{matches} matches[/green]",
+                    )
+
+                async with LetterboxdScraper(concurrency=concurrency) as scraper:
+                    matches, stats = await scraper.find_users(query, progress_callback=update_progress)
 
         render_rich_table(matches, stats, console=console)
+
+        if active_debug:
+            console.print("\n")
+            console.print(debug_tracker.generate_summary_table())
 
         if output:
             ext = output.suffix.lower()
@@ -150,12 +175,31 @@ def find_command(
 @app.command(name="profile")
 def profile_command(
     username: str = typer.Argument(..., help="Letterboxd username to inspect"),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        "-d",
+        help="Enable detailed real-time debug logging and performance diagnostics.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose info logging.",
+    ),
 ):
     """Inspect a Letterboxd user profile, stats, favorite films, and recent watches."""
+    active_debug = debug or is_debug_enabled()
+    setup_logging(debug=active_debug, verbose=verbose, force_reconfigure=True)
+    debug_tracker.reset()
+
     async def run():
         async with LetterboxdScraper() as scraper:
-            with console.status(f"Fetching @{username}..."):
+            if active_debug:
                 profile = await scraper.get_user_full_profile(username, include_films=True)
+            else:
+                with console.status(f"Fetching @{username}..."):
+                    profile = await scraper.get_user_full_profile(username, include_films=True)
             if not profile:
                 console.print(f"[red]Could not fetch profile for @{username}[/red]")
                 return
@@ -182,6 +226,10 @@ def profile_command(
                     r_str = f" [{f.user_rating_stars}]" if f.user_rating_stars else ""
                     liked_str = " (Liked)" if f.user_liked else ""
                     console.print(f"  - {f.title}{yr}{r_str}{liked_str}")
+
+        if active_debug:
+            console.print("\n")
+            console.print(debug_tracker.generate_summary_table())
 
     asyncio.run(run())
 
@@ -216,8 +264,24 @@ def taste_match_command(
         "-n",
         help="Stop search after finding this many matches.",
     ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        "-d",
+        help="Enable detailed real-time debug logging and performance diagnostics.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose info logging.",
+    ),
 ):
     """Find users from LOCATION who share taste across MULTIPLE films."""
+    active_debug = debug or is_debug_enabled()
+    setup_logging(debug=active_debug, verbose=verbose, force_reconfigure=True)
+    debug_tracker.reset()
+
     film_list = [f.strip() for f in films.split(",") if f.strip()]
     if not film_list:
         console.print("[red]Please provide at least one film.[/red]")
@@ -234,22 +298,26 @@ def taste_match_command(
 
     async def run():
         async with LetterboxdScraper() as scraper:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TimeElapsedColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task(f"Finding taste matches in '{location}'...", total=None)
+            if active_debug:
+                console.print(f"[bold cyan]🔍 Debug Mode Active:[/bold cyan] Streaming all multi-film scans, chunk lookups, and scoring breakdown...\n")
+                results, stats = await scraper.find_taste_matches(query)
+            else:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TimeElapsedColumn(),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task(f"Finding taste matches in '{location}'...", total=None)
 
-                def on_progress(desc, scanned, discovered, matches_count):
-                    progress.update(
-                        task,
-                        description=f"[cyan]{desc}[/cyan] | Scanned: {scanned} | Users: {discovered} | Matches: [bold green]{matches_count}[/bold green]",
-                    )
+                    def on_progress(desc, scanned, discovered, matches_count):
+                        progress.update(
+                            task,
+                            description=f"[cyan]{desc}[/cyan] | Scanned: {scanned} | Users: {discovered} | Matches: [bold green]{matches_count}[/bold green]",
+                        )
 
-                results, stats = await scraper.find_taste_matches(query, progress_callback=on_progress)
+                    results, stats = await scraper.find_taste_matches(query, progress_callback=on_progress)
 
             console.print(f"\n[bold green]Found {len(results)} taste matches in '{location}' across {len(film_list)} films![/bold green]\n")
             for idx, r in enumerate(results, 1):
@@ -259,14 +327,27 @@ def taste_match_command(
                 console.print(f"   Shared Films ({r.shared_films_count}): {shared_titles}")
                 console.print(f"   Profile: {r.profile_url}\n")
 
+            if active_debug:
+                console.print("\n")
+                console.print(debug_tracker.generate_summary_table())
+
     asyncio.run(run())
 
 
 @app.command(name="cache")
 def cache_command(
     clear: bool = typer.Option(False, "--clear", help="Clear all cached profiles and metadata"),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        "-d",
+        help="Enable detailed real-time debug logging.",
+    ),
 ):
     """View or clear the local SQLite cache."""
+    active_debug = debug or is_debug_enabled()
+    setup_logging(debug=active_debug, force_reconfigure=True)
+
     async def run():
         cache = CacheDB()
         await cache.init()
@@ -286,11 +367,19 @@ def cache_command(
 def serve_command(
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host address to bind to"),
     port: int = typer.Option(8000, "--port", "-p", help="Port number"),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        "-d",
+        help="Enable debug mode for web server and matcher logs.",
+    ),
 ):
     """Launch the modern web UI dashboard and REST API."""
     import uvicorn
-    console.print(f"[bold green]Starting Movie Match Web Server on http://{host}:{port}[/bold green]")
-    uvicorn.run("movie_match.web.app:app", host=host, port=port, reload=False)
+    active_debug = debug or is_debug_enabled()
+    setup_logging(debug=active_debug, force_reconfigure=True)
+    console.print(f"[bold green]Starting Movie Match Web Server on http://{host}:{port}[/bold green] (debug={'on' if active_debug else 'off'})")
+    uvicorn.run("movie_match.web.app:app", host=host, port=port, reload=False, log_level="debug" if active_debug else "info")
 
 
 def main():
@@ -299,4 +388,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

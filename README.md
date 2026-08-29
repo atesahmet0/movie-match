@@ -101,7 +101,21 @@ uv run movie-match taste-match "alien" "interstellar" "the-substance" \
 uv run movie-match profile "karsten"
 ```
 
-### 7. Manage Profile Cache
+### 7. Debug Mode & Performance Diagnostics
+Sometimes scraping or matching operations might take longer due to rate limits (HTTP 429), bot challenges (HTTP 403), or large uncached batches. Use `--debug` / `-d` (or set `DEBUG=1`) to stream real-time HTTP requests, response latencies, backoff timers, candidate location evaluations, and print a comprehensive diagnostics table:
+
+```bash
+# Debug film search
+uv run movie-match find "alien" --location "Turkey" --debug
+
+# Debug multi-film taste soulmates
+uv run movie-match taste-match "alien, interstellar" --location "Ankara" -d
+
+# Or enable globally via environment variable
+DEBUG=1 uv run movie-match find "fight-club" -l "Istanbul"
+```
+
+### 8. Manage Profile Cache
 ```bash
 # View cache stats
 uv run movie-match cache
@@ -109,6 +123,7 @@ uv run movie-match cache
 # Clear cache
 uv run movie-match cache --clear
 ```
+
 
 ---
 

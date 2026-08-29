@@ -4,6 +4,7 @@ import asyncio
 import time
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from movie_match.cache.db import CacheDB
+from movie_match.logging import debug_tracker, get_logger
 from movie_match.matcher.fingerprint import TasteFingerprint, build_fingerprint
 from movie_match.matcher.location import LocationMatcher
 from movie_match.matcher.scoring import FilmSignals, compute_compatibility_score
@@ -31,6 +32,8 @@ from movie_match.scraper.parser import (
     parse_users_from_rating_or_like_page,
     parse_users_from_reviews_page,
 )
+
+logger = get_logger("scraper")
 
 
 class LetterboxdScraper:
@@ -109,13 +112,19 @@ class LetterboxdScraper:
         start_time = time.time()
         slug = extract_slug_from_input(query.film_input)
         film_meta = await self.get_film_info(slug)
+        film_title = film_meta.title or slug.replace("-", " ").title()
 
         matcher = LocationMatcher(query.location_query, include_bio=query.include_bio)
         sentiment_plan = SentimentPlan(query.sentiment, query.rating_range)
         endpoints = sentiment_plan.get_film_endpoints(slug)
 
+        logger.info(
+            f"🔍 Starting user search: film='{slug}' ({film_title}), location='{query.location_query}', "
+            f"sentiment='{query.sentiment.value}', max_pages={query.max_pages}, limit={query.limit_matches}"
+        )
+
         stats = ScanStats(
-            film_title=film_meta.title or slug,
+            film_title=film_title,
             film_slug=slug,
         )
 
@@ -133,6 +142,8 @@ class LetterboxdScraper:
                 if len(matches) >= query.limit_matches:
                     break
 
+                logger.debug(f"[Scraper] Scanning endpoint '{endpoint_suffix}' ({desc}) - Page {page}/{query.max_pages}")
+
                 # 1. Check film page cache first
                 items = await self.cache.get_film_page(slug, endpoint_suffix, page)
                 if items is None:
@@ -144,6 +155,7 @@ class LetterboxdScraper:
                     resp = await self.client.get(url)
                     stats.total_pages_scanned += 1
                     if not resp or resp.status_code != 200:
+                        logger.debug(f"[Scraper] Endpoint '{endpoint_suffix}' returned status {resp.status_code if resp else 'None'} on page {page} - stopping pagination")
                         break
 
                     if "reviews" in endpoint_suffix:
@@ -152,6 +164,7 @@ class LetterboxdScraper:
                         items = parse_users_from_rating_or_like_page(resp.text)
 
                     if not items:
+                        logger.debug(f"[Scraper] No users parsed from '{url}' - stopping pagination")
                         break
 
                     # Save to interaction page cache
@@ -179,6 +192,7 @@ class LetterboxdScraper:
 
                 total_discovered += len(page_candidates)
                 stats.total_users_discovered = len(evaluated_usernames)
+                logger.debug(f"[Scraper] Discovered {len(page_candidates)} new candidate users on page {page} (total: {stats.total_users_discovered})")
 
                 if not page_candidates:
                     continue
@@ -195,6 +209,7 @@ class LetterboxdScraper:
                     if u in matched_usernames:
                         continue
                     is_match, fields, matched_text = matcher.match(profile.location, profile.bio)
+                    debug_tracker.record_profile_eval(is_match)
                     if is_match:
                         matched_usernames.add(u)
                         cand = page_candidates[u]
@@ -217,8 +232,12 @@ class LetterboxdScraper:
                             )
                         )
                         stats.matches_count = len(matches)
+                        logger.info(f"[green]✨ Match found:[/green] @{profile.username} ({profile.display_name}) in '{matched_text}' [dim]({len(matches)}/{query.limit_matches})[/dim]")
                         if len(matches) >= query.limit_matches:
+                            logger.info(f"Target match limit reached ({query.limit_matches} matches)")
                             break
+                    else:
+                        logger.debug(f"[dim]No match: @{profile.username} (loc='{profile.location}')[/dim]")
 
                 if len(matches) >= query.limit_matches:
                     break
@@ -227,6 +246,7 @@ class LetterboxdScraper:
                 batch_size = 25
                 for i in range(0, len(uncached_usernames), batch_size):
                     chunk = uncached_usernames[i : i + batch_size]
+                    logger.debug(f"[Scraper] Fetching {len(chunk)} uncached profiles concurrently (batch {i // batch_size + 1})...")
 
                     async def fetch_one(u_name: str) -> Optional[UserProfile]:
                         url = f"https://letterboxd.com/{u_name}/"
@@ -250,6 +270,7 @@ class LetterboxdScraper:
                         if p.username in matched_usernames:
                             continue
                         is_match, fields, matched_text = matcher.match(p.location, p.bio)
+                        debug_tracker.record_profile_eval(is_match)
                         if is_match:
                             matched_usernames.add(p.username)
                             cand = page_candidates[p.username]
@@ -272,8 +293,12 @@ class LetterboxdScraper:
                                 )
                             )
                             stats.matches_count = len(matches)
+                            logger.info(f"[green]✨ Match found:[/green] @{p.username} ({p.display_name}) in '{matched_text}' [dim]({len(matches)}/{query.limit_matches})[/dim]")
                             if len(matches) >= query.limit_matches:
+                                logger.info(f"Target match limit reached ({query.limit_matches} matches)")
                                 break
+                        else:
+                            logger.debug(f"[dim]No match: @{p.username} (loc='{p.location}')[/dim]")
 
                     if progress_callback:
                         progress_callback(
@@ -287,7 +312,12 @@ class LetterboxdScraper:
                         break
 
         stats.elapsed_seconds = time.time() - start_time
+        logger.info(
+            f"🏁 User search finished in {stats.elapsed_seconds:.2f}s: {len(matches)} matches found "
+            f"from {stats.total_users_discovered} candidates ({stats.total_pages_scanned} pages scanned)"
+        )
         return matches, stats
+
 
     async def resolve_film_poster(self, film_item: UserFilmItem) -> None:
         """Resolve film poster URL from film page metadata if missing."""
@@ -310,55 +340,61 @@ class LetterboxdScraper:
         clean_user = username.strip().lower().lstrip("@")
         cached = await self.cache.get_user_profile_detail(clean_user)
         if cached:
-            # If cached profile has films without posters, resolve them
-            all_cached_films = (
-                (cached.favorite_films or [])
-                + (cached.recent_films or [])
-                + (cached.top_rated_films or [])
-                + (cached.liked_films or [])
-            )
-            needs_resolve = [f for f in all_cached_films if not f.poster_url or "empty-poster" in f.poster_url]
-            if needs_resolve:
-                await self.resolve_posters_batch(needs_resolve)
-                await self.cache.save_user_profile_detail(cached)
             return cached
 
         url = f"https://letterboxd.com/{clean_user}/"
         resp = await self.client.get(url)
         if not resp or resp.status_code != 200:
+            # Fallback to basic profile in user_profiles cache if available
+            fallback = await self.cache.get_user_profile(clean_user)
+            if fallback:
+                return UserProfileDetail(
+                    username=fallback.username,
+                    display_name=fallback.display_name,
+                    location=fallback.location,
+                    bio=fallback.bio,
+                    avatar_url=fallback.avatar_url,
+                    profile_url=fallback.profile_url,
+                    is_pro=fallback.is_pro,
+                    is_patron=fallback.is_patron,
+                    favorite_films=fallback.favorite_films or [],
+                    stats={},
+                )
             return None
 
         profile = parse_user_profile_detail(resp.text, clean_user)
 
         if profile.favorite_films:
-            await self.resolve_posters_batch(profile.favorite_films)
+            try:
+                await self.resolve_posters_batch(profile.favorite_films, limit=4)
+            except Exception:
+                pass
 
         if include_films:
-            # Fetch recent films from page 1 of /films/
-            recent_films = await self.get_user_films_category(clean_user, "films", page=1, resolve_posters=False)
-            profile.recent_films = recent_films[:24]
+            try:
+                # Fetch recent films from page 1 of /films/
+                recent_films = await self.get_user_films_category(clean_user, "films", page=1, resolve_posters=False)
+                profile.recent_films = recent_films[:24]
 
-            # Top rated films from recent or /films/by/rating/
-            top_films = [f for f in recent_films if f.user_rating and f.user_rating >= 4.0]
-            if not top_films:
-                top_films = await self.get_user_films_category(clean_user, "top_rated", page=1, resolve_posters=False)
-            profile.top_rated_films = top_films[:24]
+                # Top rated films from recent or /films/by/rating/
+                top_films = [f for f in recent_films if f.user_rating and f.user_rating >= 4.0]
+                if not top_films:
+                    top_films = await self.get_user_films_category(clean_user, "top_rated", page=1, resolve_posters=False)
+                profile.top_rated_films = top_films[:24]
 
-            # Liked films from recent or /likes/films/
-            liked_films = [f for f in recent_films if f.user_liked]
-            if not liked_films:
-                liked_films = await self.get_user_films_category(clean_user, "likes", page=1, resolve_posters=False)
-            profile.liked_films = liked_films[:24]
+                # Liked films from recent or /likes/films/
+                liked_films = [f for f in recent_films if f.user_liked]
+                if not liked_films:
+                    liked_films = await self.get_user_films_category(clean_user, "likes", page=1, resolve_posters=False)
+                profile.liked_films = liked_films[:24]
+            except Exception:
+                pass
 
-            # Concurrently resolve posters across all film categories in profile
-            all_profile_films = (
-                profile.recent_films
-                + profile.top_rated_films
-                + profile.liked_films
-            )
-            await self.resolve_posters_batch(all_profile_films)
+        try:
+            await self.cache.save_user_profile_detail(profile)
+        except Exception:
+            pass
 
-        await self.cache.save_user_profile_detail(profile)
         return profile
 
     async def get_user_films_category(
@@ -475,6 +511,11 @@ class LetterboxdScraper:
         if not clean_slugs:
             return [], ScanStats()
 
+        logger.info(
+            f"🎯 Starting taste match: {len(clean_slugs)} films, location='{query.location_query}', "
+            f"min_shared={query.min_shared_films}, limit={query.limit_matches}"
+        )
+
         # Resolve source username for self-exclusion
         source_user_lower: Optional[str] = None
         if query.source_username:
@@ -483,6 +524,7 @@ class LetterboxdScraper:
         # --- Build Taste Fingerprint (expanded film pool) ---
         fingerprint: Optional[TasteFingerprint] = None
         if source_user_lower:
+            logger.info(f"Building taste fingerprint for source user @{source_user_lower}...")
             source_profile_detail = await self.get_user_full_profile(source_user_lower, include_films=True)
             source_basic_profile = await self.fetch_user_profile(source_user_lower)
             fingerprint = build_fingerprint(
@@ -493,6 +535,7 @@ class LetterboxdScraper:
             )
             # Use the expanded film list from the fingerprint
             clean_slugs = list(dict.fromkeys(fingerprint.film_slugs))
+            logger.info(f"Taste fingerprint created for @{source_user_lower}: {len(clean_slugs)} films in pool")
         else:
             # No source user — build minimal fingerprint from explicit slugs
             fingerprint = build_fingerprint(
@@ -551,6 +594,8 @@ class LetterboxdScraper:
             film_title_map[slug] = film_title
             endpoints = sentiment_plan.get_film_endpoints(slug)[:2]
 
+            logger.debug(f"[Scraper] Scouting film {film_idx}/{len(clean_slugs)}: '{slug}' ({film_title})")
+
             for endpoint_suffix, desc in endpoints:
                 for page in range(1, query.max_pages_per_film + 1):
                     # Check cache first
@@ -608,6 +653,7 @@ class LetterboxdScraper:
                     # Process cached profiles
                     for u, profile in cached_profiles.items():
                         is_match, fields, matched_text = matcher.match(profile.location, profile.bio)
+                        debug_tracker.record_profile_eval(is_match)
                         if is_match:
                             _register_location_match(
                                 u, profile, matched_text, fields,
@@ -618,6 +664,7 @@ class LetterboxdScraper:
                     batch_size = 25
                     for i in range(0, len(uncached_usernames), batch_size):
                         chunk = uncached_usernames[i : i + batch_size]
+                        logger.debug(f"[Scraper] Fetching {len(chunk)} uncached profiles for film '{slug}'...")
 
                         async def fetch_one(u_name: str) -> Optional[UserProfile]:
                             u_url = f"https://letterboxd.com/{u_name}/"
@@ -636,6 +683,7 @@ class LetterboxdScraper:
 
                         for p in valid_profiles:
                             is_match, fields, matched_text = matcher.match(p.location, p.bio)
+                            debug_tracker.record_profile_eval(is_match)
                             if is_match:
                                 _register_location_match(
                                     p.username, p, matched_text, fields,
@@ -651,6 +699,7 @@ class LetterboxdScraper:
                         )
 
         # Cross-reference candidate profile details / library for all location matches
+        logger.debug(f"[Matcher] Cross-referencing libraries for {len(user_profile_cache)} location-matched users...")
         for u_name, (p, matched_text, fields) in list(user_profile_cache.items()):
             if u_name not in user_film_interactions:
                 user_film_interactions[u_name] = []
@@ -715,32 +764,37 @@ class LetterboxdScraper:
                     film_signals, total_films_count, all_target_tiers,
                 )
 
-                results.append(
-                    TasteMatchResult(
-                        username=p.username,
-                        display_name=p.display_name or p.username,
-                        location=p.location,
-                        bio=p.bio,
-                        avatar_url=p.avatar_url,
-                        profile_url=p.profile_url,
-                        matched_location=matched_text,
-                        matched_fields=fields,
-                        shared_films=interactions,
-                        shared_films_count=len(interactions),
-                        compatibility_score=overall,
-                        intensity_score=intensity_pct,
-                        affinity_score=affinity_pct,
-                        correlation_score=correlation_pct,
-                        total_target_films=total_films_count,
-                    )
+                res = TasteMatchResult(
+                    username=p.username,
+                    display_name=p.display_name or p.username,
+                    location=p.location,
+                    bio=p.bio,
+                    avatar_url=p.avatar_url,
+                    profile_url=p.profile_url,
+                    matched_location=matched_text,
+                    matched_fields=fields,
+                    shared_films=interactions,
+                    shared_films_count=len(interactions),
+                    compatibility_score=overall,
+                    intensity_score=intensity_pct,
+                    affinity_score=affinity_pct,
+                    correlation_score=correlation_pct,
+                    total_target_films=total_films_count,
+                )
+                results.append(res)
+                logger.info(
+                    f"[green]✨ Taste match:[/green] @{p.username} ({p.display_name}) -> "
+                    f"[bold yellow]{overall}% Match[/bold yellow] ({len(interactions)} shared: {', '.join(i.film_slug for i in interactions[:3])})"
                 )
 
         # Sort by compatibility score descending (the weighted model already encodes breadth)
         results.sort(key=lambda r: (r.compatibility_score, r.shared_films_count), reverse=True)
         stats.matches_count = len(results)
         stats.elapsed_seconds = time.time() - start_time
+        logger.info(f"🏁 Taste match finished in {stats.elapsed_seconds:.2f}s: {len(results)} matches found")
 
         return results[:query.limit_matches], stats
+
 
     async def search_films(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Search Letterboxd for films matching query string."""

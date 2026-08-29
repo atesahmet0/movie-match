@@ -353,14 +353,17 @@ async def test_source_user_excluded_from_results(tmp_path):
     await cache.init()
 
     favs = [UserFilmItem(slug="fight-club", title="Fight Club", year=1999)]
-    p = UserProfile(
+    p_detail = UserProfileDetail(
         username="testuser",
         display_name="Test User",
         location="Ankara",
         bio="",
         favorite_films=favs,
+        top_rated_films=[],
+        liked_films=[],
+        recent_films=[],
     )
-    await cache.save_user_profile(p)
+    await cache.save_user_profile_detail(p_detail)
 
     await cache.save_film_metadata(FilmMetadata(slug="fight-club", title="Fight Club"))
     await cache.save_film_page("fight-club", "film/fight-club/likes/", 1,

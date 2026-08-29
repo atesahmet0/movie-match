@@ -3,8 +3,10 @@
 import asyncio
 import os
 import random
+import time
 from typing import Dict, List, Optional
 from curl_cffi.requests import AsyncSession, Response
+from movie_match.logging import debug_tracker, get_logger
 
 try:
     from dotenv import load_dotenv
@@ -12,6 +14,7 @@ try:
 except ImportError:
     pass
 
+logger = get_logger("http")
 
 BROWSER_IMPERSONATIONS = ["chrome124", "chrome120", "safari17_0", "edge101"]
 
@@ -65,11 +68,13 @@ class AntiBotHttpClient:
                 headers=DEFAULT_HEADERS,
                 proxies=proxies,
             )
+            logger.debug(f"[dim]HTTP session initialized (impersonate={self.impersonate}, proxy={'yes' if self.proxy_url else 'no'})[/dim]")
 
     async def close(self):
         if self._session:
             await self._session.close()
             self._session = None
+            logger.debug("[dim]HTTP session closed[/dim]")
 
     async def get(
         self,
@@ -83,9 +88,12 @@ class AntiBotHttpClient:
 
         for attempt in range(1, self.max_retries + 1):
             async with self.semaphore:
+                req_start = time.time()
                 try:
                     if self.base_delay > 0:
                         await asyncio.sleep(self.base_delay + random.uniform(0.01, 0.05))
+
+                    logger.debug(f"[cyan]HTTP GET[/cyan] {url} [dim](attempt {attempt}/{self.max_retries})[/dim]")
 
                     response = await self._session.get(
                         url,
@@ -93,27 +101,57 @@ class AntiBotHttpClient:
                         headers=headers,
                         timeout=self.timeout,
                     )
+                    elapsed_sec = time.time() - req_start
+                    elapsed_ms = elapsed_sec * 1000
 
                     # Successful response
                     if response.status_code == 200:
+                        logger.debug(f"[green]HTTP 200 OK[/green] {url} [dim]({elapsed_ms:.1f}ms)[/dim]")
+                        debug_tracker.record_http_request(elapsed_sec, 200, retry=(attempt > 1))
                         return response
 
                     # Page not found
                     if response.status_code == 404:
+                        logger.debug(f"[yellow]HTTP 404 Not Found[/yellow] {url} [dim]({elapsed_ms:.1f}ms)[/dim]")
+                        debug_tracker.record_http_request(elapsed_sec, 404, retry=(attempt > 1))
                         return response
 
                     # Rate limited, blocked by CF, or server error -> backoff & retry
                     if response.status_code in [403, 429, 500, 502, 503, 504]:
                         backoff = (2 ** attempt) + random.uniform(0.5, 1.5)
+                        status_label = "Rate Limited (429)" if response.status_code == 429 else f"Status {response.status_code}"
+                        logger.warning(
+                            f"[bold yellow]⚠️ HTTP {status_label}[/bold yellow] on {url} -> Backing off {backoff:.2f}s "
+                            f"[dim](attempt {attempt}/{self.max_retries}, elapsed {elapsed_ms:.0f}ms)[/dim]"
+                        )
+                        debug_tracker.record_http_request(elapsed_sec, response.status_code, retry=True)
                         await asyncio.sleep(backoff)
                         continue
 
+                    logger.debug(f"[dim]HTTP {response.status_code} on {url} ({elapsed_ms:.1f}ms)[/dim]")
+                    debug_tracker.record_http_request(elapsed_sec, response.status_code, retry=(attempt > 1))
                     return response
 
                 except Exception as e:
+                    elapsed_sec = time.time() - req_start
+                    elapsed_ms = elapsed_sec * 1000
+                    err_name = type(e).__name__
                     if attempt == self.max_retries:
+                        logger.error(
+                            f"[bold red]❌ Request failed permanently ({err_name}: {e})[/bold red] on {url} "
+                            f"[dim](after {self.max_retries} attempts, {elapsed_ms:.0f}ms)[/dim]"
+                        )
+                        debug_tracker.record_http_request(elapsed_sec, None, retry=True)
                         return None
+
                     backoff = (2 ** attempt) + random.uniform(0.2, 0.8)
+                    logger.warning(
+                        f"[bold yellow]⚠️ Request error ({err_name}: {e})[/bold yellow] on {url} -> Retrying in {backoff:.2f}s "
+                        f"[dim](attempt {attempt}/{self.max_retries}, {elapsed_ms:.0f}ms)[/dim]"
+                    )
+                    debug_tracker.record_http_request(elapsed_sec, None, retry=True)
                     await asyncio.sleep(backoff)
 
+        logger.error(f"[bold red]❌ Request failed after {self.max_retries} attempts[/bold red]: {url}")
         return None
+

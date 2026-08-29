@@ -1,7 +1,5 @@
-"""FastAPI backend application for Movie Match web dashboard and REST API."""
-
-import asyncio
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -9,19 +7,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from movie_match.cache.db import CacheDB
+from movie_match.logging import get_logger, is_debug_enabled, setup_logging
 from movie_match.models import MultiFilmMatchQuery, SearchQuery, SentimentType, WaitlistRequest
 from movie_match.scraper.letterboxd import LetterboxdScraper
 from movie_match.scraper.parser import extract_slug_from_input
 
-
+logger = get_logger("web")
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging(debug=is_debug_enabled())
+    logger.info("🎬 Movie Match FastAPI backend started")
+    yield
+
 
 app = FastAPI(
     title="Movie Match",
     description="Find cinephiles from specific locations who share your movie tastes.",
     version="0.2.0",
+    lifespan=lifespan,
 )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -116,15 +125,20 @@ async def api_user_profile(username: str):
     if not clean_user:
         raise HTTPException(status_code=400, detail="Username is required")
 
-    async with LetterboxdScraper() as scraper:
-        profile = await scraper.get_user_full_profile(clean_user, include_films=True)
-        if not profile:
-            raise HTTPException(status_code=404, detail=f"Letterboxd user '{clean_user}' not found")
+    try:
+        async with LetterboxdScraper() as scraper:
+            profile = await scraper.get_user_full_profile(clean_user, include_films=True)
+            if not profile:
+                raise HTTPException(status_code=404, detail=f"Letterboxd user '{clean_user}' not found")
 
-    return {
-        "status": "success",
-        "profile": profile.model_dump(),
-    }
+        return {
+            "status": "success",
+            "profile": profile.model_dump(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Unable to retrieve Letterboxd profile for '{clean_user}': {str(e)}")
 
 
 @app.get("/api/user/{username}/films")
