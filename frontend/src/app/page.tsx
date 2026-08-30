@@ -1,11 +1,9 @@
 /* Hallmark · page: / · macrostructure: Workbench · theme: Midnight Cinema
  */
 import { Metadata } from "next";
-import { fetchTasteMatch, fetchUserProfile } from "@/lib/api";
+import { redirect } from "next/navigation";
 import TasteSoulmatesSection from "@/components/TasteSoulmatesSection";
-import TasteMatchCard from "@/components/TasteMatchCard";
-import { Compass, Heart, MapPin, Users } from "lucide-react";
-import { UserFilmItem } from "@/lib/types";
+import { Heart, MapPin, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +34,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const resolvedParams = await searchParams;
   const userParam = typeof resolvedParams.user === "string" ? resolvedParams.user.trim() : "";
   const filmsParam = typeof resolvedParams.films === "string" ? resolvedParams.films : "";
-  let locationParam =
-    typeof resolvedParams.location === "string" ? resolvedParams.location : "";
+  const locationParam =
+    typeof resolvedParams.location === "string" ? resolvedParams.location.trim() : "";
   const minSharedParam =
     typeof resolvedParams.minShared === "string"
       ? parseInt(resolvedParams.minShared) || 1
@@ -57,56 +55,26 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ? parseInt(resolvedParams.limit_matches) || 10
       : 10;
 
-  let filmList = Array.from(
+  const filmList = Array.from(
     new Set(
       filmsParam
         .split(",")
-        .map((f) => f.trim().toLowerCase().replace(/\/+$/, "").split("/").pop())
+        .map((film) => film.trim().toLowerCase().replace(/\/+$/, "").split("/").pop())
         .filter(Boolean) as string[]
     )
   );
 
-  if (userParam && filmList.length === 0) {
-    try {
-      const userProfile = await fetchUserProfile(userParam);
-      if (userProfile?.profile?.favorite_films && userProfile.profile.favorite_films.length > 0) {
-        filmList = Array.from(
-          new Set(
-            userProfile.profile.favorite_films
-              .map((f: UserFilmItem) => f.slug.trim().toLowerCase().replace(/\/+$/, "").split("/").pop())
-              .filter(Boolean) as string[]
-          )
-        );
-        if (!locationParam && userProfile.profile.location) {
-          locationParam = userProfile.profile.location;
-        }
-      }
-    } catch (e) {
-      console.warn("Could not auto-resolve user favorites:", e);
-    }
-  }
-
-  if (!locationParam) {
-    locationParam = "Anywhere";
-  }
-
-  let tasteResponse = null;
-  let errorMsg = null;
-
+  // Preserve old shared URLs while moving every actual search to the streamed UI.
   if (filmList.length > 0) {
-    try {
-      tasteResponse = await fetchTasteMatch({
-        films: filmList,
-        location_query: locationParam,
-        min_shared_films: minSharedParam,
-        max_pages_per_film: maxPagesParam,
-        limit_matches: limitParam,
-        include_bio: false,
-        source_username: userParam || undefined,
-      });
-    } catch (err: unknown) {
-      errorMsg = err instanceof Error ? err.message : "Error executing movie match search";
-    }
+    const params = new URLSearchParams({
+      films: filmList.join(","),
+      location: locationParam || "Anywhere",
+      min_shared: String(Math.min(minSharedParam, filmList.length)),
+      max_pages: String(maxPagesParam),
+      limit: String(limitParam),
+    });
+    if (userParam) params.set("user", userParam);
+    redirect(`/scout?${params.toString()}`);
   }
 
   return (
@@ -149,70 +117,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
         <TasteSoulmatesSection
           initialUser={userParam}
-          initialLocation={locationParam}
-          initialFilms={filmList}
+          initialLocation={locationParam || "Anywhere"}
           initialMinShared={minSharedParam}
         />
       </section>
-
-      {errorMsg && (
-        <div role="alert" className="rounded-lg border border-[color:var(--color-error)] bg-[color:var(--color-error-soft)] p-4 text-sm text-[color:var(--color-error)]">
-          {errorMsg}
-        </div>
-      )}
-
-      {/* Match Stats Bar */}
-      {tasteResponse && (
-        <section className="result-summary" aria-live="polite">
-          <div>
-            <h2 className="flex items-center gap-2 text-xl font-bold text-white">
-              <Heart className="w-4 h-4 text-brand-green fill-brand-green shrink-0" />
-              <span>
-                Found {tasteResponse.matches_count} Movie Matches in {locationParam}
-              </span>
-            </h2>
-            <p className="mt-1 text-sm text-brand-subtext">
-              Scanned {tasteResponse.stats?.total_users_discovered || 0} candidate members across {filmList.length} cornerstone films &bull; Ranked by compatibility %
-            </p>
-          </div>
-          <div className="flex items-center gap-4 whitespace-nowrap font-mono text-xs tabular-nums">
-            <div>
-              Time:{" "}
-              <span className="text-brand-green font-bold">
-                {(tasteResponse.stats?.elapsed_seconds || 0).toFixed(2)}s
-              </span>
-            </div>
-            <div>
-              Matches:{" "}
-              <span className="text-brand-green font-bold">
-                {tasteResponse.matches_count}
-              </span>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Ranked Match Cards Grid */}
-      {tasteResponse && tasteResponse.matches.length > 0 && (
-        <section className="result-grid result-grid--two" aria-label="Taste matches">
-          {tasteResponse.matches.map((match, idx) => (
-            <TasteMatchCard key={match.username} match={match} index={idx} />
-          ))}
-        </section>
-      )}
-
-      {/* Empty State */}
-      {tasteResponse && tasteResponse.matches.length === 0 && (
-        <section className="empty-state">
-          <Compass className="h-8 w-8 text-brand-muted" />
-          <h2 className="text-xl font-bold text-white">
-            No movie matches found sharing these cornerstone films in &quot;{locationParam}&quot;.
-          </h2>
-          <p className="max-w-md text-sm text-brand-subtext">
-            Try setting location to &quot;Anywhere&quot; or lowering the minimum matching requirement to 1 film.
-          </p>
-        </section>
-      )}
     </div>
   );
 }

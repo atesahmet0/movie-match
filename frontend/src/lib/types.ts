@@ -127,6 +127,8 @@ export interface ScanStats {
   parse_seconds?: number;
   upstream_requests?: number;
   cache_status?: "hit" | "miss" | string;
+  partial?: boolean;
+  stop_reason?: "time_budget" | "request_budget" | "profile_budget" | string | null;
 }
 
 export interface SearchResponse {

@@ -32,6 +32,23 @@ Copy or configure your `.env` file in the project root:
 # Proxy configuration for Letterboxd scraping
 PROXY_URL="http://username:password@proxy-host:port"
 
+# Optional Webshare pool exported from the Endpoint Generator. Values may use
+# rotating, country-targeted, or other provider-generated username formats.
+WEBSHARE_PROXY_URLS="http://endpoint-1,http://endpoint-2"
+WEBSHARE_SESSION_POOL_SIZE="5"
+
+# Adaptive blocking controls
+PROXY_BLOCK_THRESHOLD="5"
+PROXY_BLOCK_WINDOW_SECONDS="30"
+PROXY_CIRCUIT_PAUSE_SECONDS="10"
+
+# Search safety budgets. Reaching one returns the best partial results collected.
+SEARCH_MAX_SECONDS="45"
+SEARCH_ENDPOINT_TIMEOUT_SECONDS="50"
+SEARCH_MAX_UPSTREAM_REQUESTS="400"
+SEARCH_MAX_PROFILE_FETCHES="250"
+SEARCH_FINGERPRINT_TIMEOUT_SECONDS="8"
+
 # PostgreSQL database configuration (optional; falls back to local SQLite if omitted)
 DATABASE_URL="postgresql://postgres:password@localhost:5432/movie_match"
 

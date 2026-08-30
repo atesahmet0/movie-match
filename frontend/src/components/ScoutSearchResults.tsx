@@ -20,6 +20,9 @@ interface ScoutSearchResultsProps {
   maxPages: number;
   limit: number;
   includeBio: boolean;
+  minShared?: number;
+  sourceUsername?: string;
+  searchRun?: string;
 }
 
 type StreamMatch = UserMatch | TasteMatchResult;
@@ -32,6 +35,9 @@ export default function ScoutSearchResults({
   maxPages,
   limit,
   includeBio,
+  minShared = 1,
+  sourceUsername = "",
+  searchRun = "",
 }: ScoutSearchResultsProps) {
   const [matches, setMatches] = useState<StreamMatch[]>([]);
   const [stats, setStats] = useState<ScanStats | null>(null);
@@ -51,13 +57,26 @@ export default function ScoutSearchResults({
       max_pages: String(maxPages),
       limit: String(limit),
       include_bio: String(includeBio),
+      min_shared: String(minShared),
     });
+    if (sourceUsername) params.set("source_username", sourceUsername);
+    if (searchRun) {
+      params.set("request_id", searchRun);
+      params.set("refresh", "true");
+    }
     return `/api/search/stream?${params.toString()}`;
-  }, [films, location, sentiment, maxPages, limit, includeBio]);
+  }, [films, location, sentiment, maxPages, limit, includeBio, minShared, sourceUsername, searchRun]);
 
   useEffect(() => {
     if (!searchUrl) return;
     const controller = new AbortController();
+    const searchStartedAt = Date.now();
+    let completionTimer: number | null = null;
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 60_000);
 
     const run = async () => {
       setMatches([]);
@@ -103,17 +122,33 @@ export default function ScoutSearchResults({
             );
           } else if (eventName === "complete") {
             const payload = data.payload as CompletePayload;
-            setStats(payload.stats);
-            setMatches(payload.matches as StreamMatch[]);
-            if (!isMulti) setSinglePayload(payload as SearchResponse);
-            setProgress(
-              payload.stats.cache_status === "hit"
-                ? "Loaded from the shared search cache."
-                : "Search complete."
-            );
-            setIsSearching(false);
+            const finishSearch = () => {
+              setStats(payload.stats);
+              setMatches(payload.matches as StreamMatch[]);
+              if (!isMulti) setSinglePayload(payload as SearchResponse);
+              setProgress(
+                payload.stats.partial
+                  ? "Time limit reached — showing the best matches found so far."
+                  : searchRun
+                  ? "Results refreshed."
+                  : payload.stats.cache_status === "hit"
+                  ? "Loaded from the shared search cache."
+                  : "Search complete."
+              );
+              setIsSearching(false);
+            };
+            const feedbackDelay = searchRun
+              ? Math.max(0, 600 - (Date.now() - searchStartedAt))
+              : 0;
+            if (feedbackDelay > 0) {
+              completionTimer = window.setTimeout(finishSearch, feedbackDelay);
+            } else {
+              finishSearch();
+            }
           } else if (eventName === "error") {
-            throw new Error(data.message || "Search stream failed");
+            throw new Error("The search service could not finish this request.");
+          } else if (eventName === "cancelled") {
+            throw new Error("The search was cancelled before it finished.");
           }
         };
 
@@ -129,15 +164,27 @@ export default function ScoutSearchResults({
           }
         }
       } catch (caught) {
-        if (controller.signal.aborted) return;
-        setError(caught instanceof Error ? caught.message : "Search failed");
+        if (controller.signal.aborted && !timedOut) return;
+        setError(
+          timedOut
+            ? "This search reached its one-minute limit. Any matches already found are shown below; try fewer pages or a narrower location for a faster result."
+            : caught instanceof Error
+            ? caught.message
+            : "The search could not be completed. Please try again."
+        );
         setIsSearching(false);
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     };
 
     void run();
-    return () => controller.abort();
-  }, [searchUrl, isMulti]);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (completionTimer !== null) window.clearTimeout(completionTimer);
+      controller.abort();
+    };
+  }, [searchUrl, isMulti, searchRun]);
 
   if (!searchUrl) return null;
 

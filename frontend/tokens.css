@@ -1,21 +1,21 @@
 :root {
-  --color-paper: oklch(96.5% 0.012 92);
-  --color-paper-2: oklch(93.5% 0.015 92);
-  --color-paper-3: oklch(89.5% 0.018 92);
-  --color-ink: oklch(18% 0.018 75);
-  --color-ink-2: oklch(30% 0.016 78);
-  --color-rule: oklch(83% 0.02 92);
-  --color-rule-2: oklch(68% 0.022 92);
-  --color-muted: oklch(44% 0.018 82);
-  --color-neutral: oklch(34% 0.016 80);
-  --color-accent: oklch(66% 0.17 145);
-  --color-accent-hover: oklch(60% 0.17 145);
-  --color-accent-soft: oklch(91% 0.055 145);
-  --color-accent-ink: oklch(18% 0.025 145);
-  --color-focus: oklch(35% 0.11 145);
-  --color-error: oklch(50% 0.18 28);
-  --color-error-soft: oklch(93% 0.035 28);
-  --color-screen: oklch(20% 0.018 75);
+  --color-paper: oklch(20% 0.016 75);
+  --color-paper-2: oklch(24% 0.017 75);
+  --color-paper-3: oklch(29% 0.019 78);
+  --color-ink: oklch(94% 0.012 92);
+  --color-ink-2: oklch(84% 0.014 88);
+  --color-rule: oklch(33% 0.02 80);
+  --color-rule-2: oklch(44% 0.022 85);
+  --color-muted: oklch(66% 0.018 85);
+  --color-neutral: oklch(73% 0.016 85);
+  --color-accent: oklch(70% 0.17 145);
+  --color-accent-hover: oklch(76% 0.17 145);
+  --color-accent-soft: oklch(28% 0.06 145);
+  --color-accent-ink: oklch(16% 0.025 145);
+  --color-focus: oklch(76% 0.16 145);
+  --color-error: oklch(62% 0.19 28);
+  --color-error-soft: oklch(28% 0.05 28);
+  --color-screen: oklch(13% 0.016 75);
   --color-screen-ink: oklch(94% 0.012 92);
 
   --font-display: var(--font-newsreader), "Times New Roman", serif;
@@ -54,5 +54,5 @@
   --radius-card: 0.75rem;
   --radius-pill: 999px;
   --radius-input: 0.5rem;
-  --shadow-card: 0 1px 2px oklch(18% 0.018 75 / 0.06);
+  --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.35), 0 4px 12px oklch(0% 0 0 / 0.2);
 }

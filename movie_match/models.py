@@ -156,3 +156,5 @@ class ScanStats(BaseModel):
     parse_seconds: float = 0.0
     upstream_requests: int = 0
     cache_status: str = "miss"
+    partial: bool = False
+    stop_reason: Optional[str] = None

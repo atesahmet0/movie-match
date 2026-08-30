@@ -383,3 +383,75 @@ async def test_source_user_excluded_from_results(tmp_path):
         assert all(m.username != "testuser" for m in matches)
 
     await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_source_fingerprint_does_not_expand_candidate_discovery(tmp_path):
+    """Profile history may affect scoring, but only explicitly selected films are scanned."""
+    cache = CacheDB(db_path=tmp_path / "discovery_scope.db", ttl_seconds=1000)
+    await cache.init()
+
+    source = UserProfileDetail(
+        username="source",
+        favorite_films=[UserFilmItem(slug="alien", title="Alien")],
+        top_rated_films=[
+            UserFilmItem(slug="hidden-gem", title="Hidden Gem", user_rating=5.0)
+        ],
+    )
+    await cache.save_user_profile_detail(source)
+    for slug in ("alien", "hidden-gem"):
+        await cache.save_film_metadata(FilmMetadata(slug=slug, title=slug.title()))
+        await cache.save_film_page(slug, f"film/{slug}/likes/", 1, [])
+        await cache.save_film_page(slug, f"film/{slug}/ratings/rated/4-5/", 1, [])
+
+    # This candidate is discoverable only through the expanded fingerprint film.
+    await cache.save_film_page(
+        "hidden-gem",
+        "film/hidden-gem/likes/",
+        1,
+        [{"username": "should-not-be-scanned", "user_rating": 5.0, "user_liked": True}],
+    )
+
+    async with LetterboxdScraper(cache=cache) as scraper:
+        matches, stats = await scraper.find_taste_matches(
+            MultiFilmMatchQuery(
+                films=["alien"],
+                source_username="source",
+                max_pages_per_film=1,
+            )
+        )
+
+    assert matches == []
+    assert stats.total_pages_scanned == 2
+    await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_taste_search_returns_partial_results_at_profile_budget(
+    tmp_path, monkeypatch
+):
+    cache = CacheDB(db_path=tmp_path / "profile_budget.db", ttl_seconds=1000)
+    await cache.init()
+    await cache.save_film_metadata(FilmMetadata(slug="alien", title="Alien"))
+    candidates = [
+        {"username": f"viewer-{index}", "user_rating": 4.5, "user_liked": True}
+        for index in range(30)
+    ]
+    await cache.save_film_page("alien", "film/alien/likes/", 1, candidates)
+    await cache.save_film_page("alien", "film/alien/ratings/rated/4-5/", 1, [])
+    monkeypatch.setenv("SEARCH_MAX_PROFILE_FETCHES", "25")
+
+    async with LetterboxdScraper(cache=cache) as scraper:
+        async def blocked_profile(_url):
+            return None
+
+        monkeypatch.setattr(scraper.client, "get", blocked_profile)
+        matches, stats = await scraper.find_taste_matches(
+            MultiFilmMatchQuery(films=["alien"], max_pages_per_film=1)
+        )
+
+    assert matches == []
+    assert stats.partial is True
+    assert stats.stop_reason == "profile_budget"
+    assert stats.profiles_fetched == 25
+    await cache.close()

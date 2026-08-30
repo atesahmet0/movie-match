@@ -131,6 +131,7 @@ export async function fetchTasteMatch(params: {
         source_username: params.source_username || undefined,
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(55_000),
     });
 
     if (!res.ok) {
@@ -141,7 +142,14 @@ export async function fetchTasteMatch(params: {
     return await res.json();
   } catch (error) {
     console.error("fetchTasteMatch error:", error);
-    throw error;
+    const isTimeout =
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.message.toLowerCase().includes("timeout"));
+    throw new Error(
+      isTimeout
+        ? "This search took too long. Try fewer pages or a narrower location."
+        : "The search service is temporarily unavailable. Please try again."
+    );
   }
 }
 

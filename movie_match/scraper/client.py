@@ -1,15 +1,20 @@
-"""Anti-bot HTTP client using curl_cffi for modern TLS/HTTP2 browser impersonation."""
+"""Anti-bot HTTP client with Webshare-aware proxy session rotation."""
 
 import asyncio
 import os
 import random
 import time
+from collections import deque
+from dataclasses import dataclass
 from typing import Dict, List, Optional
+
 from curl_cffi.requests import AsyncSession, Response
+
 from movie_match.logging import debug_tracker, get_logger
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -17,6 +22,8 @@ except ImportError:
 logger = get_logger("http")
 
 BROWSER_IMPERSONATIONS = ["chrome124", "chrome120", "safari17_0", "edge101"]
+BLOCK_STATUSES = {403, 429}
+RETRYABLE_SERVER_STATUSES = {500, 502, 503, 504}
 
 DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -29,8 +36,16 @@ DEFAULT_HEADERS = {
 }
 
 
+@dataclass
+class ProxySessionSlot:
+    session: AsyncSession
+    proxy_url: Optional[str]
+    impersonation: str
+    generation: int = 1
+
+
 class AntiBotHttpClient:
-    """High-performance HTTP client resilient against bot detection, proxies, and rate limits."""
+    """Concurrent HTTP client with rotating tunnels and adaptive rate control."""
 
     def __init__(
         self,
@@ -40,14 +55,52 @@ class AntiBotHttpClient:
         timeout: int = 15,
         base_delay: float = 0.05,
         proxy_url: Optional[str] = None,
+        session_pool_size: Optional[int] = None,
     ):
         self.impersonate = impersonate
-        self.semaphore = asyncio.Semaphore(concurrency)
-        self.max_retries = max_retries
+        self.concurrency = max(1, concurrency)
+        self.max_retries = max(1, max_retries)
         self.timeout = timeout
         self.base_delay = base_delay
-        self.proxy_url = proxy_url or os.getenv("PROXY_URL") or os.getenv("HTTP_PROXY")
+
+        configured_urls = os.getenv("WEBSHARE_PROXY_URLS") or os.getenv("PROXY_URLS") or ""
+        proxy_urls = [
+            item.strip()
+            for item in configured_urls.replace("\n", ",").split(",")
+            if item.strip()
+        ]
+        if proxy_url:
+            proxy_urls = [proxy_url]
+        elif not proxy_urls:
+            fallback = os.getenv("PROXY_URL") or os.getenv("HTTP_PROXY")
+            if fallback:
+                proxy_urls = [fallback]
+
+        self.proxy_urls = proxy_urls
+        self.proxy_url = proxy_urls[0] if proxy_urls else None
+        configured_pool_size = session_pool_size or int(os.getenv("WEBSHARE_SESSION_POOL_SIZE", "5"))
+        self.session_pool_size = max(1, min(configured_pool_size, self.concurrency))
+
+        # Compatibility alias for code/tests that used the former single session.
         self._session: Optional[AsyncSession] = None
+        self._slots: List[ProxySessionSlot] = []
+        self._available_slots: asyncio.Queue[int] = asyncio.Queue()
+        self._start_lock = asyncio.Lock()
+        self._limit_condition = asyncio.Condition()
+        self._active_requests = 0
+        self._adaptive_limit = self.session_pool_size
+        self._success_streak = 0
+        self._cooldown_tasks: set[asyncio.Task] = set()
+
+        self._block_events: deque[float] = deque()
+        self._circuit_open_until = 0.0
+        self._block_window = float(os.getenv("PROXY_BLOCK_WINDOW_SECONDS", "30"))
+        self._block_threshold = max(2, int(os.getenv("PROXY_BLOCK_THRESHOLD", "5")))
+        self._circuit_pause = float(os.getenv("PROXY_CIRCUIT_PAUSE_SECONDS", "10"))
+
+        self.session_rotations = 0
+        self.proxy_blocks = 0
+        self.circuit_trips = 0
 
     async def __aenter__(self):
         await self.start()
@@ -56,25 +109,156 @@ class AntiBotHttpClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
+    def _proxy_for_slot(self, index: int) -> Optional[str]:
+        if not self.proxy_urls:
+            return None
+        return self.proxy_urls[index % len(self.proxy_urls)]
+
+    def _impersonation_for(self, index: int, generation: int) -> str:
+        if generation == 1 and index == 0:
+            return self.impersonate
+        return BROWSER_IMPERSONATIONS[(index + generation - 1) % len(BROWSER_IMPERSONATIONS)]
+
+    def _create_session(self, index: int, generation: int = 1) -> ProxySessionSlot:
+        proxy = self._proxy_for_slot(index)
+        impersonation = self._impersonation_for(index, generation)
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        session = AsyncSession(impersonate=impersonation, headers=DEFAULT_HEADERS, proxies=proxies)
+        return ProxySessionSlot(session, proxy, impersonation, generation)
+
     async def start(self):
-        if not self._session:
-            proxies = (
-                {"http": self.proxy_url, "https": self.proxy_url}
-                if self.proxy_url
-                else None
+        if self._slots:
+            return
+        async with self._start_lock:
+            if self._slots:
+                return
+            self._slots = [self._create_session(index) for index in range(self.session_pool_size)]
+            self._available_slots = asyncio.Queue()
+            for index in range(len(self._slots)):
+                self._available_slots.put_nowait(index)
+            self._session = self._slots[0].session
+            logger.debug(
+                "HTTP session pool initialized "
+                f"(sessions={len(self._slots)}, proxy={'yes' if self.proxy_urls else 'no'}, "
+                f"endpoints={len(self.proxy_urls)})"
             )
-            self._session = AsyncSession(
-                impersonate=self.impersonate,
-                headers=DEFAULT_HEADERS,
-                proxies=proxies,
-            )
-            logger.debug(f"[dim]HTTP session initialized (impersonate={self.impersonate}, proxy={'yes' if self.proxy_url else 'no'})[/dim]")
 
     async def close(self):
-        if self._session:
-            await self._session.close()
-            self._session = None
-            logger.debug("[dim]HTTP session closed[/dim]")
+        for task in list(self._cooldown_tasks):
+            task.cancel()
+        if self._cooldown_tasks:
+            await asyncio.gather(*self._cooldown_tasks, return_exceptions=True)
+        self._cooldown_tasks.clear()
+        sessions = [slot.session for slot in self._slots]
+        if not sessions and self._session is not None:
+            sessions = [self._session]
+        if sessions:
+            await asyncio.gather(*(session.close() for session in sessions), return_exceptions=True)
+        self._slots = []
+        self._session = None
+        self._available_slots = asyncio.Queue()
+        logger.debug("HTTP session pool closed")
+
+    async def _acquire_capacity(self) -> None:
+        async with self._limit_condition:
+            await self._limit_condition.wait_for(lambda: self._active_requests < self._adaptive_limit)
+            self._active_requests += 1
+
+    async def _release_capacity(self) -> None:
+        async with self._limit_condition:
+            self._active_requests = max(0, self._active_requests - 1)
+            self._limit_condition.notify_all()
+
+    async def _acquire_slot(self) -> int:
+        await self._acquire_capacity()
+        try:
+            return await self._available_slots.get()
+        except BaseException:
+            await self._release_capacity()
+            raise
+
+    async def _requeue_after(self, index: int, delay: float) -> None:
+        if delay > 0:
+            await asyncio.sleep(delay)
+        if self._slots:
+            self._available_slots.put_nowait(index)
+
+    async def _release_slot(self, index: int, cooldown: float = 0.0) -> None:
+        await self._release_capacity()
+        if cooldown <= 0:
+            self._available_slots.put_nowait(index)
+            return
+        task = asyncio.create_task(self._requeue_after(index, cooldown))
+        self._cooldown_tasks.add(task)
+        task.add_done_callback(self._cooldown_tasks.discard)
+
+    async def _rotate_slot(self, index: int) -> None:
+        old_slot = self._slots[index]
+        await old_slot.session.close()
+        replacement = self._create_session(index, old_slot.generation + 1)
+        self._slots[index] = replacement
+        if index == 0:
+            self._session = replacement.session
+        self.session_rotations += 1
+        logger.debug(
+            f"Proxy session {index + 1} rotated to generation {replacement.generation} "
+            f"(impersonate={replacement.impersonation})"
+        )
+
+    async def _record_block(self) -> None:
+        now = time.monotonic()
+        self.proxy_blocks += 1
+        self._success_streak = 0
+        self._adaptive_limit = max(1, self._adaptive_limit // 2)
+        self._block_events.append(now)
+        while self._block_events and now - self._block_events[0] > self._block_window:
+            self._block_events.popleft()
+        if len(self._block_events) >= self._block_threshold:
+            if now >= self._circuit_open_until:
+                self._circuit_open_until = now + self._circuit_pause
+                self.circuit_trips += 1
+                logger.warning(
+                    f"Proxy circuit opened for {self._circuit_pause:.1f}s after "
+                    f"{len(self._block_events)} recent blocks"
+                )
+
+    async def _record_success(self) -> None:
+        self._success_streak += 1
+        if self._success_streak >= 20 and self._adaptive_limit < self.session_pool_size:
+            self._adaptive_limit += 1
+            self._success_streak = 0
+            async with self._limit_condition:
+                self._limit_condition.notify_all()
+
+    async def _respect_circuit(self) -> None:
+        delay = self._circuit_open_until - time.monotonic()
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+    def metrics_snapshot(self) -> Dict[str, object]:
+        return {
+            "configured": bool(self.proxy_urls),
+            "endpoints": len(self.proxy_urls),
+            "session_pool_size": len(self._slots) or self.session_pool_size,
+            "active_requests": self._active_requests,
+            "adaptive_concurrency": self._adaptive_limit,
+            "session_rotations": self.session_rotations,
+            "blocked_responses": self.proxy_blocks,
+            "circuit_trips": self.circuit_trips,
+            "circuit_open": self._circuit_open_until > time.monotonic(),
+            "session_generations": [slot.generation for slot in self._slots],
+        }
+
+    async def _legacy_get(
+        self,
+        url: str,
+        params: Optional[Dict[str, str]],
+        headers: Optional[Dict[str, str]],
+    ) -> Optional[Response]:
+        req_start = time.time()
+        response = await self._session.get(url, params=params, headers=headers, timeout=self.timeout)
+        debug_tracker.record_http_request(time.time() - req_start, response.status_code)
+        return response
 
     async def get(
         self,
@@ -82,76 +266,111 @@ class AntiBotHttpClient:
         params: Optional[Dict[str, str]] = None,
         headers: Optional[Dict[str, str]] = None,
     ) -> Optional[Response]:
-        """Perform an HTTP GET request with retries, jitter, and concurrency control."""
-        if not self._session:
+        """GET with fresh-tunnel rotation, adaptive concurrency, and bounded retry."""
+        if not self._slots:
             await self.start()
+        if not self._slots and self._session is not None:
+            return await self._legacy_get(url, params, headers)
 
         for attempt in range(1, self.max_retries + 1):
-            async with self.semaphore:
-                req_start = time.time()
-                try:
-                    if self.base_delay > 0:
-                        await asyncio.sleep(self.base_delay + random.uniform(0.01, 0.05))
+            await self._respect_circuit()
+            index = await self._acquire_slot()
+            released = False
+            req_start = time.time()
+            try:
+                if self.base_delay > 0:
+                    await asyncio.sleep(self.base_delay + random.uniform(0.01, 0.05))
+                slot = self._slots[index]
+                logger.debug(
+                    f"HTTP GET {url} (attempt {attempt}/{self.max_retries}, "
+                    f"session={index + 1}, generation={slot.generation})"
+                )
+                response = await slot.session.get(
+                    url, params=params, headers=headers, timeout=self.timeout
+                )
+                elapsed_sec = time.time() - req_start
+                elapsed_ms = elapsed_sec * 1000
 
-                    logger.debug(f"[cyan]HTTP GET[/cyan] {url} [dim](attempt {attempt}/{self.max_retries})[/dim]")
-
-                    response = await self._session.get(
-                        url,
-                        params=params,
-                        headers=headers,
-                        timeout=self.timeout,
-                    )
-                    elapsed_sec = time.time() - req_start
-                    elapsed_ms = elapsed_sec * 1000
-
-                    # Successful response
-                    if response.status_code == 200:
-                        logger.debug(f"[green]HTTP 200 OK[/green] {url} [dim]({elapsed_ms:.1f}ms)[/dim]")
-                        debug_tracker.record_http_request(elapsed_sec, 200, retry=(attempt > 1))
-                        return response
-
-                    # Page not found
-                    if response.status_code == 404:
-                        logger.debug(f"[yellow]HTTP 404 Not Found[/yellow] {url} [dim]({elapsed_ms:.1f}ms)[/dim]")
-                        debug_tracker.record_http_request(elapsed_sec, 404, retry=(attempt > 1))
-                        return response
-
-                    # Rate limited, blocked by CF, or server error -> backoff & retry
-                    if response.status_code in [403, 429, 500, 502, 503, 504]:
-                        backoff = (2 ** attempt) + random.uniform(0.5, 1.5)
-                        status_label = "Rate Limited (429)" if response.status_code == 429 else f"Status {response.status_code}"
-                        logger.warning(
-                            f"[bold yellow]⚠️ HTTP {status_label}[/bold yellow] on {url} -> Backing off {backoff:.2f}s "
-                            f"[dim](attempt {attempt}/{self.max_retries}, elapsed {elapsed_ms:.0f}ms)[/dim]"
-                        )
-                        debug_tracker.record_http_request(elapsed_sec, response.status_code, retry=True)
-                        await asyncio.sleep(backoff)
-                        continue
-
-                    logger.debug(f"[dim]HTTP {response.status_code} on {url} ({elapsed_ms:.1f}ms)[/dim]")
-                    debug_tracker.record_http_request(elapsed_sec, response.status_code, retry=(attempt > 1))
+                if response.status_code == 200:
+                    debug_tracker.record_http_request(elapsed_sec, 200, retry=(attempt > 1))
+                    await self._record_success()
+                    await self._release_slot(index)
+                    released = True
                     return response
 
-                except Exception as e:
-                    elapsed_sec = time.time() - req_start
-                    elapsed_ms = elapsed_sec * 1000
-                    err_name = type(e).__name__
-                    if attempt == self.max_retries:
+                if response.status_code == 404:
+                    debug_tracker.record_http_request(elapsed_sec, 404, retry=(attempt > 1))
+                    await self._release_slot(index)
+                    released = True
+                    return response
+
+                if response.status_code in BLOCK_STATUSES:
+                    will_retry = attempt < self.max_retries
+                    debug_tracker.record_http_request(elapsed_sec, response.status_code, retry=will_retry)
+                    await self._record_block()
+                    await self._rotate_slot(index)
+                    backoff = min(3.0, 0.45 * (2 ** (attempt - 1)) + random.uniform(0.05, 0.25))
+                    await self._release_slot(index, cooldown=backoff if will_retry else 0.0)
+                    released = True
+                    if not will_retry:
                         logger.error(
-                            f"[bold red]❌ Request failed permanently ({err_name}: {e})[/bold red] on {url} "
-                            f"[dim](after {self.max_retries} attempts, {elapsed_ms:.0f}ms)[/dim]"
+                            f"HTTP {response.status_code} remained blocked after "
+                            f"{self.max_retries} attempts: {url} ({elapsed_ms:.0f}ms final attempt)"
                         )
-                        debug_tracker.record_http_request(elapsed_sec, None, retry=True)
                         return None
-
-                    backoff = (2 ** attempt) + random.uniform(0.2, 0.8)
                     logger.warning(
-                        f"[bold yellow]⚠️ Request error ({err_name}: {e})[/bold yellow] on {url} -> Retrying in {backoff:.2f}s "
-                        f"[dim](attempt {attempt}/{self.max_retries}, {elapsed_ms:.0f}ms)[/dim]"
+                        f"HTTP {response.status_code} on {url}; proxy tunnel rotated, "
+                        f"retrying in {backoff:.2f}s (attempt {attempt}/{self.max_retries})"
                     )
-                    debug_tracker.record_http_request(elapsed_sec, None, retry=True)
                     await asyncio.sleep(backoff)
+                    continue
 
-        logger.error(f"[bold red]❌ Request failed after {self.max_retries} attempts[/bold red]: {url}")
+                if response.status_code in RETRYABLE_SERVER_STATUSES:
+                    will_retry = attempt < self.max_retries
+                    debug_tracker.record_http_request(elapsed_sec, response.status_code, retry=will_retry)
+                    await self._release_slot(index)
+                    released = True
+                    if not will_retry:
+                        return None
+                    backoff = min(5.0, 0.75 * (2 ** (attempt - 1)) + random.uniform(0.1, 0.4))
+                    await asyncio.sleep(backoff)
+                    continue
+
+                debug_tracker.record_http_request(
+                    elapsed_sec, response.status_code, retry=(attempt > 1)
+                )
+                await self._release_slot(index)
+                released = True
+                return response
+
+            except asyncio.CancelledError:
+                if not released:
+                    await self._release_slot(index)
+                    released = True
+                raise
+            except Exception as exc:
+                elapsed_sec = time.time() - req_start
+                will_retry = attempt < self.max_retries
+                debug_tracker.record_http_request(elapsed_sec, None, retry=will_retry)
+                try:
+                    await self._rotate_slot(index)
+                except Exception:
+                    logger.debug("Failed to rotate errored proxy session", exc_info=True)
+                await self._release_slot(index, cooldown=0.5 if will_retry else 0.0)
+                released = True
+                if not will_retry:
+                    logger.error(
+                        f"Request failed permanently ({type(exc).__name__}: {exc}) on {url}"
+                    )
+                    return None
+                backoff = min(3.0, 0.5 * (2 ** (attempt - 1)) + random.uniform(0.1, 0.3))
+                logger.warning(
+                    f"Request error ({type(exc).__name__}) on {url}; "
+                    f"session rotated, retrying in {backoff:.2f}s"
+                )
+                await asyncio.sleep(backoff)
+            finally:
+                if not released:
+                    await self._release_slot(index)
+
         return None
-

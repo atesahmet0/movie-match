@@ -185,32 +185,34 @@ async def _run_single_search(
     result_callback=None,
     progress_callback=None,
     cancel_event: Optional[asyncio.Event] = None,
+    bypass_cache: bool = False,
 ) -> dict:
     started = time.monotonic()
     performance_tracker.started()
     cache_key = _query_cache_key("single", query.model_dump(mode="json"))
-    scraper = await get_shared_scraper()
-    cached = await scraper.cache.get_query_result(cache_key)
-    if cached is not None:
-        cached["stats"]["cache_status"] = "hit"
-        performance_tracker.finished(time.monotonic() - started, cache_hit=True)
-        return cached
-
     use_coalescing = result_callback is None and progress_callback is None and cancel_event is None
-    task = _search_inflight.get(cache_key) if use_coalescing else None
-    if task is None:
-        task = asyncio.create_task(
-            _compute_single_search(
-                query,
-                cache_key,
-                result_callback=result_callback,
-                progress_callback=progress_callback,
-                cancel_event=cancel_event,
-            )
-        )
-        if use_coalescing:
-            _search_inflight[cache_key] = task
+    task: Optional[asyncio.Task] = None
     try:
+        scraper = await get_shared_scraper()
+        cached = None if bypass_cache else await scraper.cache.get_query_result(cache_key)
+        if cached is not None:
+            cached["stats"]["cache_status"] = "hit"
+            performance_tracker.finished(time.monotonic() - started, cache_hit=True)
+            return cached
+
+        task = _search_inflight.get(cache_key) if use_coalescing else None
+        if task is None:
+            task = asyncio.create_task(
+                _compute_single_search(
+                    query,
+                    cache_key,
+                    result_callback=result_callback,
+                    progress_callback=progress_callback,
+                    cancel_event=cancel_event,
+                )
+            )
+            if use_coalescing:
+                _search_inflight[cache_key] = task
         payload = await asyncio.shield(task) if use_coalescing else await task
         performance_tracker.finished(
             time.monotonic() - started,
@@ -220,8 +222,11 @@ async def _run_single_search(
     except asyncio.CancelledError:
         performance_tracker.finished(time.monotonic() - started, cancelled=True)
         raise
+    except Exception:
+        performance_tracker.finished(time.monotonic() - started)
+        raise
     finally:
-        if use_coalescing and task.done() and _search_inflight.get(cache_key) is task:
+        if use_coalescing and task is not None and task.done() and _search_inflight.get(cache_key) is task:
             _search_inflight.pop(cache_key, None)
 
 
@@ -245,7 +250,8 @@ async def _compute_taste_search(
         "matches_count": len(matches),
         "matches": [match.model_dump(mode="json") for match in matches],
     }
-    await scraper.cache.save_query_result(cache_key, payload)
+    if not stats.partial:
+        await scraper.cache.save_query_result(cache_key, payload)
     return payload
 
 
@@ -254,31 +260,33 @@ async def _run_taste_search(
     *,
     progress_callback=None,
     cancel_event: Optional[asyncio.Event] = None,
+    bypass_cache: bool = False,
 ) -> dict:
     started = time.monotonic()
     performance_tracker.started()
     cache_key = _query_cache_key("taste", query.model_dump(mode="json"))
-    scraper = await get_shared_scraper()
-    cached = await scraper.cache.get_query_result(cache_key)
-    if cached is not None:
-        cached["stats"]["cache_status"] = "hit"
-        performance_tracker.finished(time.monotonic() - started, cache_hit=True)
-        return cached
-
     use_coalescing = progress_callback is None and cancel_event is None
-    task = _search_inflight.get(cache_key) if use_coalescing else None
-    if task is None:
-        task = asyncio.create_task(
-            _compute_taste_search(
-                query,
-                cache_key,
-                progress_callback=progress_callback,
-                cancel_event=cancel_event,
-            )
-        )
-        if use_coalescing:
-            _search_inflight[cache_key] = task
+    task: Optional[asyncio.Task] = None
     try:
+        scraper = await get_shared_scraper()
+        cached = None if bypass_cache else await scraper.cache.get_query_result(cache_key)
+        if cached is not None:
+            cached["stats"]["cache_status"] = "hit"
+            performance_tracker.finished(time.monotonic() - started, cache_hit=True)
+            return cached
+
+        task = _search_inflight.get(cache_key) if use_coalescing else None
+        if task is None:
+            task = asyncio.create_task(
+                _compute_taste_search(
+                    query,
+                    cache_key,
+                    progress_callback=progress_callback,
+                    cancel_event=cancel_event,
+                )
+            )
+            if use_coalescing:
+                _search_inflight[cache_key] = task
         payload = await asyncio.shield(task) if use_coalescing else await task
         performance_tracker.finished(
             time.monotonic() - started,
@@ -288,8 +296,11 @@ async def _run_taste_search(
     except asyncio.CancelledError:
         performance_tracker.finished(time.monotonic() - started, cancelled=True)
         raise
+    except Exception:
+        performance_tracker.finished(time.monotonic() - started)
+        raise
     finally:
-        if use_coalescing and task.done() and _search_inflight.get(cache_key) is task:
+        if use_coalescing and task is not None and task.done() and _search_inflight.get(cache_key) is task:
             _search_inflight.pop(cache_key, None)
 
 
@@ -317,12 +328,35 @@ async def api_search(
 
 
 @app.post("/api/taste-match")
-async def api_taste_match(query: MultiFilmMatchQuery):
+async def api_taste_match(query: MultiFilmMatchQuery, request: Request):
     """Search for users in target location matching multiple films (taste overlap)."""
     if not query.films:
         raise HTTPException(status_code=400, detail="At least one film must be provided")
 
-    return await _run_taste_search(query)
+    cancel_event = asyncio.Event()
+    task = asyncio.create_task(_run_taste_search(query, cancel_event=cancel_event))
+    endpoint_timeout = max(10.0, float(os.getenv("SEARCH_ENDPOINT_TIMEOUT_SECONDS", "50")))
+    deadline = time.monotonic() + endpoint_timeout
+    try:
+        while not task.done():
+            if await request.is_disconnected():
+                cancel_event.set()
+                task.cancel()
+                raise HTTPException(status_code=499, detail="Search cancelled after client disconnected")
+            if time.monotonic() >= deadline:
+                cancel_event.set()
+                task.cancel()
+                raise HTTPException(
+                    status_code=504,
+                    detail="Search reached its time limit. Try fewer pages or a narrower location.",
+                )
+            await asyncio.wait({task}, timeout=0.25)
+        return await task
+    finally:
+        if not task.done():
+            cancel_event.set()
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @app.get("/api/search/stream")
@@ -335,6 +369,9 @@ async def api_stream_search(
     max_pages: int = Query(2, ge=1, le=20),
     limit: int = Query(10, ge=1, le=500),
     include_bio: bool = Query(False),
+    min_shared: int = Query(1, ge=1, le=50),
+    source_username: Optional[str] = Query(None),
+    refresh: bool = Query(False),
 ):
     """Stream progress and discovered matches; disconnecting cancels upstream work."""
     clean_films = list(
@@ -381,20 +418,24 @@ async def api_stream_search(
                         result_callback=on_result,
                         progress_callback=on_progress,
                         cancel_event=cancel_event,
+                        bypass_cache=refresh,
                     )
                 else:
                     payload = await _run_taste_search(
                         MultiFilmMatchQuery(
                             films=clean_films,
                             location_query=location,
+                            min_shared_films=min(min_shared, len(clean_films)),
                             sentiment=sentiment,
                             rating_range=rating,
                             include_bio=include_bio,
                             max_pages_per_film=max_pages,
                             limit_matches=limit,
+                            source_username=source_username,
                         ),
                         progress_callback=on_progress,
                         cancel_event=cancel_event,
+                        bypass_cache=refresh,
                     )
                 for match in payload["matches"]:
                     if match["username"] not in emitted:
@@ -443,7 +484,10 @@ async def api_stream_search(
 
 @app.get("/api/metrics")
 async def api_metrics():
-    return {"status": "success", "metrics": performance_tracker.snapshot()}
+    metrics = performance_tracker.snapshot()
+    if _shared_scraper is not None:
+        metrics["proxy"] = _shared_scraper.client.metrics_snapshot()
+    return {"status": "success", "metrics": metrics}
 
 
 @app.get("/api/user/{username}")

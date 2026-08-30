@@ -68,6 +68,14 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
     typeof resolvedParams.include_bio === "string"
       ? resolvedParams.include_bio === "true"
       : false;
+  const minSharedParam =
+    typeof resolvedParams.min_shared === "string"
+      ? Math.max(1, parseInt(resolvedParams.min_shared) || 1)
+      : 1;
+  const sourceUsername =
+    typeof resolvedParams.user === "string" ? resolvedParams.user.trim() : "";
+  const searchRun =
+    typeof resolvedParams.run === "string" ? resolvedParams.run : "";
 
   return (
     <div className="space-y-10">
@@ -100,6 +108,9 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
         maxPages={maxPagesParam}
         limit={limitParam}
         includeBio={includeBioParam}
+        minShared={Math.min(minSharedParam, Math.max(1, filmList.length))}
+        sourceUsername={sourceUsername}
+        searchRun={searchRun}
       />
     </div>
   );

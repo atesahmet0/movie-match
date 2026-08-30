@@ -92,7 +92,7 @@ export default function ScoutForm({
             ) : (
               <span>
                 Scout {form.selectedFilms.length}{" "}
-                {form.selectedFilms.length === 1 ? "Film" : "Films"})
+                {form.selectedFilms.length === 1 ? "Film" : "Films"}
               </span>
             )}
           </Button>

@@ -208,15 +208,18 @@ export function useScoutForm({
     if (selectedFilms.length === 0) return;
 
     const uniqueSlugs = Array.from(new Set(selectedFilms.map((f) => f.slug.trim()).filter(Boolean)));
-    const filmsParam = uniqueSlugs.join(",");
-    const locParam = locations.join(",");
+    const params = new URLSearchParams({
+      films: uniqueSlugs.join(","),
+      location: locations.join(","),
+      sentiment,
+      max_pages: String(maxPages),
+      limit: String(limit),
+      include_bio: String(includeBio),
+      run: String(Date.now()),
+    });
 
     startTransition(() => {
-      router.push(
-        `/scout?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
-          locParam
-        )}&sentiment=${sentiment}&max_pages=${maxPages}&limit=${limit}&include_bio=${includeBio}`
-      );
+      router.push(`/scout?${params.toString()}`, { scroll: false });
     });
   };
 

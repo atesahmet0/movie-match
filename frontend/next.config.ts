@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   images: {
     unoptimized: true, // Prevents Letterboxd anti-hotlink CDN 403 blocks when Next.js server attempts image optimization
     remotePatterns: [

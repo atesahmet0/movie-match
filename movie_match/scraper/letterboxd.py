@@ -1,6 +1,7 @@
 """Main Letterboxd scraping and matching orchestration service with stream pipelining and multi-tier caching."""
 
 import asyncio
+import os
 import time
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -546,20 +547,49 @@ class LetterboxdScraper:
         """
         Search for users matching multiple target films in the specified location with Taste Compatibility score.
 
-        When source_username is provided, builds a TasteFingerprint from their full profile
-        (favorites + top-rated + liked + recent) to expand the matching universe beyond
-        just pinned favorites.
+        The explicitly requested films are always the candidate-discovery set. When a
+        source username is provided, its expanded fingerprint is used only as bounded
+        scoring evidence after candidates have been discovered.
         """
         start_time = time.time()
         http_requests_at_start = debug_tracker.http_requests_total
-        clean_slugs = list(dict.fromkeys(extract_slug_from_input(f) for f in query.films if f.strip()))
-        if not clean_slugs:
+        discovery_slugs = list(dict.fromkeys(extract_slug_from_input(f) for f in query.films if f.strip()))
+        if not discovery_slugs:
             return [], ScanStats()
 
         logger.info(
-            f"🎯 Starting taste match: {len(clean_slugs)} films, location='{query.location_query}', "
+            f"🎯 Starting taste match: {len(discovery_slugs)} films, location='{query.location_query}', "
             f"min_shared={query.min_shared_films}, limit={query.limit_matches}"
         )
+
+        stats = ScanStats(
+            film_title=", ".join(discovery_slugs[:3]),
+            film_slug=discovery_slugs[0],
+        )
+        deadline = time.monotonic() + max(
+            5.0, float(os.getenv("SEARCH_MAX_SECONDS", "45"))
+        )
+        request_budget = max(25, int(os.getenv("SEARCH_MAX_UPSTREAM_REQUESTS", "400")))
+        profile_budget = max(25, int(os.getenv("SEARCH_MAX_PROFILE_FETCHES", "250")))
+
+        def _budget_reason() -> Optional[str]:
+            if cancel_event and cancel_event.is_set():
+                raise asyncio.CancelledError
+            if time.monotonic() >= deadline:
+                return "time_budget"
+            if debug_tracker.http_requests_total - http_requests_at_start >= request_budget:
+                return "request_budget"
+            if stats.profiles_fetched >= profile_budget:
+                return "profile_budget"
+            return None
+
+        def _stop_for_budget() -> bool:
+            reason = _budget_reason()
+            if reason is None:
+                return False
+            stats.partial = True
+            stats.stop_reason = reason
+            return True
 
         # Resolve source username for self-exclusion
         source_user_lower: Optional[str] = None
@@ -570,36 +600,49 @@ class LetterboxdScraper:
         fingerprint: Optional[TasteFingerprint] = None
         if source_user_lower:
             logger.info(f"Building taste fingerprint for source user @{source_user_lower}...")
-            source_profile_detail = await self.get_user_full_profile(source_user_lower, include_films=True)
-            source_basic_profile = await self.fetch_user_profile(source_user_lower)
+            source_profile_detail = None
+            fingerprint_timeout = max(
+                1.0, float(os.getenv("SEARCH_FINGERPRINT_TIMEOUT_SECONDS", "8"))
+            )
+            try:
+                source_profile_detail = await asyncio.wait_for(
+                    self.get_user_full_profile(source_user_lower, include_films=True),
+                    timeout=min(fingerprint_timeout, max(0.1, deadline - time.monotonic())),
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Taste fingerprint enrichment timed out for @{source_user_lower}; "
+                    "continuing with the selected films"
+                )
             fingerprint = build_fingerprint(
                 username=source_user_lower,
                 profile_detail=source_profile_detail,
-                favorite_films=source_basic_profile.favorite_films if source_basic_profile else None,
-                explicit_slugs=clean_slugs,
+                explicit_slugs=discovery_slugs,
             )
-            # Use the expanded film list from the fingerprint
-            clean_slugs = list(dict.fromkeys(fingerprint.film_slugs))
-            logger.info(f"Taste fingerprint created for @{source_user_lower}: {len(clean_slugs)} films in pool")
+            logger.info(
+                f"Taste fingerprint created for @{source_user_lower}: "
+                f"{len(fingerprint.film_slugs)} scoring films; "
+                f"discovery remains limited to {len(discovery_slugs)} selected films"
+            )
         else:
             # No source user — build minimal fingerprint from explicit slugs
             fingerprint = build_fingerprint(
                 username="",
-                explicit_slugs=clean_slugs,
+                explicit_slugs=discovery_slugs,
             )
+
+        scoring_slugs = list(dict.fromkeys(fingerprint.film_slugs))
 
         matcher = LocationMatcher(query.location_query, include_bio=query.include_bio)
         sentiment_plan = SentimentPlan(query.sentiment, query.rating_range)
 
-        stats = ScanStats(
-            film_title=", ".join(clean_slugs[:3]),
-            film_slug=clean_slugs[0] if clean_slugs else "",
-        )
-
         user_film_interactions: Dict[str, List[FilmInteraction]] = {}
         user_profile_cache: Dict[str, Tuple[UserProfile, str, List[str]]] = {}
         all_evaluated_usernames: Set[str] = set()
-        film_title_map: Dict[str, str] = {}
+        film_title_map: Dict[str, str] = {
+            film.slug: film.title or film.slug.replace("-", " ").title()
+            for film in fingerprint.films
+        }
         film_member_counts: Dict[str, Optional[int]] = {}
 
         def _register_location_match(
@@ -630,7 +673,7 @@ class LetterboxdScraper:
                 )
             # Cross-check favorites (unified helper)
             self._cross_check_favorites(
-                u, profile.favorite_films, clean_slugs,
+                u, profile.favorite_films, scoring_slugs,
                 film_title_map, user_film_interactions[u],
             )
 
@@ -638,14 +681,30 @@ class LetterboxdScraper:
         # safe concurrency limit. Resolving them together removes one full network
         # round trip per film from the critical path on a cold search.
         metadata_started = time.monotonic()
-        film_metadata = await asyncio.gather(
-            *(self.get_film_info(slug) for slug in clean_slugs)
+        metadata_tasks = [
+            asyncio.create_task(self.get_film_info(slug)) for slug in discovery_slugs
+        ]
+        metadata_done, metadata_pending = await asyncio.wait(
+            metadata_tasks,
+            timeout=max(0.0, deadline - time.monotonic()),
         )
+        for pending_task in metadata_pending:
+            pending_task.cancel()
+        if metadata_pending:
+            await asyncio.gather(*metadata_pending, return_exceptions=True)
+            stats.partial = True
+            stats.stop_reason = "time_budget"
+        film_metadata = [
+            task.result()
+            if task in metadata_done and not task.cancelled() and task.exception() is None
+            else None
+            for task in metadata_tasks
+        ]
         stats.metadata_seconds = time.monotonic() - metadata_started
-        metadata_by_slug = dict(zip(clean_slugs, film_metadata))
+        metadata_by_slug = dict(zip(discovery_slugs, film_metadata))
 
         scan_slugs = sorted(
-            clean_slugs,
+            discovery_slugs,
             key=lambda slug: (
                 metadata_by_slug[slug].member_count is None if metadata_by_slug[slug] else True,
                 metadata_by_slug[slug].member_count
@@ -654,9 +713,10 @@ class LetterboxdScraper:
             ),
         )
 
+        stop_scanning = _stop_for_budget()
         for film_idx, slug in enumerate(scan_slugs, 1):
-            if cancel_event and cancel_event.is_set():
-                raise asyncio.CancelledError
+            if stop_scanning or _stop_for_budget():
+                break
             film_meta = metadata_by_slug[slug] or FilmMetadata(
                 slug=slug,
                 title=slug.replace("-", " ").title(),
@@ -669,9 +729,13 @@ class LetterboxdScraper:
             logger.debug(f"[Scraper] Scouting film {film_idx}/{len(scan_slugs)}: '{slug}' ({film_title})")
 
             for endpoint_suffix, desc in endpoints:
+                if stop_scanning or _stop_for_budget():
+                    stop_scanning = True
+                    break
                 for page in range(1, query.max_pages_per_film + 1):
-                    if cancel_event and cancel_event.is_set():
-                        raise asyncio.CancelledError
+                    if _stop_for_budget():
+                        stop_scanning = True
+                        break
                     # Check cache first
                     cache_started = time.monotonic()
                     items = await self.cache.get_film_page(slug, endpoint_suffix, page)
@@ -741,7 +805,16 @@ class LetterboxdScraper:
                     # Fetch uncached profiles concurrently in chunks
                     batch_size = 25
                     for i in range(0, len(uncached_usernames), batch_size):
-                        chunk = uncached_usernames[i : i + batch_size]
+                        if _stop_for_budget():
+                            stop_scanning = True
+                            break
+                        remaining_profiles = profile_budget - stats.profiles_fetched
+                        chunk = uncached_usernames[i : i + min(batch_size, remaining_profiles)]
+                        if not chunk:
+                            stats.partial = True
+                            stats.stop_reason = "profile_budget"
+                            stop_scanning = True
+                            break
                         logger.debug(f"[Scraper] Fetching {len(chunk)} uncached profiles for film '{slug}'...")
 
                         async def fetch_one(u_name: str) -> Optional[UserProfile]:
@@ -751,8 +824,21 @@ class LetterboxdScraper:
                                 return None
                             return parse_user_profile_page(r.text, u_name)
 
-                        tasks = [fetch_one(u) for u in chunk]
-                        fetched_profiles = await asyncio.gather(*tasks)
+                        tasks = [asyncio.create_task(fetch_one(u)) for u in chunk]
+                        remaining_seconds = max(0.0, deadline - time.monotonic())
+                        done, pending = await asyncio.wait(tasks, timeout=remaining_seconds)
+                        for pending_task in pending:
+                            pending_task.cancel()
+                        if pending:
+                            await asyncio.gather(*pending, return_exceptions=True)
+                            stats.partial = True
+                            stats.stop_reason = "time_budget"
+                            stop_scanning = True
+                        fetched_profiles = [
+                            task.result()
+                            for task in tasks
+                            if task in done and not task.cancelled() and task.exception() is None
+                        ]
                         valid_profiles = [p for p in fetched_profiles if p is not None]
                         if valid_profiles:
                             await self.cache.save_user_profiles_batch(valid_profiles)
@@ -768,6 +854,9 @@ class LetterboxdScraper:
                                     slug, film_title, page_candidates[p.username],
                                 )
 
+                        if stop_scanning:
+                            break
+
                     if progress_callback:
                         progress_callback(
                             f"Scouting film {film_idx}/{len(scan_slugs)} ({slug}) - Page {page}",
@@ -775,6 +864,12 @@ class LetterboxdScraper:
                             stats.total_users_discovered,
                             len([u for u, ints in user_film_interactions.items() if len(ints) >= query.min_shared_films]),
                         )
+
+                    if stop_scanning:
+                        break
+
+                if stop_scanning:
+                    break
 
             qualified_candidates = sum(
                 1
@@ -792,6 +887,9 @@ class LetterboxdScraper:
                 )
                 break
 
+            if stop_scanning:
+                break
+
         # Cross-reference candidate profile details / library for all location matches
         logger.debug(f"[Matcher] Cross-referencing libraries for {len(user_profile_cache)} location-matched users...")
         profile_entries = list(user_profile_cache.items())
@@ -807,14 +905,14 @@ class LetterboxdScraper:
 
             # Check favorites on profile (unified helper)
             self._cross_check_favorites(
-                u_name, p.favorite_films, clean_slugs,
+                u_name, p.favorite_films, scoring_slugs,
                 film_title_map, user_film_interactions[u_name],
             )
 
             # Check cached detail (favorites + top rated + liked + recent)
             if cached_detail:
                 self._cross_check_favorites(
-                    u_name, cached_detail.favorite_films, clean_slugs,
+                    u_name, cached_detail.favorite_films, scoring_slugs,
                     film_title_map, user_film_interactions[u_name],
                 )
                 all_lib_films = (
@@ -823,7 +921,7 @@ class LetterboxdScraper:
                     + (cached_detail.recent_films or [])
                 )
                 for lf in all_lib_films:
-                    if lf.slug in clean_slugs:
+                    if lf.slug in scoring_slugs:
                         if not any(i.film_slug == lf.slug for i in user_film_interactions[u_name]):
                             user_film_interactions[u_name].append(
                                 FilmInteraction(
@@ -838,8 +936,8 @@ class LetterboxdScraper:
 
         # Assemble and rank taste match results using weighted scoring model
         results: List[TasteMatchResult] = []
-        total_films_count = len(clean_slugs)
-        all_target_tiers = [fingerprint.get_tier(s) for s in clean_slugs] if fingerprint else None
+        total_films_count = len(scoring_slugs)
+        all_target_tiers = [fingerprint.get_tier(s) for s in scoring_slugs] if fingerprint else None
         if fingerprint:
             for interactions in user_film_interactions.values():
                 for interaction in interactions:

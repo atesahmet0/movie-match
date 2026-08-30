@@ -131,12 +131,13 @@ export default function TasteSoulmatesSection({
 
     const loc = overrideLocation || targetLocation || userProfile.location || "Anywhere";
     const filmsParam = favoriteSlugs.join(",");
+    const run = Date.now();
 
     startTransition(() => {
       router.push(
-        `/?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
+        `/scout?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
           loc
-        )}&user=${encodeURIComponent(userProfile.username)}&minShared=${minShared}&maxPages=2&limit=10`
+        )}&user=${encodeURIComponent(userProfile.username)}&min_shared=${minShared}&max_pages=2&limit=10&run=${run}`
       );
     });
   };

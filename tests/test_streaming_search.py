@@ -13,6 +13,7 @@ def test_streaming_search_emits_progress_result_and_completion(monkeypatch):
         result_callback=None,
         progress_callback=None,
         cancel_event=None,
+        bypass_cache=False,
     ):
         match = UserMatch(username="ripley", display_name="Ellen Ripley")
         progress_callback("Checking profiles", 1, 4, 0)
@@ -51,3 +52,43 @@ def test_metrics_endpoint_has_search_health_fields():
     assert "search_cache_hit_ratio" in metrics
     assert "average_time_to_first_result_seconds" in metrics
     assert "http_requests_total" in metrics
+
+
+def test_streaming_taste_search_forwards_scoring_profile_and_partial_status(monkeypatch):
+    captured = {}
+
+    async def fake_taste_search(
+        query,
+        *,
+        progress_callback=None,
+        cancel_event=None,
+        bypass_cache=False,
+    ):
+        captured["query"] = query
+        captured["bypass_cache"] = bypass_cache
+        stats = ScanStats(
+            film_slug="alien",
+            film_title="Alien, Sunshine",
+            partial=True,
+            stop_reason="profile_budget",
+            elapsed_seconds=0.2,
+        )
+        return {
+            "status": "success",
+            "films": query.films,
+            "stats": stats.model_dump(mode="json"),
+            "matches_count": 0,
+            "matches": [],
+        }
+
+    monkeypatch.setattr(web_app, "_run_taste_search", fake_taste_search)
+    response = TestClient(web_app.app).get(
+        "/api/search/stream?films=alien,sunshine-2007&min_shared=2&source_username=karsten&refresh=true"
+    )
+
+    assert response.status_code == 200
+    assert "event: complete" in response.text
+    assert '"partial": true' in response.text
+    assert captured["query"].min_shared_films == 2
+    assert captured["query"].source_username == "karsten"
+    assert captured["bypass_cache"] is True
