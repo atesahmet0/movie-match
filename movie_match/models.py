@@ -62,6 +62,7 @@ class SearchQuery(BaseModel):
     max_pages: int = 2
     limit_matches: int = 10
     concurrency: int = 15
+    source_username: Optional[str] = None
 
 
 class WaitlistRequest(BaseModel):
@@ -115,6 +116,11 @@ class TasteMatchResult(BaseModel):
     intensity_score: float = 0.0
     affinity_score: float = 0.0
     correlation_score: float = 0.0
+    # Number of films both members rated. Below MIN_CORRELATION_PAIRS the
+    # correlation score is a neutral placeholder, not a measurement.
+    correlation_pairs: int = 0
+    confidence: float = 0.0
+    ranking_score: float = 0.0
     total_target_films: int = 0
 
 

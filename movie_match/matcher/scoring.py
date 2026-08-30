@@ -6,11 +6,17 @@ Computes a compatibility score from four orthogonal signals:
   - Affinity     (0.15): strength of discovery signal (likes/fans > ratings > generic)
   - Correlation  (0.35): Pearson correlation on shared film ratings (gold standard)
 
+Signals that cannot be measured are dropped and their weight is redistributed
+across the signals that could be, so a missing input never masquerades as a
+mediocre one. Because dropping a signal makes thin evidence look confident, the
+breakdown also carries a `ranking_score` that shrinks toward the neutral prior
+when there is little evidence — display `overall`, sort on `ranking_score`.
+
 Plus an IDF-based rarity modifier that boosts niche film overlap.
 """
 
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional
 
 # Weights — sum to 1.0
 W_BREADTH = 0.30
@@ -49,22 +55,58 @@ TIER_WEIGHTS: Dict[str, float] = {
 # Minimum shared rated films for Pearson correlation to be meaningful
 MIN_CORRELATION_PAIRS = 3
 
+# Intensity fallback for a film the member watched but never rated
+DEFAULT_UNRATED_BASELINE = 0.6
+
+# Rarity is a modest bonus on breadth, not a per-film multiplier on the
+# numerator alone (which used to let a single niche film saturate breadth).
+RARITY_BONUS_MAX = 0.25
+
+# Evidence needed before a score is trusted at face value for ranking.
+# Shared films count once; films rated by both sides count half again.
+CONFIDENCE_FULL_EVIDENCE = 6.0
+NEUTRAL_PRIOR = 0.5
+
+
+class ScoreBreakdown(NamedTuple):
+    """Result of a compatibility computation.
+
+    `overall` is the honest quality score over the signals that could actually
+    be measured. `ranking_score` is `overall` shrunk toward NEUTRAL_PRIOR by
+    `confidence` and is what results should be sorted by. All score fields are
+    percentages in [0, 100]; `confidence` is a fraction in [0, 1].
+    """
+
+    overall: float
+    breadth: float
+    intensity: float
+    affinity: float
+    correlation: float
+    correlation_pairs: int
+    confidence: float
+    ranking_score: float
+
 
 def _film_intensity(
     user_rating: Optional[float],
     user_liked: Optional[bool],
     is_favorite: bool,
+    unrated_baseline: float = DEFAULT_UNRATED_BASELINE,
 ) -> float:
     """Compute per-film intensity score in [0, 1].
 
     Combines rating signal, like signal, and favorite signal.
+
+    `unrated_baseline` stands in for films the member watched but never rated.
+    Callers pass this member's own average rating where one is known, so a
+    heavy watcher who rarely rates is measured against their own habits rather
+    than a constant.
     """
     # Base from rating (if available)
     if user_rating is not None and user_rating > 0:
         base = min(user_rating / 5.0, 1.0)
     else:
-        # Unknown rating — assign neutral baseline
-        base = 0.6
+        base = unrated_baseline
 
     # Liked bonus
     if user_liked:
@@ -191,7 +233,7 @@ def compute_compatibility_score(
     film_signals: List[FilmSignals],
     total_target_films: int,
     all_target_tiers: Optional[List[str]] = None,
-) -> Tuple[float, float, float, float, float]:
+) -> ScoreBreakdown:
     """Compute weighted compatibility score with tier-weighted breadth and rating correlation.
 
     Args:
@@ -200,19 +242,19 @@ def compute_compatibility_score(
         all_target_tiers: Tiers of ALL target films (for weighted breadth denominator).
                           If None, falls back to flat breadth.
 
-    Returns: (overall_score, breadth_score, intensity_score, affinity_score, correlation_score)
-    All values are percentages in [0, 100].
+    Returns: a ScoreBreakdown. Signals with no data behind them are excluded
+    from the weighted average rather than imputed, so `overall` answers "of what
+    we could measure, how well do these two match".
     """
     if total_target_films <= 0 or not film_signals:
-        return (0.0, 0.0, 0.0, 0.0, 0.0)
+        return ScoreBreakdown(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0)
 
     shared_count = len(film_signals)
 
-    # --- Breadth (tier-weighted) ---
+    # --- Breadth (tier-weighted coverage, with a bounded rarity bonus) ---
     if all_target_tiers:
         weighted_shared = sum(
-            TIER_WEIGHTS.get(fs.film_tier, 1.0) * _film_rarity_weight(fs.member_count)
-            for fs in film_signals
+            TIER_WEIGHTS.get(fs.film_tier, 1.0) for fs in film_signals
         )
         weighted_total = sum(
             TIER_WEIGHTS.get(t, 1.0)
@@ -223,12 +265,30 @@ def compute_compatibility_score(
         # Flat breadth (legacy fallback)
         breadth = shared_count / total_target_films
 
-    # Clamp breadth to [0, 1] — rarity can push it above 1.0
+    # Rarity applies to the whole ratio rather than inflating the numerator
+    # against a rarity-free denominator. Averaged over the shared films and
+    # capped, so niche overlap is a real edge without saturating breadth.
+    rarities = [_film_rarity_weight(fs.member_count) for fs in film_signals]
+    avg_rarity = sum(rarities) / len(rarities) if rarities else 1.0
+    breadth *= 1.0 + RARITY_BONUS_MAX * (avg_rarity - 1.0) / 2.0
+
+    # Clamp breadth to [0, 1] — the rarity bonus can push it above 1.0
     breadth = min(breadth, 1.0)
 
     # --- Intensity (average per-film intensity) ---
+    # Unrated films fall back to this member's own average rating where we have
+    # one, instead of a flat constant that reads as a lukewarm 3 stars.
+    own_ratings = [
+        fs.user_rating for fs in film_signals
+        if fs.user_rating is not None and fs.user_rating > 0
+    ]
+    unrated_baseline = (
+        min(sum(own_ratings) / len(own_ratings) / 5.0, 1.0)
+        if own_ratings
+        else DEFAULT_UNRATED_BASELINE
+    )
     intensities = [
-        _film_intensity(fs.user_rating, fs.user_liked, fs.is_favorite)
+        _film_intensity(fs.user_rating, fs.user_liked, fs.is_favorite, unrated_baseline)
         for fs in film_signals
     ]
     intensity = sum(intensities) / len(intensities) if intensities else 0.0
@@ -249,28 +309,43 @@ def compute_compatibility_score(
             source_ratings.append(fs.source_rating)
             candidate_ratings.append(fs.user_rating)
 
-    if len(source_ratings) >= MIN_CORRELATION_PAIRS:
+    correlation_pairs = len(source_ratings)
+    has_correlation = correlation_pairs >= MIN_CORRELATION_PAIRS
+    if has_correlation:
         raw_corr = _pearson_correlation(source_ratings, candidate_ratings)
         # Map [-1, 1] → [0, 1] for scoring: -1→0, 0→0.5, 1→1.0
         correlation = (raw_corr + 1.0) / 2.0
     else:
-        # Insufficient data — use a neutral estimate based on intensity
-        # (if they rate films highly that the source also rates highly, assume mild correlation)
-        correlation = 0.5  # Neutral — doesn't help or hurt
+        # Not measurable — reported as the neutral prior for display, but left
+        # out of the weighted average below so it neither helps nor caps.
+        correlation = NEUTRAL_PRIOR
 
-    # --- Weighted composite ---
-    raw = (
-        W_BREADTH * breadth
-        + W_INTENSITY * intensity
-        + W_AFFINITY * affinity
-        + W_CORRELATION * correlation
+    # --- Weighted composite over the measurable signals only ---
+    parts = [
+        (W_BREADTH, breadth),
+        (W_INTENSITY, intensity),
+        (W_AFFINITY, affinity),
+    ]
+    if has_correlation:
+        parts.append((W_CORRELATION, correlation))
+
+    total_weight = sum(w for w, _ in parts)
+    raw = sum(w * v for w, v in parts) / total_weight if total_weight > 0 else 0.0
+
+    # --- Confidence and shrunk ranking score ---
+    # Renormalising lifts thin matches, so rank on a score pulled back toward
+    # the neutral prior until there is enough evidence to justify it.
+    evidence = shared_count + 0.5 * correlation_pairs
+    confidence = min(1.0, evidence / CONFIDENCE_FULL_EVIDENCE)
+    ranking = NEUTRAL_PRIOR + (raw - NEUTRAL_PRIOR) * confidence
+
+    return ScoreBreakdown(
+        overall=round(min(raw * 100, 100.0), 1),
+        breadth=round(breadth * 100, 1),
+        intensity=round(intensity * 100, 1),
+        affinity=round(affinity * 100, 1),
+        correlation=round(correlation * 100, 1),
+        correlation_pairs=correlation_pairs,
+        confidence=round(confidence, 3),
+        ranking_score=round(min(ranking * 100, 100.0), 1),
     )
-
-    # Scale to percentage and clamp
-    overall = round(min(raw * 100, 100.0), 1)
-    breadth_pct = round(breadth * 100, 1)
-    intensity_pct = round(intensity * 100, 1)
-    affinity_pct = round(affinity * 100, 1)
-    correlation_pct = round(correlation * 100, 1)
-
-    return (overall, breadth_pct, intensity_pct, affinity_pct, correlation_pct)

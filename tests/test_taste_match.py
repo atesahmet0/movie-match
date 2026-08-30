@@ -200,14 +200,14 @@ def test_tiered_breadth_favorites_worth_more():
                      found_via="Pinned Favorite", film_tier="favorite"),
     ]
     tiers_all = ["favorite", "top_rated", "liked", "recent"]
-    _, breadth_fav, _, _, _ = compute_compatibility_score(signals_fav, 4, tiers_all)
+    breadth_fav = compute_compatibility_score(signals_fav, 4, tiers_all).breadth
 
     # Scenario 2: Match on 1 recent watch out of 4 films
     signals_recent = [
         FilmSignals(user_rating=3.0, user_liked=False, is_favorite=False,
                      found_via="All Members (Watched)", film_tier="recent"),
     ]
-    _, breadth_recent, _, _, _ = compute_compatibility_score(signals_recent, 4, tiers_all)
+    breadth_recent = compute_compatibility_score(signals_recent, 4, tiers_all).breadth
 
     assert breadth_fav > breadth_recent
 
@@ -228,26 +228,27 @@ def test_correlation_boosts_compatible_users():
     ]
     tiers = ["favorite", "top_rated", "liked"]
 
-    overall_agree, _, _, _, corr_agree = compute_compatibility_score(signals_agree, 3, tiers)
-    overall_disagree, _, _, _, corr_disagree = compute_compatibility_score(signals_disagree, 3, tiers)
+    agree = compute_compatibility_score(signals_agree, 3, tiers)
+    disagree = compute_compatibility_score(signals_disagree, 3, tiers)
 
-    assert corr_agree > corr_disagree
-    assert overall_agree > overall_disagree
+    assert agree.correlation > disagree.correlation
+    assert agree.overall > disagree.overall
 
 
-def test_scoring_returns_5_tuple():
-    """compute_compatibility_score should return 5 values."""
+def test_scoring_returns_full_breakdown():
+    """compute_compatibility_score should return a complete ScoreBreakdown."""
     signals = [
         FilmSignals(user_rating=4.0, user_liked=True, found_via="Movie Likes (Hearts)"),
     ]
     result = compute_compatibility_score(signals, 2)
-    assert len(result) == 5
-    overall, breadth, intensity, affinity, correlation = result
-    assert 0 <= overall <= 100
-    assert 0 <= breadth <= 100
-    assert 0 <= intensity <= 100
-    assert 0 <= affinity <= 100
-    assert 0 <= correlation <= 100
+    assert 0 <= result.overall <= 100
+    assert 0 <= result.breadth <= 100
+    assert 0 <= result.intensity <= 100
+    assert 0 <= result.affinity <= 100
+    assert 0 <= result.correlation <= 100
+    assert result.correlation_pairs == 0
+    assert 0 <= result.confidence <= 1
+    assert 0 <= result.ranking_score <= 100
 
 
 def test_scoring_legacy_no_tiers():
@@ -257,20 +258,24 @@ def test_scoring_legacy_no_tiers():
         FilmSignals(user_rating=5.0, user_liked=True, found_via="Pinned Favorite"),
     ]
     result = compute_compatibility_score(signals, 4)  # no all_target_tiers
-    overall, breadth, intensity, affinity, correlation = result
-    assert overall > 0
-    assert breadth == 50.0  # 2/4 = 50% flat breadth
+    assert result.overall > 0
+    assert result.breadth == 50.0  # 2/4 = 50% flat breadth
 
 
-def test_scoring_insufficient_correlation_uses_neutral():
-    """When fewer than 3 shared rated films, correlation should be neutral (50%)."""
+def test_scoring_insufficient_correlation_reports_placeholder():
+    """Below 3 shared rated films correlation is a placeholder, not a measurement.
+
+    It is reported as the neutral 50% for display but excluded from the
+    weighted average, so it neither helps nor caps the score.
+    """
     signals = [
         FilmSignals(user_rating=5.0, source_rating=5.0, film_tier="favorite"),
         FilmSignals(user_rating=4.0, source_rating=4.0, film_tier="top_rated"),
         # Only 2 pairs — below MIN_CORRELATION_PAIRS threshold
     ]
-    _, _, _, _, corr = compute_compatibility_score(signals, 4, ["favorite", "top_rated", "liked", "recent"])
-    assert corr == 50.0  # Neutral
+    result = compute_compatibility_score(signals, 4, ["favorite", "top_rated", "liked", "recent"])
+    assert result.correlation == 50.0  # Neutral placeholder
+    assert result.correlation_pairs == 2
 
 
 # ───────────────────────────────────────────────────────────────────────

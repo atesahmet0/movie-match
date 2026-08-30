@@ -109,6 +109,11 @@ export interface TasteMatchResult {
   intensity_score: number;
   affinity_score: number;
   correlation_score: number;
+  /** Films rated by both members. Under 3, correlation_score is a neutral
+   *  placeholder rather than a measurement — show the count, not the score. */
+  correlation_pairs: number;
+  confidence: number;
+  ranking_score: number;
   total_target_films: number;
 }
 

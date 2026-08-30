@@ -71,6 +71,14 @@ function TasteMatchCard({ match, index }: TasteMatchCardProps) {
               <span className="mt-1 block font-mono text-xs text-brand-muted tabular-nums">
                 {match.shared_films_count} of {match.total_target_films} Films
               </span>
+              {/* The score is computed over the signals we could measure, so a
+                  thin match can still score high — say so rather than let the
+                  percentage speak alone. */}
+              {match.confidence < 0.6 && (
+                <span className="mt-0.5 block font-mono text-xs text-brand-muted/70">
+                  Limited evidence
+                </span>
+              )}
             </div>
           </div>
 

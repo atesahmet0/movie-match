@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { fetchFilmInfo } from "@/lib/api";
+import { useTaste } from "@/lib/taste-context";
 import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
 
 export interface UseScoutFormProps {
@@ -23,6 +24,7 @@ export function useScoutForm({
   initialIncludeBio = false,
 }: UseScoutFormProps = {}) {
   const router = useRouter();
+  const { activeUsername } = useTaste();
   const [isPending, startTransition] = useTransition();
 
   const [selectedFilms, setSelectedFilms] = useState<SelectedFilmChip[]>([]);
@@ -217,6 +219,9 @@ export function useScoutForm({
       include_bio: String(includeBio),
       run: String(Date.now()),
     });
+    // Without this the backend cannot exclude you from your own results, and
+    // has no fingerprint of your ratings to correlate candidates against.
+    if (activeUsername) params.set("user", activeUsername);
 
     startTransition(() => {
       router.push(`/scout?${params.toString()}`, { scroll: false });

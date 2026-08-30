@@ -12,6 +12,7 @@ import {
   TasteMatchResult,
   UserMatch,
 } from "@/lib/types";
+import { useTaste } from "@/lib/taste-context";
 
 interface ScoutSearchResultsProps {
   films: string[];
@@ -47,6 +48,10 @@ export default function ScoutSearchResults({
   const [error, setError] = useState<string | null>(null);
   const deferredMatches = useDeferredValue(matches);
   const isMulti = films.length > 1;
+  const { activeUsername } = useTaste();
+  // The URL param wins (a shared link is explicit), but a connected profile
+  // still applies when the scout form was submitted without one.
+  const effectiveSourceUsername = sourceUsername || activeUsername;
 
   const searchUrl = useMemo(() => {
     if (films.length === 0) return null;
@@ -59,13 +64,13 @@ export default function ScoutSearchResults({
       include_bio: String(includeBio),
       min_shared: String(minShared),
     });
-    if (sourceUsername) params.set("source_username", sourceUsername);
+    if (effectiveSourceUsername) params.set("source_username", effectiveSourceUsername);
     if (searchRun) {
       params.set("request_id", searchRun);
       params.set("refresh", "true");
     }
     return `/api/search/stream?${params.toString()}`;
-  }, [films, location, sentiment, maxPages, limit, includeBio, minShared, sourceUsername, searchRun]);
+  }, [films, location, sentiment, maxPages, limit, includeBio, minShared, effectiveSourceUsername, searchRun]);
 
   useEffect(() => {
     if (!searchUrl) return;

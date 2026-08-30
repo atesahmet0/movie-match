@@ -313,6 +313,7 @@ async def api_search(
     max_pages: int = Query(2, ge=1, le=20),
     limit: int = Query(10, ge=1, le=500),
     include_bio: bool = Query(False),
+    source_username: Optional[str] = Query(None),
 ):
     query = SearchQuery(
         film_input=film,
@@ -322,6 +323,7 @@ async def api_search(
         include_bio=include_bio,
         max_pages=max_pages,
         limit_matches=limit,
+        source_username=source_username,
     )
 
     return await _run_single_search(query)
@@ -414,6 +416,7 @@ async def api_stream_search(
                             include_bio=include_bio,
                             max_pages=max_pages,
                             limit_matches=limit,
+                            source_username=source_username,
                         ),
                         result_callback=on_result,
                         progress_callback=on_progress,

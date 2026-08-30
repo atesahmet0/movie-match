@@ -83,14 +83,15 @@ class TestFilmAffinity:
 
 class TestComputeCompatibilityScore:
     def test_empty_signals(self):
-        overall, breadth, intensity, affinity, correlation = compute_compatibility_score([], 4)
-        assert overall == 0.0
-        assert breadth == 0.0
+        score = compute_compatibility_score([], 4)
+        assert score.overall == 0.0
+        assert score.breadth == 0.0
+        assert score.confidence == 0.0
+        assert score.ranking_score == 0.0
 
     def test_zero_target_films(self):
         signals = [FilmSignals(user_rating=5.0)]
-        overall, _, _, _, _ = compute_compatibility_score(signals, 0)
-        assert overall == 0.0
+        assert compute_compatibility_score(signals, 0).overall == 0.0
 
     def test_perfect_match_all_favorites(self):
         """User has all 4 target films as favorites with 5★ ratings."""
@@ -100,11 +101,13 @@ class TestComputeCompatibilityScore:
             FilmSignals(user_rating=5.0, user_liked=True, is_favorite=True, found_via="Pinned Favorite"),
             FilmSignals(user_rating=5.0, user_liked=True, is_favorite=True, found_via="Pinned Favorite"),
         ]
-        overall, breadth, intensity, affinity, correlation = compute_compatibility_score(signals, 4)
-        assert breadth == 100.0
-        assert intensity == 100.0
-        assert affinity == 100.0
-        assert overall >= 80.0
+        score = compute_compatibility_score(signals, 4)
+        assert score.breadth == 100.0
+        assert score.intensity == 100.0
+        assert score.affinity == 100.0
+        # No source ratings, so correlation drops out and the measurable
+        # signals — all perfect — carry the full weight.
+        assert score.overall == 100.0
 
     def test_partial_overlap_high_intensity(self):
         """User matched 2/4 films but rated them both 5★ and liked."""
@@ -112,10 +115,10 @@ class TestComputeCompatibilityScore:
             FilmSignals(user_rating=5.0, user_liked=True, found_via="Movie Likes (Hearts)"),
             FilmSignals(user_rating=5.0, user_liked=True, found_via="Movie Likes (Hearts)"),
         ]
-        overall, breadth, intensity, affinity, correlation = compute_compatibility_score(signals, 4)
-        assert breadth == 50.0
-        assert intensity == 100.0  # capped at 1.0 per film
-        assert overall > 40.0
+        score = compute_compatibility_score(signals, 4)
+        assert score.breadth == 50.0
+        assert score.intensity == 100.0  # capped at 1.0 per film
+        assert score.overall > 40.0
 
     def test_full_overlap_low_intensity(self):
         """User matched 4/4 films but rated them all 2★, no likes."""
@@ -125,10 +128,10 @@ class TestComputeCompatibilityScore:
             FilmSignals(user_rating=2.0, found_via="All Member Ratings"),
             FilmSignals(user_rating=2.0, found_via="All Member Ratings"),
         ]
-        overall, breadth, intensity, affinity, correlation = compute_compatibility_score(signals, 4)
-        assert breadth == 100.0
-        assert intensity < 50.0  # low ratings
-        assert overall < 80.0  # pulled down by low intensity
+        score = compute_compatibility_score(signals, 4)
+        assert score.breadth == 100.0
+        assert score.intensity < 50.0  # low ratings
+        assert score.overall < 80.0  # pulled down by low intensity
 
     def test_passionate_fan_beats_casual_watcher(self):
         """A user with 2/4 films rated 5★ + favorites should outscore 4/4 films rated 2★."""
@@ -142,8 +145,8 @@ class TestComputeCompatibilityScore:
             FilmSignals(user_rating=2.0, found_via="All Member Ratings"),
             FilmSignals(user_rating=2.0, found_via="All Member Ratings"),
         ]
-        passionate_score, _, _, _, _ = compute_compatibility_score(passionate, 4)
-        casual_score, _, _, _, _ = compute_compatibility_score(casual, 4)
+        passionate_score = compute_compatibility_score(passionate, 4).overall
+        casual_score = compute_compatibility_score(casual, 4).overall
         assert passionate_score > casual_score, (
             f"Passionate fan ({passionate_score}) should beat casual watcher ({casual_score})"
         )
@@ -151,9 +154,9 @@ class TestComputeCompatibilityScore:
     def test_single_film_query(self):
         """With only 1 target film, breadth = 100% if matched."""
         signals = [FilmSignals(user_rating=4.0, user_liked=True, found_via="Movie Likes (Hearts)")]
-        overall, breadth, _, _, _ = compute_compatibility_score(signals, 1)
-        assert breadth == 100.0
-        assert overall > 60.0
+        score = compute_compatibility_score(signals, 1)
+        assert score.breadth == 100.0
+        assert score.overall > 60.0
 
     def test_score_never_exceeds_100(self):
         """Score should never exceed 100 regardless of inputs."""
@@ -161,6 +164,105 @@ class TestComputeCompatibilityScore:
             FilmSignals(user_rating=5.0, user_liked=True, is_favorite=True, found_via="Pinned Favorite")
             for _ in range(10)
         ]
-        overall, _, _, _, _ = compute_compatibility_score(signals, 5)
-        assert overall <= 100.0
+        assert compute_compatibility_score(signals, 5).overall <= 100.0
 
+
+
+# ================ missing-signal renormalisation & confidence ================
+
+
+class TestMissingSignalHandling:
+    def test_absent_correlation_does_not_cap_the_score(self):
+        """With no source ratings, a perfect match must still reach 100.
+
+        The old model imputed correlation at 0.5 and silently capped every such
+        match at 82.5% — which is how a user matched against themselves and
+        scored 80.6%.
+        """
+        signals = [
+            FilmSignals(
+                user_rating=5.0, user_liked=True, is_favorite=True,
+                found_via="Pinned Favorite", film_tier="favorite",
+            )
+            for _ in range(4)
+        ]
+        score = compute_compatibility_score(signals, 4, ["favorite"] * 4)
+        assert score.correlation_pairs == 0
+        assert score.overall > 82.5
+        assert score.overall == 100.0
+
+    def test_measured_correlation_still_counts(self):
+        """When correlation is available it carries its full weight."""
+        agree = [
+            FilmSignals(user_rating=5.0, source_rating=5.0, found_via="Pinned Favorite"),
+            FilmSignals(user_rating=4.0, source_rating=4.0, found_via="Pinned Favorite"),
+            FilmSignals(user_rating=2.0, source_rating=2.0, found_via="Pinned Favorite"),
+        ]
+        disagree = [
+            FilmSignals(user_rating=5.0, source_rating=2.0, found_via="Pinned Favorite"),
+            FilmSignals(user_rating=4.0, source_rating=4.0, found_via="Pinned Favorite"),
+            FilmSignals(user_rating=2.0, source_rating=5.0, found_via="Pinned Favorite"),
+        ]
+        hi = compute_compatibility_score(agree, 3)
+        lo = compute_compatibility_score(disagree, 3)
+        assert hi.correlation_pairs == 3
+        assert hi.correlation > lo.correlation
+        assert hi.overall > lo.overall
+
+    def test_correlation_pairs_reported_below_threshold(self):
+        """Pair count is exposed so the UI can say 'not measured' instead of 50%."""
+        signals = [
+            FilmSignals(user_rating=5.0, source_rating=5.0),
+            FilmSignals(user_rating=4.0, source_rating=4.0),
+        ]
+        score = compute_compatibility_score(signals, 4)
+        assert score.correlation_pairs == 2
+        assert score.correlation == 50.0  # placeholder, excluded from the average
+
+    def test_thin_match_is_shrunk_for_ranking(self):
+        """A one-film match may score well but must not outrank a broad one."""
+        thin = [
+            FilmSignals(
+                user_rating=5.0, user_liked=True, is_favorite=True,
+                found_via="Pinned Favorite", film_tier="favorite",
+            )
+        ]
+        broad = [
+            FilmSignals(
+                user_rating=5.0, user_liked=True, is_favorite=True,
+                found_via="Pinned Favorite", film_tier="favorite",
+            )
+            for _ in range(6)
+        ]
+        thin_score = compute_compatibility_score(thin, 1, ["favorite"])
+        broad_score = compute_compatibility_score(broad, 6, ["favorite"] * 6)
+        assert thin_score.overall == broad_score.overall == 100.0
+        assert thin_score.confidence < broad_score.confidence
+        assert thin_score.ranking_score < broad_score.ranking_score
+        assert broad_score.confidence == 1.0
+
+    def test_unrated_film_uses_members_own_average(self):
+        """An unrated watch is judged against this member's own rating habits."""
+        # This member rates high; the unrated film should not drag them to 0.6.
+        signals = [
+            FilmSignals(user_rating=5.0, found_via="All Member Ratings"),
+            FilmSignals(user_rating=5.0, found_via="All Member Ratings"),
+            FilmSignals(user_rating=None, found_via="All Member Ratings"),
+        ]
+        generous = compute_compatibility_score(signals, 3)
+
+        stingy_signals = [
+            FilmSignals(user_rating=2.0, found_via="All Member Ratings"),
+            FilmSignals(user_rating=2.0, found_via="All Member Ratings"),
+            FilmSignals(user_rating=None, found_via="All Member Ratings"),
+        ]
+        stingy = compute_compatibility_score(stingy_signals, 3)
+        assert generous.intensity > stingy.intensity
+
+    def test_rarity_bonus_cannot_saturate_breadth(self):
+        """One niche film must not push partial overlap to full breadth."""
+        signals = [
+            FilmSignals(found_via="Pinned Favorite", film_tier="favorite", member_count=200),
+        ]
+        score = compute_compatibility_score(signals, 4, ["favorite"] * 4)
+        assert score.breadth < 100.0

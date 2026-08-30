@@ -147,11 +147,21 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                   <Sparkles className="w-3.5 h-3.5 text-brand-green" />
                   <span>Shared Films in Taste Matrix ({matchResult.shared_films.length})</span>
                 </span>
-                {matchResult.correlation_score > 0 && (
-                  <span className="text-xs font-normal text-brand-muted">
-                    Rating Agreement: {matchResult.correlation_score}%
-                  </span>
-                )}
+                {/* Below the 3-pair threshold the backend reports a neutral
+                    placeholder, so showing a percentage would invent a
+                    measurement that was never taken. */}
+                <span className="text-xs font-normal text-brand-muted">
+                  {matchResult.correlation_pairs >= 3 ? (
+                    <>
+                      Rating Agreement: {matchResult.correlation_score}%{" "}
+                      <span className="text-brand-subtext">
+                        ({matchResult.correlation_pairs} rated by both)
+                      </span>
+                    </>
+                  ) : (
+                    "Not enough mutually rated films"
+                  )}
+                </span>
               </div>
 
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">

@@ -138,6 +138,11 @@ class LetterboxdScraper:
         sentiment_plan = SentimentPlan(query.sentiment, query.rating_range)
         endpoints = sentiment_plan.get_film_endpoints(slug)
 
+        # Resolve source username for self-exclusion
+        source_user_lower: Optional[str] = None
+        if query.source_username:
+            source_user_lower = query.source_username.strip().lower().lstrip("@") or None
+
         logger.info(
             f"🔍 Starting user search: film='{slug}' ({film_title}), location='{query.location_query}', "
             f"sentiment='{query.sentiment.value}', max_pages={query.max_pages}, limit={query.limit_matches}"
@@ -205,6 +210,8 @@ class LetterboxdScraper:
                 page_candidates: Dict[str, Dict] = {}
                 for item in items:
                     u = item["username"]
+                    if source_user_lower and u.lower() == source_user_lower:
+                        continue
                     if u not in evaluated_usernames:
                         page_candidates[u] = {
                             "username": u,
@@ -416,14 +423,30 @@ class LetterboxdScraper:
 
         if include_films:
             try:
-                # Fetch recent films from page 1 of /films/
-                recent_films = await self.get_user_films_category(clean_user, "films", page=1, resolve_posters=False)
+                # /films/ carries recent activity, /films/by/rating/ carries this
+                # member's actual highest-rated films. Deriving "top rated" from
+                # the recent page alone left the rating pool one page deep, which
+                # is what starves the correlation signal downstream. Both pages
+                # are cached and independent, so fetch them together.
+                recent_films, rated_films = await asyncio.gather(
+                    self.get_user_films_category(clean_user, "films", page=1, resolve_posters=False),
+                    self.get_user_films_category(clean_user, "top_rated", page=1, resolve_posters=False),
+                    return_exceptions=True,
+                )
+                if isinstance(recent_films, BaseException):
+                    recent_films = []
+                if isinstance(rated_films, BaseException):
+                    rated_films = []
+
                 profile.recent_films = recent_films[:24]
 
-                # Top rated films from recent or /films/by/rating/
-                top_films = [f for f in recent_films if f.user_rating and f.user_rating >= 4.0]
-                if not top_films:
-                    top_films = await self.get_user_films_category(clean_user, "top_rated", page=1, resolve_posters=False)
+                # Top rated: the real ranked page first, recent high scorers after
+                top_films = [f for f in rated_films if f.user_rating and f.user_rating >= 4.0]
+                seen_top = {f.slug for f in top_films}
+                top_films.extend(
+                    f for f in recent_films
+                    if f.user_rating and f.user_rating >= 4.0 and f.slug not in seen_top
+                )
                 profile.top_rated_films = top_films[:24]
 
                 # Liked films from recent or /likes/films/
@@ -431,6 +454,21 @@ class LetterboxdScraper:
                 if not liked_films:
                     liked_films = await self.get_user_films_category(clean_user, "likes", page=1, resolve_posters=False)
                 profile.liked_films = liked_films[:24]
+
+                # Pinned favorites are parsed from the profile poster row, which
+                # carries no rating markup — so the strongest tier arrives
+                # unrated and can never contribute a correlation pair. Backfill
+                # from the rated pages we already have in hand.
+                if profile.favorite_films:
+                    ratings_by_slug = {
+                        f.slug: f.user_rating
+                        for f in list(rated_films) + list(recent_films)
+                        if f.slug and f.user_rating
+                    }
+                    for fav in profile.favorite_films:
+                        if fav.user_rating is None and fav.slug in ratings_by_slug:
+                            fav.user_rating = ratings_by_slug[fav.slug]
+                            fav.user_rating_stars = rating_to_stars_text(fav.user_rating)
             except Exception:
                 pass
 
@@ -964,7 +1002,7 @@ class LetterboxdScraper:
                     )
                     for fi in interactions
                 ]
-                overall, _breadth, intensity_pct, affinity_pct, correlation_pct = compute_compatibility_score(
+                score = compute_compatibility_score(
                     film_signals, total_films_count, all_target_tiers,
                 )
 
@@ -979,20 +1017,30 @@ class LetterboxdScraper:
                     matched_fields=fields,
                     shared_films=interactions,
                     shared_films_count=len(interactions),
-                    compatibility_score=overall,
-                    intensity_score=intensity_pct,
-                    affinity_score=affinity_pct,
-                    correlation_score=correlation_pct,
+                    compatibility_score=score.overall,
+                    intensity_score=score.intensity,
+                    affinity_score=score.affinity,
+                    correlation_score=score.correlation,
+                    correlation_pairs=score.correlation_pairs,
+                    confidence=score.confidence,
+                    ranking_score=score.ranking_score,
                     total_target_films=total_films_count,
                 )
                 results.append(res)
                 logger.info(
                     f"[green]✨ Taste match:[/green] @{p.username} ({p.display_name}) -> "
-                    f"[bold yellow]{overall}% Match[/bold yellow] ({len(interactions)} shared: {', '.join(i.film_slug for i in interactions[:3])})"
+                    f"[bold yellow]{score.overall}% Match[/bold yellow] "
+                    f"(rank {score.ranking_score}, {score.correlation_pairs} rated pairs, "
+                    f"{len(interactions)} shared: {', '.join(i.film_slug for i in interactions[:3])})"
                 )
 
-        # Sort by compatibility score descending (the weighted model already encodes breadth)
-        results.sort(key=lambda r: (r.compatibility_score, r.shared_films_count), reverse=True)
+        # Sort by the evidence-shrunk ranking score, not the displayed score: a
+        # one-film match with no ratings can score high on the signals we could
+        # measure, and should not outrank a well-evidenced match because of it.
+        results.sort(
+            key=lambda r: (r.ranking_score, r.compatibility_score, r.shared_films_count),
+            reverse=True,
+        )
         stats.matches_count = len(results)
         stats.elapsed_seconds = time.time() - start_time
         stats.time_to_first_result = stats.elapsed_seconds if results else None
