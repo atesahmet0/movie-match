@@ -1,8 +1,9 @@
-/* Hallmark · component: UserDetailModal · genre: atmospheric · theme: Midnight Cinema
+/* Hallmark · component: UserDetailModal · genre: editorial utility · theme: Studio Projection
  */
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ interface UserDetailModalProps {
 
 export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps) {
   const { setActiveUsername } = useTaste();
+  const router = useRouter();
 
   if (!user) return null;
 
@@ -44,7 +46,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="text-left space-y-4">
           <div className="flex items-start gap-4">
-            <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-brand-border bg-brand-card shrink-0 shadow-xl">
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-brand-border bg-brand-card">
               {user.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -97,7 +99,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
 
         {/* Bio */}
         {user.bio && (
-          <div className="bg-brand-card border border-brand-border rounded-xl p-3.5 text-xs sm:text-sm text-[#e1e7ed] italic relative">
+          <div className="relative border-y border-brand-border bg-brand-darker p-4 text-sm text-brand-text">
             <Quote className="w-4 h-4 text-brand-muted absolute top-2 right-2 opacity-30" />
             <p className="leading-relaxed whitespace-pre-wrap">{user.bio}</p>
           </div>
@@ -108,8 +110,8 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
           (scoutResult.user_rating_stars ||
             scoutResult.user_liked ||
             scoutResult.user_review) && (
-            <div className="bg-brand-card border border-brand-border rounded-xl p-4 space-y-3">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5 font-mono">
+            <div className="space-y-3 border-y border-brand-border py-4">
+              <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-brand-muted">
                 <Film className="w-3.5 h-3.5 text-brand-green" />
                 <span>Film Interaction</span>
               </div>
@@ -128,7 +130,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                 )}
               </div>
               {scoutResult.user_review && (
-                <div className="text-xs text-brand-subtext bg-brand-darker p-3 rounded-lg border border-brand-border leading-relaxed">
+                <div className="border-t border-brand-border pt-3 text-sm leading-relaxed text-brand-subtext">
                   {scoutResult.user_review}
                 </div>
               )}
@@ -140,13 +142,13 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
           matchResult.shared_films &&
           matchResult.shared_films.length > 0 && (
             <div className="space-y-2.5">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-brand-muted flex items-center justify-between font-mono">
+              <div className="flex items-center justify-between font-mono text-xs font-bold text-brand-muted">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-brand-green" />
                   <span>Shared Films in Taste Matrix ({matchResult.shared_films.length})</span>
                 </span>
                 {matchResult.correlation_score > 0 && (
-                  <span className="text-[10px] text-brand-blue normal-case">
+                  <span className="text-xs font-normal text-brand-muted">
                     Rating Agreement: {matchResult.correlation_score}%
                   </span>
                 )}
@@ -156,7 +158,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                 {matchResult.shared_films.map((film, idx) => (
                   <div
                     key={idx}
-                    className="bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center justify-between gap-3 text-xs"
+                    className="flex items-center justify-between gap-3 border-t border-brand-border py-2.5 text-sm first:border-t-0"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -164,7 +166,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                           {film.film_title || film.film_slug}
                         </span>
                         {film.film_tier && film.film_tier !== "unknown" && (
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold uppercase ${
+                          <span className={`rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${
                             film.film_tier === "favorite"
                               ? "bg-brand-orange/20 text-brand-orange border border-brand-orange/30"
                               : film.film_tier === "top_rated"
@@ -178,7 +180,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                         )}
                       </div>
                       {film.found_via && (
-                        <div className="text-[10px] text-brand-muted capitalize font-mono">
+                        <div className="font-mono text-xs capitalize text-brand-muted">
                           {film.found_via.replace("-", " ")}
                         </div>
                       )}
@@ -202,7 +204,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
           )}
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row">
           <Button
             asChild
             variant="cinema"
@@ -224,7 +226,8 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
             variant="secondary"
             onClick={() => {
               setActiveUsername(user.username);
-              window.location.href = `/?user=${user.username}`;
+              onClose();
+              router.push(`/?user=${encodeURIComponent(user.username)}`);
             }}
             className="flex items-center justify-center gap-1.5"
           >

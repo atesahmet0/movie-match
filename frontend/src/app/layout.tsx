@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Newsreader, Outfit } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -8,24 +8,24 @@ import { QueryProvider } from "@/lib/query-provider";
 
 const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-outfit",
   display: "swap",
 });
 
-const spaceGrotesk = Space_Grotesk({
+const newsreader = Newsreader({
   subsets: ["latin"],
-  variable: "--font-display",
+  variable: "--font-newsreader",
   display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-jetbrains",
   display: "swap",
 });
 
 export const viewport: Viewport = {
-  themeColor: "#14181c",
+  themeColor: "oklch(96.5% 0.012 92)",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -52,27 +52,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark scroll-smooth">
+    <html lang="en" data-scroll-behavior="smooth">
       <head>
         <meta name="referrer" content="no-referrer" />
       </head>
       <body
-        className={`${outfit.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} min-h-screen bg-brand-dark text-[#e1e7ed] font-sans antialiased selection:bg-brand-green selection:text-black overflow-x-clip`}
+        className={`${outfit.variable} ${newsreader.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
         <QueryProvider>
           <TasteProvider>
-            <div className="relative min-h-screen flex flex-col justify-between w-full">
-              {/* Ambient Background Noise & Subtle Glow */}
-              <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-40">
-                <div className="absolute -top-[30%] left-[10%] w-[600px] h-[600px] rounded-full bg-brand-green/5 blur-[120px]" />
-                <div className="absolute top-[40%] -right-[10%] w-[500px] h-[500px] rounded-full bg-brand-orange/5 blur-[140px]" />
-                <div className="absolute bottom-[10%] left-[20%] w-[550px] h-[550px] rounded-full bg-brand-blue/5 blur-[130px]" />
-              </div>
-
+            <div className="app-shell">
               <Navbar />
-              <main className="relative z-10 flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
-                {children}
-              </main>
+              <main className="page-frame flex-1">{children}</main>
               <Footer />
             </div>
           </TasteProvider>

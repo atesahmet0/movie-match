@@ -34,6 +34,9 @@ PROXY_URL="http://username:password@proxy-host:port"
 
 # PostgreSQL database configuration (optional; falls back to local SQLite if omitted)
 DATABASE_URL="postgresql://postgres:password@localhost:5432/movie_match"
+
+# Token required for history/cache inspection and waitlist administration
+MOVIE_MATCH_ADMIN_TOKEN="change-this-to-a-long-random-secret"
 ```
 
 ### 2. Start PostgreSQL (Docker)

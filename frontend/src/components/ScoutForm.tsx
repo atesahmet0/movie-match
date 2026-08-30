@@ -1,4 +1,4 @@
-/* Hallmark · component: ScoutForm · genre: atmospheric · theme: Midnight Cinema
+/* Hallmark · component: ScoutForm · genre: editorial utility · theme: Studio Projection
  * architecture: Compound Components & Custom Hooks
  */
 "use client";
@@ -37,9 +37,9 @@ export default function ScoutForm({
   });
 
   return (
-    <div className={`space-y-6 max-w-4xl mx-auto ${className}`}>
-      <div className="glass-card p-6 sm:p-8 rounded-3xl border border-brand-border/90 shadow-2xl">
-        <form onSubmit={form.handleSubmit} className="space-y-6">
+    <div className={`w-full space-y-4 ${className}`}>
+      <div className="workspace-panel p-5 sm:p-7">
+        <form onSubmit={form.handleSubmit} className="space-y-7">
           {/* Compound 1: Film Selector */}
           <FilmSelector
             selectedFilms={form.selectedFilms}
@@ -78,7 +78,7 @@ export default function ScoutForm({
             variant="cinema"
             size="lg"
             disabled={form.isPending || form.selectedFilms.length === 0}
-            className="w-full h-13 text-sm sm:text-base font-bold shadow-xl shadow-brand-green/20"
+            className="w-full text-sm sm:text-base"
             leftIcon={
               form.isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -88,10 +88,10 @@ export default function ScoutForm({
             }
           >
             {form.isPending ? (
-              <span>Scouting Letterboxd... ({form.elapsedSeconds.toFixed(1)}s)</span>
+                <span>Scouting… ({form.elapsedSeconds.toFixed(1)}s)</span>
             ) : (
               <span>
-                Start Scout ({form.selectedFilms.length}{" "}
+                Scout {form.selectedFilms.length}{" "}
                 {form.selectedFilms.length === 1 ? "Film" : "Films"})
               </span>
             )}

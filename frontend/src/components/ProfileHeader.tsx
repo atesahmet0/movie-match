@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, ExternalLink, RefreshCw, Film, Calendar, Users, Compass } from "lucide-react";
+import { MapPin, ExternalLink, RefreshCw, Compass } from "lucide-react";
 import { UserProfileDetail } from "@/lib/types";
 import { useTaste } from "@/lib/taste-context";
 import { Badge } from "@/components/ui/badge";

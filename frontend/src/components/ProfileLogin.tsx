@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Film, Zap, Sparkles, Clapperboard, Compass } from "lucide-react";
+import { Zap, Sparkles, Clapperboard } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";

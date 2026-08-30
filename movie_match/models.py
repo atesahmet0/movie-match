@@ -2,7 +2,7 @@
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, model_validator
 
 
 class SentimentType(str, Enum):
@@ -33,6 +33,7 @@ class FilmMetadata(BaseModel):
     rating: Optional[float] = None
     poster_url: Optional[str] = None
     url: str = ""
+    member_count: Optional[int] = None
 
 
 class UserMatch(BaseModel):
@@ -118,16 +119,26 @@ class TasteMatchResult(BaseModel):
 
 
 class MultiFilmMatchQuery(BaseModel):
-    films: List[str]
+    films: List[str] = Field(..., max_length=50)
     location_query: str = "Anywhere"
-    min_shared_films: int = 1
+    min_shared_films: int = Field(1, ge=1, le=50)
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None
     include_bio: bool = False
-    max_pages_per_film: int = 2
-    limit_matches: int = 10
-    concurrency: int = 15
+    max_pages_per_film: int = Field(2, ge=1, le=20)
+    limit_matches: int = Field(10, ge=1, le=500)
+    concurrency: int = Field(15, ge=1, le=50)
     source_username: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_match_request(self) -> "MultiFilmMatchQuery":
+        if not self.films:
+            return self
+        if any(not film.strip() or len(film.strip()) > 200 for film in self.films):
+            raise ValueError("Each film must be between 1 and 200 characters")
+        if self.min_shared_films > len(self.films):
+            raise ValueError("min_shared_films cannot exceed the number of films")
+        return self
 
 
 class ScanStats(BaseModel):
@@ -139,4 +150,3 @@ class ScanStats(BaseModel):
     cache_hits: int = 0
     matches_count: int = 0
     elapsed_seconds: float = 0.0
-

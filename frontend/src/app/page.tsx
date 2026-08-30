@@ -4,7 +4,7 @@ import { Metadata } from "next";
 import { fetchTasteMatch, fetchUserProfile } from "@/lib/api";
 import TasteSoulmatesSection from "@/components/TasteSoulmatesSection";
 import TasteMatchCard from "@/components/TasteMatchCard";
-import { Heart, Compass } from "lucide-react";
+import { Compass, Heart, MapPin, Users } from "lucide-react";
 import { UserFilmItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -110,82 +110,108 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header Intro */}
-      <div className="text-center max-w-2xl mx-auto py-2">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2 flex items-center justify-center font-display">
-          <span>Movie <span className="text-brand-green">Match</span></span>
-        </h1>
-        <p className="text-brand-subtext text-xs sm:text-sm leading-relaxed">
-          Discover cinephiles who love the exact same movies you do in your area, ranked by compatibility match ratio.
-        </p>
-      </div>
+    <div className="space-y-10">
+      <section className="workspace-grid pt-4" aria-labelledby="match-title">
+        <div className="space-y-7 lg:sticky lg:top-24">
+          <div className="space-y-4">
+            <h1 id="match-title" className="page-title">
+              Find your film people.
+            </h1>
+            <p className="page-lede">
+              Start with four films you already care about. MovieMatch looks for public Letterboxd members who share them, then filters by place.
+            </p>
+          </div>
 
-      {/* 1-Click Match Studio */}
-      <TasteSoulmatesSection
-        initialUser={userParam}
-        initialLocation={locationParam}
-        initialFilms={filmList}
-        initialMinShared={minSharedParam}
-      />
+          <dl className="grid gap-0 border-y border-brand-border text-sm">
+            <div className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-b border-brand-border py-4">
+              <Heart className="mt-0.5 h-4 w-4 text-brand-green" aria-hidden="true" />
+              <div>
+                <dt className="font-bold text-white">Taste first</dt>
+                <dd className="mt-1 text-brand-subtext">Your pinned favorites become the matching signal.</dd>
+              </div>
+            </div>
+            <div className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-b border-brand-border py-4">
+              <MapPin className="mt-0.5 h-4 w-4 text-brand-green" aria-hidden="true" />
+              <div>
+                <dt className="font-bold text-white">Place second</dt>
+                <dd className="mt-1 text-brand-subtext">Search a city, country, or anywhere.</dd>
+              </div>
+            </div>
+            <div className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 py-4">
+              <Users className="mt-0.5 h-4 w-4 text-brand-green" aria-hidden="true" />
+              <div>
+                <dt className="font-bold text-white">Evidence included</dt>
+                <dd className="mt-1 text-brand-subtext">Every result shows the films and ratings behind the score.</dd>
+              </div>
+            </div>
+          </dl>
+        </div>
+
+        <TasteSoulmatesSection
+          initialUser={userParam}
+          initialLocation={locationParam}
+          initialFilms={filmList}
+          initialMinShared={minSharedParam}
+        />
+      </section>
 
       {errorMsg && (
-        <div className="solid-card rounded-2xl p-5 max-w-4xl mx-auto text-center border-red-500/50 text-red-400 text-xs sm:text-sm font-mono">
+        <div role="alert" className="rounded-lg border border-[color:var(--color-error)] bg-[color:var(--color-error-soft)] p-4 text-sm text-[color:var(--color-error)]">
           {errorMsg}
         </div>
       )}
 
       {/* Match Stats Bar */}
       {tasteResponse && (
-        <div className="glass-card rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-4xl mx-auto border border-brand-border/90">
+        <section className="result-summary" aria-live="polite">
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 font-display">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-white">
               <Heart className="w-4 h-4 text-brand-green fill-brand-green shrink-0" />
               <span>
                 Found {tasteResponse.matches_count} Movie Matches in {locationParam}
               </span>
-            </h3>
-            <p className="text-xs text-brand-subtext mt-1">
+            </h2>
+            <p className="mt-1 text-sm text-brand-subtext">
               Scanned {tasteResponse.stats?.total_users_discovered || 0} candidate members across {filmList.length} cornerstone films &bull; Ranked by compatibility %
             </p>
           </div>
-          <div className="flex items-center space-x-3 text-xs font-mono shrink-0">
-            <div className="bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border">
+          <div className="flex items-center gap-4 whitespace-nowrap font-mono text-xs tabular-nums">
+            <div>
               Time:{" "}
               <span className="text-brand-green font-bold">
                 {(tasteResponse.stats?.elapsed_seconds || 0).toFixed(2)}s
               </span>
             </div>
-            <div className="bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border">
+            <div>
               Matches:{" "}
               <span className="text-brand-green font-bold">
                 {tasteResponse.matches_count}
               </span>
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Ranked Match Cards Grid */}
       {tasteResponse && tasteResponse.matches.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+        <section className="result-grid result-grid--two" aria-label="Taste matches">
           {tasteResponse.matches.map((match, idx) => (
             <TasteMatchCard key={match.username} match={match} index={idx} />
           ))}
-        </div>
+        </section>
       )}
 
       {/* Empty State */}
       {tasteResponse && tasteResponse.matches.length === 0 && (
-        <div className="text-center py-16 glass-card rounded-3xl max-w-4xl mx-auto space-y-3">
-          <Compass className="w-10 h-10 mx-auto text-brand-muted opacity-40" />
-          <p className="font-bold text-white text-base font-display">
+        <section className="empty-state">
+          <Compass className="h-8 w-8 text-brand-muted" />
+          <h2 className="text-xl font-bold text-white">
             No movie matches found sharing these cornerstone films in &quot;{locationParam}&quot;.
-          </p>
-          <p className="text-xs text-brand-subtext max-w-md mx-auto leading-relaxed">
+          </h2>
+          <p className="max-w-md text-sm text-brand-subtext">
             Try setting location to &quot;Anywhere&quot; or lowering the minimum matching requirement to 1 film.
           </p>
-        </div>
+        </section>
       )}
     </div>
   );

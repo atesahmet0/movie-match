@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from movie_match.cache.db import CacheDB
 from movie_match.logging import debug_tracker, get_logger
@@ -35,6 +36,10 @@ from movie_match.scraper.parser import (
 
 logger = get_logger("scraper")
 
+FILM_SEARCH_CACHE_TTL = 10 * 60
+FILM_SEARCH_EMPTY_TTL = 60
+FILM_SEARCH_CACHE_SIZE = 256
+
 
 class LetterboxdScraper:
     """High-performance scraper and matcher for Letterboxd movies and users with multi-tier caching."""
@@ -48,10 +53,19 @@ class LetterboxdScraper:
         self.client = client or AntiBotHttpClient(concurrency=concurrency)
         self.cache = cache or CacheDB()
         self._owns_client = client is None
+        # Autocomplete traffic is highly repetitive. Keep the parsed result set in
+        # process and let identical concurrent requests share one upstream fetch.
+        self._film_search_cache: OrderedDict[str, Tuple[float, List[Dict[str, Any]]]] = OrderedDict()
+        self._film_search_inflight: Dict[str, asyncio.Task[List[Dict[str, Any]]]] = {}
 
     async def __aenter__(self):
         await self.client.start()
-        await self.cache.init()
+        try:
+            await self.cache.init()
+        except Exception:
+            if self._owns_client:
+                await self.client.close()
+            raise
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -59,7 +73,7 @@ class LetterboxdScraper:
             await self.client.close()
         await self.cache.close()
 
-    async def get_film_info(self, film_slug_or_url: str) -> FilmMetadata:
+    async def get_film_info(self, film_slug_or_url: str, strict: bool = False) -> Optional[FilmMetadata]:
         """Fetch and cache film metadata."""
         slug = extract_slug_from_input(film_slug_or_url)
         cached = await self.cache.get_film_metadata(slug)
@@ -69,6 +83,8 @@ class LetterboxdScraper:
         url = f"https://letterboxd.com/film/{slug}/"
         resp = await self.client.get(url)
         if not resp or resp.status_code != 200:
+            if strict:
+                return None
             return FilmMetadata(slug=slug, title=slug.replace("-", " ").title(), url=url)
 
         meta = parse_film_page(resp.text, slug)
@@ -243,7 +259,14 @@ class LetterboxdScraper:
                     break
 
                 # Fetch uncached profiles concurrently in batches
-                batch_size = 25
+                # For an Anywhere search every valid profile is a match, so avoid
+                # fetching more profiles than the remaining result slots. Narrow
+                # location searches keep wider batches to preserve throughput.
+                batch_size = (
+                    max(1, query.limit_matches - len(matches))
+                    if matcher.is_anywhere
+                    else 25
+                )
                 for i in range(0, len(uncached_usernames), batch_size):
                     chunk = uncached_usernames[i : i + batch_size]
                     logger.debug(f"[Scraper] Fetching {len(chunk)} uncached profiles concurrently (batch {i // batch_size + 1})...")
@@ -555,6 +578,7 @@ class LetterboxdScraper:
         user_profile_cache: Dict[str, Tuple[UserProfile, str, List[str]]] = {}
         all_evaluated_usernames: Set[str] = set()
         film_title_map: Dict[str, str] = {}
+        film_member_counts: Dict[str, Optional[int]] = {}
 
         def _register_location_match(
             u: str,
@@ -588,10 +612,22 @@ class LetterboxdScraper:
                 film_title_map, user_film_interactions[u],
             )
 
+        # Metadata lookups are independent and the HTTP client already enforces a
+        # safe concurrency limit. Resolving them together removes one full network
+        # round trip per film from the critical path on a cold search.
+        film_metadata = await asyncio.gather(
+            *(self.get_film_info(slug) for slug in clean_slugs)
+        )
+        metadata_by_slug = dict(zip(clean_slugs, film_metadata))
+
         for film_idx, slug in enumerate(clean_slugs, 1):
-            film_meta = await self.get_film_info(slug)
+            film_meta = metadata_by_slug[slug] or FilmMetadata(
+                slug=slug,
+                title=slug.replace("-", " ").title(),
+            )
             film_title = film_meta.title or slug.replace("-", " ").title()
             film_title_map[slug] = film_title
+            film_member_counts[slug] = film_meta.member_count
             endpoints = sentiment_plan.get_film_endpoints(slug)[:2]
 
             logger.debug(f"[Scraper] Scouting film {film_idx}/{len(clean_slugs)}: '{slug}' ({film_title})")
@@ -700,7 +736,11 @@ class LetterboxdScraper:
 
         # Cross-reference candidate profile details / library for all location matches
         logger.debug(f"[Matcher] Cross-referencing libraries for {len(user_profile_cache)} location-matched users...")
-        for u_name, (p, matched_text, fields) in list(user_profile_cache.items()):
+        profile_entries = list(user_profile_cache.items())
+        cached_details = await asyncio.gather(
+            *(self.cache.get_user_profile_detail(u_name) for u_name, _ in profile_entries)
+        )
+        for (u_name, (p, matched_text, fields)), cached_detail in zip(profile_entries, cached_details):
             if u_name not in user_film_interactions:
                 user_film_interactions[u_name] = []
 
@@ -711,7 +751,6 @@ class LetterboxdScraper:
             )
 
             # Check cached detail (favorites + top rated + liked + recent)
-            cached_detail = await self.cache.get_user_profile_detail(u_name)
             if cached_detail:
                 self._cross_check_favorites(
                     u_name, cached_detail.favorite_films, clean_slugs,
@@ -740,6 +779,11 @@ class LetterboxdScraper:
         results: List[TasteMatchResult] = []
         total_films_count = len(clean_slugs)
         all_target_tiers = [fingerprint.get_tier(s) for s in clean_slugs] if fingerprint else None
+        if fingerprint:
+            for interactions in user_film_interactions.values():
+                for interaction in interactions:
+                    if interaction.film_tier == "unknown":
+                        interaction.film_tier = fingerprint.get_tier(interaction.film_slug)
 
         for u, interactions in user_film_interactions.items():
             # Exclude source user from their own results
@@ -757,6 +801,7 @@ class LetterboxdScraper:
                         found_via=fi.found_via,
                         film_tier=fi.film_tier,
                         source_rating=fingerprint.get_source_rating(fi.film_slug) if fingerprint else None,
+                        member_count=film_member_counts.get(fi.film_slug),
                     )
                     for fi in interactions
                 ]
@@ -797,15 +842,48 @@ class LetterboxdScraper:
 
 
     async def search_films(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search Letterboxd for films matching query string."""
-        clean_q = query.strip()
+        """Search films with bounded caching and concurrent-request coalescing."""
+        clean_q = " ".join(query.split())
         if not clean_q:
             return []
+
+        cache_key = clean_q.casefold()
+        now = time.monotonic()
+        cached = self._film_search_cache.get(cache_key)
+        if cached:
+            cached_at, cached_results = cached
+            ttl = FILM_SEARCH_CACHE_TTL if cached_results else FILM_SEARCH_EMPTY_TTL
+            if now - cached_at < ttl:
+                self._film_search_cache.move_to_end(cache_key)
+                return cached_results[:limit]
+            del self._film_search_cache[cache_key]
+
+        task = self._film_search_inflight.get(cache_key)
+        if task is None:
+            task = asyncio.create_task(self._fetch_film_search(clean_q))
+            self._film_search_inflight[cache_key] = task
+
+        try:
+            # A browser abandoning an old autocomplete query should not cancel the
+            # shared upstream lookup that a newer request may still be awaiting.
+            results = await asyncio.shield(task)
+        finally:
+            if task.done() and self._film_search_inflight.get(cache_key) is task:
+                self._film_search_inflight.pop(cache_key, None)
+
+        self._film_search_cache[cache_key] = (time.monotonic(), results)
+        self._film_search_cache.move_to_end(cache_key)
+        while len(self._film_search_cache) > FILM_SEARCH_CACHE_SIZE:
+            self._film_search_cache.popitem(last=False)
+        return results[:limit]
+
+    async def _fetch_film_search(self, query: str) -> List[Dict[str, Any]]:
+        """Fetch and parse the largest supported suggestion set once."""
 
         import urllib.parse
         from selectolax.parser import HTMLParser
 
-        encoded = urllib.parse.quote(clean_q)
+        encoded = urllib.parse.quote(query)
         url = f"https://letterboxd.com/s/search/{encoded}/"
         headers = {
             "X-Requested-With": "XMLHttpRequest",
@@ -853,8 +931,7 @@ class LetterboxdScraper:
                     "director": director,
                     "film_url": f"https://letterboxd.com/film/{slug}/",
                 })
-                if len(films) >= limit:
+                if len(films) >= 25:
                     break
 
         return films
-

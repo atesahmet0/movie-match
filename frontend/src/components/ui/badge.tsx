@@ -1,4 +1,4 @@
-/* Hallmark · component: Badge · genre: atmospheric · theme: Midnight Cinema
+/* Hallmark · component: Badge · genre: editorial utility · theme: Studio Projection
  */
 "use client";
 
@@ -12,34 +12,34 @@ function cn(...inputs: (string | undefined | null | false)[]) {
 }
 
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 select-none",
+  "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold select-none",
   {
     variants: {
       variant: {
         default:
-          "border border-transparent bg-brand-green/20 text-brand-green border-brand-green/30",
+          "border-brand-green bg-brand-green/15 text-brand-text",
         secondary:
-          "border border-brand-border bg-brand-darker text-brand-subtext hover:border-brand-borderLight",
+          "border-brand-border bg-brand-darker text-brand-subtext",
         destructive:
-          "border border-red-500/30 bg-red-500/15 text-red-400",
+          "border-[color:var(--color-error)] bg-[color:var(--color-error-soft)] text-[color:var(--color-error)]",
         outline:
-          "border border-brand-border text-brand-subtext bg-transparent",
+          "border-brand-border text-brand-subtext bg-transparent",
         patron:
-          "border border-brand-blue/40 bg-brand-blue/15 text-brand-blue font-bold font-mono tracking-wider shadow-sm",
+          "border-brand-border bg-brand-darker text-brand-text font-bold font-mono",
         pro:
-          "border border-brand-orange/40 bg-brand-orange/15 text-brand-orange font-bold font-mono tracking-wider shadow-sm",
+          "border-brand-border bg-brand-darker text-brand-text font-bold font-mono",
         matchHigh:
-          "border border-brand-green/50 bg-brand-green/15 text-brand-green font-bold font-mono shadow-sm",
+          "border-brand-green bg-brand-green/20 text-brand-text font-bold font-mono",
         matchMedium:
-          "border border-brand-orange/40 bg-brand-orange/15 text-brand-orange font-bold font-mono",
+          "border-brand-borderLight bg-brand-darker text-brand-text font-bold font-mono",
         matchLow:
-          "border border-brand-border bg-brand-card text-brand-subtext font-mono",
+          "border-brand-border bg-brand-card text-brand-subtext font-mono",
         location:
-          "border border-brand-border/80 bg-brand-darker/90 text-[#e1e7ed] font-medium",
+          "border-brand-border bg-brand-darker text-brand-text font-medium",
         rating:
-          "border border-brand-green/30 bg-brand-darker text-brand-green font-mono font-bold",
+          "border-brand-border bg-brand-darker text-brand-text font-mono font-bold",
         chip:
-          "border border-brand-border bg-brand-card hover:bg-brand-cardHover hover:border-brand-borderLight text-brand-subtext hover:text-white rounded-lg px-2.5 py-1 text-xs cursor-pointer transition-all",
+          "border-brand-border bg-brand-card text-brand-subtext rounded-lg px-2.5 py-1 text-xs",
       },
     },
     defaultVariants: {

@@ -1,4 +1,4 @@
-/* Hallmark · component: Button · genre: atmospheric · theme: Midnight Cinema
+/* Hallmark · component: Button · genre: editorial utility · theme: Studio Projection
  * states: default · hover · focus · active · disabled · loading · error · success
  * contrast: pass (46–50)
  */
@@ -15,37 +15,37 @@ function cn(...inputs: (string | undefined | null | false)[]) {
 }
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-xs font-semibold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/70 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-45 select-none active:scale-[0.98] cursor-pointer",
+  "tactile-btn inline-flex items-center justify-center gap-2 whitespace-nowrap border text-sm font-semibold focus-visible:outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 select-none cursor-pointer",
   {
     variants: {
       variant: {
         default:
-          "bg-brand-green text-black hover:bg-brand-greenHover shadow-md shadow-brand-green/15 active:shadow-none font-bold",
+          "border-brand-green bg-brand-green text-black hover:bg-brand-greenHover font-bold",
         cinema:
-          "bg-brand-green text-black hover:bg-brand-greenHover font-bold tracking-tight shadow-lg shadow-brand-green/20 hover:shadow-brand-green/35",
+          "border-brand-green bg-brand-green text-black hover:bg-brand-greenHover font-bold",
         orange:
-          "bg-brand-orange text-white hover:bg-[#e67300] font-bold shadow-md shadow-brand-orange/20",
+          "border-brand-green bg-brand-green text-black hover:bg-brand-greenHover font-bold",
         blue:
-          "bg-brand-blue text-black hover:bg-[#2fb0ec] font-bold shadow-md shadow-brand-blue/20",
+          "border-brand-border bg-brand-card text-brand-text hover:bg-brand-cardHover hover:border-brand-borderLight",
         secondary:
-          "bg-brand-card text-brand-text hover:bg-brand-cardHover hover:text-white border border-brand-border hover:border-brand-borderLight",
+          "border-brand-border bg-brand-card text-brand-text hover:bg-brand-cardHover hover:border-brand-borderLight",
         outline:
-          "border border-brand-border bg-transparent hover:bg-brand-card hover:text-white text-brand-subtext",
+          "border-brand-border bg-transparent text-brand-text hover:bg-brand-card hover:border-brand-borderLight",
         ghost:
-          "hover:bg-brand-card hover:text-white text-brand-subtext",
+          "border-transparent bg-transparent text-brand-subtext hover:bg-brand-card hover:text-white",
         glass:
-          "bg-brand-card/75 backdrop-blur-md border border-brand-border/80 hover:border-brand-borderLight text-brand-text hover:text-white shadow-sm",
+          "border-brand-border bg-brand-card text-brand-text hover:bg-brand-cardHover hover:border-brand-borderLight",
         destructive:
-          "bg-red-500/15 border border-red-500/40 text-red-400 hover:bg-red-500/25 hover:border-red-500/60",
+          "border-[color:var(--color-error)] bg-[color:var(--color-error-soft)] text-[color:var(--color-error)] hover:bg-brand-card",
         link:
-          "text-brand-green underline-offset-4 hover:underline p-0 h-auto font-normal",
+          "h-auto border-transparent bg-transparent p-0 text-brand-text underline decoration-brand-green decoration-2 underline-offset-4 hover:text-brand-green font-semibold",
       },
       size: {
-        default: "h-9 px-4 py-2 rounded-xl",
-        sm: "h-7.5 px-3 rounded-lg text-[11px]",
-        lg: "h-11 px-6 rounded-2xl text-sm",
-        icon: "h-9 w-9 rounded-xl p-0",
-        "icon-sm": "h-7 w-7 rounded-lg p-0",
+        default: "h-11 px-4 rounded-lg",
+        sm: "h-10 px-3 rounded-lg text-sm",
+        lg: "h-12 px-6 rounded-lg text-base",
+        icon: "h-11 w-11 rounded-lg p-0",
+        "icon-sm": "h-10 w-10 rounded-lg p-0",
       },
     },
     defaultVariants: {
@@ -71,6 +71,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       className,
       variant,
       size,
+      asChild = false,
       isLoading = false,
       loadingText,
       leftIcon,
@@ -81,9 +82,22 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
+    const classes = cn(buttonVariants({ variant, size, className }));
+
+    if (asChild) {
+      const child = React.Children.only(children) as React.ReactElement<{
+        className?: string;
+      }>;
+      return React.cloneElement(child, {
+        ...props,
+        className: cn(classes, child.props.className),
+        ref,
+      } as React.Attributes);
+    }
+
     return (
       <button
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={classes}
         ref={ref}
         disabled={disabled || isLoading}
         data-state={isLoading ? "loading" : undefined}

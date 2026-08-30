@@ -1,0 +1,13 @@
+{
+  "date": "2026-08-30",
+  "framework": "Next.js 16 App Router",
+  "styling": "Tailwind CSS 4 with CSS theme variables",
+  "fonts": ["Outfit", "Space Grotesk", "JetBrains Mono"],
+  "motion": "Framer Motion 13",
+  "spacing": "Tailwind utility scale; no prior semantic scale",
+  "source_files": [
+    "frontend/package.json",
+    "frontend/src/app/globals.css",
+    "frontend/src/app/layout.tsx"
+  ]
+}

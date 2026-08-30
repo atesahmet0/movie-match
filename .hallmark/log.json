@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-08-30",
+    "scope": "app",
+    "macrostructure": "Split Studio",
+    "theme": "Studio Projection",
+    "genre": "editorial utility",
+    "nav": "N1a Two-destination masthead",
+    "footer": "Ft2 Inline single line",
+    "enrichment": "none",
+    "brief": "MovieMatch app-wide UI redesign with a warm editorial utility system",
+    "slop_test": "58/58 pass"
+  },
+  {
     "date": "2026-08-29",
     "macrostructure": "Workbench",
     "theme": "Midnight Cinema",

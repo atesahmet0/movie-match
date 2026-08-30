@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, Check, FileJson, FileSpreadsheet } from "lucide-react";
+import { Check, FileJson, FileSpreadsheet } from "lucide-react";
 import { ScanStats, UserMatch } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 
@@ -32,9 +32,23 @@ export default function ExportButtons({ filmSlug, stats, matches }: ExportButton
   };
 
   const handleExportCSV = () => {
+    const csvCell = (value: unknown) => {
+      const text = String(value ?? "");
+      // Prevent spreadsheet formula injection while preserving the displayed value.
+      const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
     let csv = "username,display_name,location,matched_location,rating,liked,profile_url\n";
     matches.forEach((m) => {
-      csv += `"${m.username}","${m.display_name}","${m.location}","${m.matched_location}","${m.user_rating || ""}","${m.user_liked || false}","${m.profile_url}"\n`;
+      csv += [
+        m.username,
+        m.display_name,
+        m.location,
+        m.matched_location,
+        m.user_rating,
+        m.user_liked || false,
+        m.profile_url,
+      ].map(csvCell).join(",") + "\n";
     });
     const downloadAnchor = document.createElement("a");
     downloadAnchor.setAttribute(

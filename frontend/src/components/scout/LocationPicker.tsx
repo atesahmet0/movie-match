@@ -40,17 +40,17 @@ export function LocationPicker({
   };
 
   return (
-    <div className="space-y-3 pt-4 border-t border-brand-border/80">
-      <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+    <div className="space-y-3 border-t border-brand-border pt-6">
+      <label className="flex items-center gap-2 text-sm font-bold text-white">
         <MapPin className="w-4 h-4 text-brand-blue" />
         <span>Target Locations & Cities</span>
       </label>
 
-      <div className="min-h-[50px] p-2.5 rounded-2xl bg-brand-darker border border-brand-border flex flex-wrap items-center gap-2">
+      <div className="flex min-h-14 flex-wrap items-center gap-2 rounded-lg border border-brand-border bg-brand-darker p-2.5">
         {locations.map((loc) => (
           <span
             key={loc}
-            className="inline-flex items-center space-x-1.5 bg-brand-card border border-brand-border px-3 py-1 rounded-xl text-xs font-semibold text-brand-green font-mono"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-brand-border bg-brand-card px-3 py-1 text-sm font-semibold text-white"
           >
             <MapPin className="w-3 h-3 text-brand-green" />
             <span>{loc}</span>
@@ -58,7 +58,8 @@ export function LocationPicker({
               <button
                 type="button"
                 onClick={() => onRemoveLocation(loc)}
-                className="text-brand-muted hover:text-red-400 ml-1 cursor-pointer"
+                className="ml-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-brand-muted hover:bg-brand-darker hover:text-[color:var(--color-error)]"
+                aria-label={`Remove ${loc}`}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -79,7 +80,7 @@ export function LocationPicker({
               ? "Type city (e.g. Ankara) and press Enter"
               : "Add another location..."
           }
-          className="bg-transparent border-none text-xs sm:text-sm text-white placeholder:text-brand-muted focus:outline-none flex-1 min-w-[140px] px-2 py-1"
+          className="min-h-11 min-w-[140px] flex-1 border-none bg-transparent px-2 py-1 text-sm text-white placeholder:text-brand-muted focus:outline-none"
         />
       </div>
 
@@ -92,10 +93,10 @@ export function LocationPicker({
               key={loc}
               type="button"
               onClick={() => onTogglePresetLocation(loc)}
-              className={`px-3 py-1 rounded-xl border text-xs font-mono transition cursor-pointer flex items-center space-x-1.5 ${
+              className={`inline-flex min-h-10 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1 text-sm transition-colors ${
                 active
                   ? "bg-brand-green text-black font-bold border-brand-green"
-                  : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white hover:border-brand-borderLight"
+                  : "bg-brand-card text-brand-subtext border-brand-border hover:bg-brand-darker hover:text-white"
               }`}
             >
               <span>{loc}</span>

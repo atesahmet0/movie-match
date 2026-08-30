@@ -57,6 +57,21 @@ def parse_film_page(html: str, slug: str) -> FilmMetadata:
         except ValueError:
             pass
 
+    # Member count is used as an optional rarity signal. Prefer a dedicated
+    # statistic, then fall back to common metadata/summary text.
+    member_count = None
+    member_el = tree.css_first(".film-stats .members, .film-stats .count, .film-detail .members")
+    member_text = member_el.text(strip=True) if member_el else ""
+    if not member_text:
+        desc_el = tree.css_first('meta[name="description"], meta[property="og:description"]')
+        member_text = desc_el.attributes.get("content", "") if desc_el else ""
+    members_match = re.search(r"([\d,.]+)\s*([kKmM])?\s*members", member_text)
+    if members_match:
+        try:
+            member_count = int(float(members_match.group(1).replace(",", "")) * ({"k": 1000, "m": 1_000_000}.get((members_match.group(2) or "").lower(), 1)))
+        except ValueError:
+            member_count = None
+
     # 1st Priority: Clean 2:3 Vertical Theatrical Poster Element
     poster_url = None
     for sel in [
@@ -113,6 +128,7 @@ def parse_film_page(html: str, slug: str) -> FilmMetadata:
         director=director,
         rating=rating,
         poster_url=poster_url,
+        member_count=member_count,
         url=f"https://letterboxd.com/film/{slug}/",
     )
 
@@ -432,4 +448,3 @@ def parse_user_films_page(html: str) -> List[UserFilmItem]:
         ))
 
     return films
-

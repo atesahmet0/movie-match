@@ -1,13 +1,12 @@
-/* Hallmark · component: FilmCombobox · genre: atmospheric · theme: Midnight Cinema
+/* Hallmark · component: FilmCombobox · genre: editorial utility · theme: Studio Projection
  * architecture: TanStack Query Cached Autocomplete
  */
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Film, Loader2, X, Check, Clapperboard } from "lucide-react";
+import { Film, Loader2, X, Clapperboard } from "lucide-react";
 import { useFilmSearch } from "@/lib/hooks/use-film-queries";
 import { FilmSearchResult } from "@/lib/types";
-import { motion, AnimatePresence } from "framer-motion";
 
 interface FilmComboboxProps {
   value?: string;
@@ -31,6 +30,7 @@ export function FilmCombobox({
 
   // Sync with value prop from parent (e.g. when cleared)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuery(value);
     setDebouncedQuery(value);
   }, [value]);
@@ -39,7 +39,7 @@ export function FilmCombobox({
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query);
-    }, 200);
+    }, 250);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -57,6 +57,7 @@ export function FilmCombobox({
   // Open dropdown when search results arrive for active typing
   useEffect(() => {
     if (results.length > 0 && query.trim().length >= 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsOpen(true);
     }
   }, [results, query]);
@@ -125,6 +126,7 @@ export function FilmCombobox({
           disabled={disabled}
           onChange={(e) => {
             setQuery(e.target.value);
+            setSelectedIndex(-1);
           }}
           onFocus={() => {
             if (results.length > 0 && query.trim().length >= 2) {
@@ -133,7 +135,12 @@ export function FilmCombobox({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full bg-brand-darker border border-brand-border rounded-xl pl-10 pr-10 py-2.5 text-white placeholder:text-brand-muted text-xs sm:text-sm font-medium focus:outline-none focus:border-brand-green/80 focus:ring-2 focus:ring-brand-green/30 transition-all disabled:opacity-50"
+          role="combobox"
+          aria-label="Search for a film"
+          aria-expanded={isOpen}
+          aria-controls="film-search-results"
+          aria-autocomplete="list"
+          className="h-11 w-full rounded-lg border border-brand-border bg-brand-card py-2 pl-10 pr-11 text-sm font-medium text-white placeholder:text-brand-muted transition-colors hover:bg-brand-darker focus:outline-2 focus:outline-brand-green disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <div className="absolute right-3 flex items-center gap-1.5">
@@ -150,7 +157,8 @@ export function FilmCombobox({
                 setSelectedIndex(-1);
                 inputRef.current?.focus();
               }}
-              className="text-brand-muted hover:text-white p-1 rounded-md transition-colors cursor-pointer"
+              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-brand-muted transition-colors hover:bg-brand-darker hover:text-white"
+              aria-label="Clear film search"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -159,18 +167,15 @@ export function FilmCombobox({
       </div>
 
       {/* Autocomplete Dropdown Menu */}
-      <AnimatePresence>
         {isOpen && results.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }}
-            transition={{ duration: 0.15 }}
-            className="absolute z-50 left-0 right-0 mt-2 bg-brand-card/95 border border-brand-border rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto backdrop-blur-xl"
+          <div
+            id="film-search-results"
+            role="listbox"
+            className="absolute left-0 right-0 z-50 mt-2 max-h-72 overflow-y-auto rounded-lg border border-brand-border bg-brand-card shadow-lg"
           >
             <div className="p-1.5 space-y-1">
-              <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono">
-                Letterboxd Suggestions
+              <div className="px-3 py-2 text-sm font-semibold text-brand-subtext">
+                Film suggestions
               </div>
               {results.map((film, index) => {
                 const isSelected = index === selectedIndex;
@@ -179,9 +184,11 @@ export function FilmCombobox({
                     key={film.slug}
                     type="button"
                     onClick={() => handleSelect(film)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors cursor-pointer ${
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`flex min-h-14 w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-left transition-colors ${
                       isSelected
-                        ? "bg-brand-border text-white"
+                        ? "bg-brand-green/20 text-white"
                         : "text-brand-text hover:bg-brand-cardHover"
                     }`}
                   >
@@ -190,16 +197,16 @@ export function FilmCombobox({
                         <Clapperboard className="w-4 h-4" />
                       </div>
                       <div className="truncate">
-                        <div className="font-semibold text-xs sm:text-sm text-white truncate flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-white">
                           <span>{film.title}</span>
                           {film.year && (
-                            <span className="text-[11px] text-brand-subtext font-mono font-normal">
+                            <span className="font-mono text-xs font-normal text-brand-subtext">
                               ({film.year})
                             </span>
                           )}
                         </div>
                         {film.director && (
-                          <div className="text-[11px] text-brand-muted truncate">
+                          <div className="truncate text-xs text-brand-muted">
                             Dir. {film.director}
                           </div>
                         )}
@@ -209,9 +216,8 @@ export function FilmCombobox({
                 );
               })}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }

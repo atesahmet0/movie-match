@@ -1,12 +1,14 @@
 import json
+import asyncio
+import hmac
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
-from movie_match.cache.db import CacheDB
 from movie_match.logging import get_logger, is_debug_enabled, setup_logging
 from movie_match.models import MultiFilmMatchQuery, SearchQuery, SentimentType, WaitlistRequest
 from movie_match.scraper.letterboxd import LetterboxdScraper
@@ -15,13 +17,60 @@ from movie_match.scraper.parser import extract_slug_from_input
 logger = get_logger("web")
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+_shared_scraper: Optional[LetterboxdScraper] = None
+_shared_loop: Optional[asyncio.AbstractEventLoop] = None
+_scraper_lock = asyncio.Lock()
+
+
+async def get_shared_scraper() -> LetterboxdScraper:
+    """Create one scraper/cache per process and reuse it across requests."""
+    global _shared_scraper, _shared_loop
+    current_loop = asyncio.get_running_loop()
+    if _shared_scraper is not None and _shared_loop is current_loop:
+        return _shared_scraper
+    async with _scraper_lock:
+        if _shared_scraper is not None and _shared_loop is not current_loop:
+            try:
+                await _shared_scraper.client.close()
+                await _shared_scraper.cache.close()
+            except Exception:
+                logger.debug("Discarding scraper created on a previous event loop", exc_info=True)
+            _shared_scraper = None
+        if _shared_scraper is None:
+            candidate = LetterboxdScraper()
+            try:
+                await candidate.client.start()
+                await candidate.cache.init()
+            except Exception:
+                await candidate.client.close()
+                raise
+            _shared_scraper = candidate
+            _shared_loop = current_loop
+    return _shared_scraper
+
+
+async def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> None:
+    """Fail closed for operations that expose PII or mutate shared data."""
+    expected = os.getenv("MOVIE_MATCH_ADMIN_TOKEN")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Administrative API is not configured")
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=401, detail="Administrative access required")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(debug=is_debug_enabled())
     logger.info("🎬 Movie Match FastAPI backend started")
-    yield
+    try:
+        yield
+    finally:
+        global _shared_scraper, _shared_loop
+        if _shared_scraper is not None:
+            await _shared_scraper.client.close()
+            await _shared_scraper.cache.close()
+            _shared_scraper = None
+            _shared_loop = None
 
 
 app = FastAPI(
@@ -35,7 +84,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -72,19 +121,19 @@ async def api_search(
         limit_matches=limit,
     )
 
-    async with LetterboxdScraper() as scraper:
-        matches, stats = await scraper.find_users(query)
-        # Save to search history
-        matches_serialized = [m.model_dump() for m in matches]
-        history_id = await scraper.cache.save_search_history(
-            film_slug=stats.film_slug,
-            film_title=stats.film_title,
-            location_query=location,
-            sentiment=sentiment.value,
-            rating_range=rating,
-            matches_count=len(matches),
-            results_json=json.dumps(matches_serialized, ensure_ascii=False),
-        )
+    scraper = await get_shared_scraper()
+    matches, stats = await scraper.find_users(query)
+    # Save to search history
+    matches_serialized = [m.model_dump() for m in matches]
+    history_id = await scraper.cache.save_search_history(
+        film_slug=stats.film_slug,
+        film_title=stats.film_title,
+        location_query=location,
+        sentiment=sentiment.value,
+        rating_range=rating,
+        matches_count=len(matches),
+        results_json=json.dumps(matches_serialized, ensure_ascii=False),
+    )
 
     return {
         "status": "success",
@@ -105,9 +154,9 @@ async def api_taste_match(query: MultiFilmMatchQuery):
     if not query.films:
         raise HTTPException(status_code=400, detail="At least one film must be provided")
 
-    async with LetterboxdScraper() as scraper:
-        matches, stats = await scraper.find_taste_matches(query)
-        matches_serialized = [m.model_dump() for m in matches]
+    scraper = await get_shared_scraper()
+    matches, stats = await scraper.find_taste_matches(query)
+    matches_serialized = [m.model_dump() for m in matches]
 
     return {
         "status": "success",
@@ -126,10 +175,10 @@ async def api_user_profile(username: str):
         raise HTTPException(status_code=400, detail="Username is required")
 
     try:
-        async with LetterboxdScraper() as scraper:
-            profile = await scraper.get_user_full_profile(clean_user, include_films=True)
-            if not profile:
-                raise HTTPException(status_code=404, detail=f"Letterboxd user '{clean_user}' not found")
+        scraper = await get_shared_scraper()
+        profile = await scraper.get_user_full_profile(clean_user, include_films=True)
+        if not profile:
+            raise HTTPException(status_code=404, detail=f"Letterboxd user '{clean_user}' not found")
 
         return {
             "status": "success",
@@ -152,8 +201,8 @@ async def api_user_films(
     if not clean_user:
         raise HTTPException(status_code=400, detail="Username is required")
 
-    async with LetterboxdScraper() as scraper:
-        films = await scraper.get_user_films_category(clean_user, category=category, page=page)
+    scraper = await get_shared_scraper()
+    films = await scraper.get_user_films_category(clean_user, category=category, page=page)
 
     return {
         "status": "success",
@@ -166,63 +215,59 @@ async def api_user_films(
 
 
 @app.get("/api/history")
-async def api_history(limit: int = Query(50, ge=1, le=100)):
+async def api_history(limit: int = Query(50, ge=1, le=100), _: None = Depends(require_admin)):
     """Retrieve list of previous search summaries."""
-    cache = CacheDB()
-    await cache.init()
+    cache = (await get_shared_scraper()).cache
     history = await cache.get_search_history(limit=limit)
-    await cache.close()
     return {"status": "success", "history": history}
 
 
 @app.get("/api/history/{history_id}")
-async def api_history_item(history_id: int):
+async def api_history_item(history_id: int, _: None = Depends(require_admin)):
     """Retrieve full results of a specific historical search."""
-    cache = CacheDB()
-    await cache.init()
+    cache = (await get_shared_scraper()).cache
     item = await cache.get_search_history_item(history_id)
-    await cache.close()
     if not item:
         raise HTTPException(status_code=404, detail="Search history item not found")
     return {"status": "success", "item": item}
 
 
 @app.delete("/api/history")
-async def api_clear_history():
+async def api_clear_history(_: None = Depends(require_admin)):
     """Clear all search history."""
-    cache = CacheDB()
-    await cache.init()
+    cache = (await get_shared_scraper()).cache
     await cache.clear_search_history()
-    await cache.close()
     return {"status": "success", "message": "Search history cleared."}
 
 
 @app.post("/api/cache/clear")
-async def api_clear_cache():
+async def api_clear_cache(_: None = Depends(require_admin)):
     """Clear local SQLite database cache."""
-    cache = CacheDB()
-    await cache.init()
+    cache = (await get_shared_scraper()).cache
     await cache.clear_cache()
-    await cache.close()
     return {"status": "success", "message": "Local cache cleared successfully."}
 
 
 @app.get("/api/film-info")
 async def api_film_info(film: str = Query(...)):
     slug = extract_slug_from_input(film)
-    async with LetterboxdScraper() as scraper:
-        meta = await scraper.get_film_info(slug)
+    scraper = await get_shared_scraper()
+    meta = await scraper.get_film_info(slug, strict=True)
+    if meta is None:
+        raise HTTPException(status_code=404, detail=f"Film '{slug}' was not found")
     return meta.model_dump()
 
 
 @app.get("/api/films/search")
 async def api_search_films(
+    response: Response,
     q: str = Query(..., min_length=1, description="Search query for films"),
     limit: int = Query(10, ge=1, le=25),
 ):
     """Search Letterboxd for films by title / keyword."""
-    async with LetterboxdScraper() as scraper:
-        results = await scraper.search_films(q, limit=limit)
+    scraper = await get_shared_scraper()
+    results = await scraper.search_films(q, limit=limit)
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=600"
     return {"status": "success", "query": q, "results": results}
 
 
@@ -233,10 +278,8 @@ async def api_save_waitlist(req: WaitlistRequest):
     if not email or "@" not in email or "." not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required.")
 
-    cache = CacheDB()
-    await cache.init()
+    cache = (await get_shared_scraper()).cache
     lead_id = await cache.save_waitlist_lead(email=email, feature=req.feature or "extended_tier")
-    await cache.close()
 
     return {
         "status": "success",
@@ -246,13 +289,8 @@ async def api_save_waitlist(req: WaitlistRequest):
 
 
 @app.get("/api/waitlist")
-async def api_get_waitlist(limit: int = Query(100, ge=1, le=500)):
+async def api_get_waitlist(limit: int = Query(100, ge=1, le=500), _: None = Depends(require_admin)):
     """Retrieve saved waitlist leads."""
-    cache = CacheDB()
-    await cache.init()
+    cache = (await get_shared_scraper()).cache
     leads = await cache.get_waitlist_leads(limit=limit)
-    await cache.close()
     return {"status": "success", "leads": leads, "count": len(leads)}
-
-
-

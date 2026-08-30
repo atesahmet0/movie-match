@@ -1,12 +1,11 @@
-/* Hallmark · component: ScoutResultCard · genre: atmospheric · theme: Midnight Cinema
- * motion: card-lift · modal-spring
+/* Hallmark · component: ScoutResultCard · genre: editorial utility · theme: Studio Projection
+ * motion: none; evidence stays readable and stable
  */
 "use client";
 
 import React, { useState } from "react";
 import { MapPin, Heart, ArrowRight, Star, Eye } from "lucide-react";
 import { UserMatch } from "@/lib/types";
-import { motion } from "framer-motion";
 import { UserDetailModal } from "@/components/ui/UserDetailModal";
 import { Badge } from "@/components/ui/badge";
 
@@ -15,7 +14,7 @@ interface ScoutResultCardProps {
   index?: number;
 }
 
-export default function ScoutResultCard({ match, index = 0 }: ScoutResultCardProps) {
+export default function ScoutResultCard({ match }: ScoutResultCardProps) {
   const [avatarError, setAvatarError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -26,18 +25,14 @@ export default function ScoutResultCard({ match, index = 0 }: ScoutResultCardPro
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.3) }}
-        className="glass-card p-5 sm:p-6 flex flex-col justify-between group hover:border-brand-borderLight transition-all rounded-3xl relative overflow-hidden"
-      >
+      <article className="glass-card flex flex-col justify-between p-5 sm:p-6">
         <div>
           <div className="flex items-center space-x-3.5 mb-3.5">
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="flex-shrink-0 cursor-pointer group-hover:scale-105 transition-transform duration-200"
+              className="flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg"
+              aria-label={`View ${match.display_name || match.username}`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -45,18 +40,18 @@ export default function ScoutResultCard({ match, index = 0 }: ScoutResultCardPro
                 alt={match.display_name || match.username}
                 referrerPolicy="no-referrer"
                 onError={() => setAvatarError(true)}
-                className="w-13 h-13 rounded-2xl object-cover border-2 border-brand-border group-hover:border-brand-green transition-colors shadow-md"
+                className="h-13 w-13 rounded-lg border border-brand-border object-cover"
               />
             </button>
             <div className="min-w-0 flex-1">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(true)}
-                className="font-bold text-white text-sm sm:text-base truncate hover:text-brand-green transition block text-left font-display cursor-pointer"
+                className="block min-h-11 max-w-full cursor-pointer truncate text-left text-base font-bold text-white underline-offset-4 hover:underline"
               >
                 {match.display_name || match.username}
               </button>
-              <span className="text-xs font-mono text-brand-blue block">
+              <span className="block font-mono text-xs text-brand-muted">
                 @{match.username}
               </span>
             </div>
@@ -84,16 +79,16 @@ export default function ScoutResultCard({ match, index = 0 }: ScoutResultCardPro
           </div>
 
           {match.user_review ? (
-            <p className="text-xs text-[#e1e7ed] line-clamp-3 bg-brand-darker p-3 rounded-xl border border-brand-border italic leading-relaxed">
+            <p className="line-clamp-3 border-t border-brand-border pt-3 text-sm leading-relaxed text-brand-text">
               &ldquo;{match.user_review}&rdquo;
             </p>
           ) : match.bio ? (
-            <p className="text-xs text-brand-subtext line-clamp-2 leading-relaxed">{match.bio}</p>
+            <p className="line-clamp-2 text-sm leading-relaxed text-brand-subtext">{match.bio}</p>
           ) : null}
         </div>
 
         <div className="pt-3.5 mt-3.5 border-t border-brand-border flex items-center justify-between">
-          <span className="text-[10px] font-mono text-brand-muted uppercase tracking-wider">
+          <span className="font-mono text-xs text-brand-muted">
             {match.found_via ? match.found_via.replace("-", " ") : "Letterboxd"}
           </span>
 
@@ -101,7 +96,7 @@ export default function ScoutResultCard({ match, index = 0 }: ScoutResultCardPro
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center space-x-1 text-xs font-semibold text-brand-subtext hover:text-white px-2.5 py-1.5 rounded-xl hover:bg-brand-card transition cursor-pointer"
+              className="inline-flex min-h-10 cursor-pointer items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-sm font-semibold text-brand-subtext transition-colors hover:bg-brand-darker hover:text-white"
             >
               <Eye className="w-3.5 h-3.5 text-brand-blue" />
               <span>Details</span>
@@ -111,14 +106,14 @@ export default function ScoutResultCard({ match, index = 0 }: ScoutResultCardPro
               href={match.profile_url || `https://letterboxd.com/${match.username}/`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center space-x-1 text-xs font-semibold text-brand-green hover:text-brand-greenHover px-2.5 py-1.5 rounded-xl hover:bg-brand-green/10 transition"
+              className="inline-flex min-h-10 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-sm font-semibold text-brand-text underline decoration-brand-green decoration-2 underline-offset-4 hover:text-brand-green"
             >
               <span>Profile</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>
-      </motion.div>
+      </article>
 
       {/* Modal */}
       <UserDetailModal

@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useTransition } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Clapperboard,
-  Film,
   Plus,
   X,
   Sparkles,
@@ -15,11 +14,10 @@ import {
   CheckCircle2,
   MapPin,
   Trash2,
-  Sliders,
 } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { fetchFilmInfo } from "@/lib/api";
-import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
+import { FilmSearchResult } from "@/lib/types";
 import { FilmCombobox } from "@/components/ui/FilmCombobox";
 import UpcomingFeatureModal from "@/components/UpcomingFeatureModal";
 import { motion, AnimatePresence } from "framer-motion";
@@ -126,7 +124,7 @@ export default function TasteForm({
     if (initialFilms && initialFilms.length > 0 && selectedFilms.length === 0) {
       initialFilms.forEach((slug) => {
         if (slug) {
-          fetchFilmInfo(slug).then((meta) => {
+        fetchFilmInfo(slug).then((meta) => {
             if (meta && meta.slug) {
               addFilm({
                 slug: meta.slug,
@@ -136,17 +134,21 @@ export default function TasteForm({
               });
             } else {
               addFilm({ slug, title: slug });
-            }
-          });
+          }
+        }).catch(() => addFilm({ slug, title: slug }));
         }
       });
     }
+  // The initial URL is intentionally hydrated once; addFilm is stable for this mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFilms]);
 
   // Handle timer during scan
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isPending) {
+      // Reset the progress clock when a new transition starts.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setElapsedSeconds(0);
       setStatusStep(1);
       const startTime = Date.now();

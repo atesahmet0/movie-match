@@ -6,7 +6,7 @@ import ScoutForm from "@/components/ScoutForm";
 import ScoutResultCard from "@/components/ScoutResultCard";
 import TasteMatchCard from "@/components/TasteMatchCard";
 import ExportButtons from "@/components/ExportButtons";
-import { Clapperboard, Compass, Users } from "lucide-react";
+import { Compass, Search, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -119,50 +119,51 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
     : singleSearchResponse?.stats?.elapsed_seconds || 0;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Intro Header */}
-      <div className="text-center max-w-2xl mx-auto py-2">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2 flex items-center justify-center gap-2.5 font-display">
-          <Clapperboard className="w-6 h-6 sm:w-7 sm:h-7 text-brand-green" />
-          <span>Find <span className="text-brand-green">Members</span></span>
-        </h1>
-        <p className="text-brand-subtext text-xs sm:text-sm leading-relaxed">
-          Filter Letterboxd fans across any movies, world cities, and sentiment criteria simultaneously.
-        </p>
-      </div>
+    <div className="space-y-10">
+      <section className="workspace-grid pt-4" aria-labelledby="scout-title">
+        <div className="space-y-6 lg:sticky lg:top-24">
+          <Search className="h-7 w-7 text-brand-green" aria-hidden="true" />
+          <h1 id="scout-title" className="page-title">Scout the audience.</h1>
+          <p className="page-lede">
+            Choose one or more films, set a location, and decide which kind of activity counts. Results show the public evidence behind every member.
+          </p>
+          <p className="max-w-[48ch] border-t border-brand-border pt-5 text-sm text-brand-subtext">
+            One film finds people around that title. Several films rank members by overlap across the set.
+          </p>
+        </div>
 
-      {/* Multi-Film Scout Form */}
-      <ScoutForm
-        initialFilms={filmList.length > 0 ? filmList : ["parasite-2019"]}
-        initialLocation={locationParam}
-        initialSentiment={sentimentParam}
-        initialPages={maxPagesParam}
-        initialLimit={limitParam}
-        initialIncludeBio={includeBioParam}
-      />
+        <ScoutForm
+          initialFilms={filmList.length > 0 ? filmList : ["parasite-2019"]}
+          initialLocation={locationParam}
+          initialSentiment={sentimentParam}
+          initialPages={maxPagesParam}
+          initialLimit={limitParam}
+          initialIncludeBio={includeBioParam}
+        />
+      </section>
 
       {errorMsg && (
-        <div className="solid-card rounded-2xl p-5 max-w-4xl mx-auto text-center border-red-500/50 text-red-400 text-xs sm:text-sm font-mono">
+        <div role="alert" className="rounded-lg border border-[color:var(--color-error)] bg-[color:var(--color-error-soft)] p-4 text-sm text-[color:var(--color-error)]">
           {errorMsg}
         </div>
       )}
 
       {/* Multi-Film Stats Bar */}
       {(singleSearchResponse || tasteMatchResponse) && (
-        <div className="glass-card rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-brand-border/90">
+        <section className="result-summary" aria-live="polite">
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white font-display flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-white">
               <Users className="w-4 h-4 text-brand-green" />
               <span>
                 Found {totalMatches} Matches across {filmList.length} {filmList.length === 1 ? "Film" : "Films"} in {locationParam}
               </span>
-            </h3>
-            <p className="text-xs text-brand-subtext mt-1">
+            </h2>
+            <p className="mt-1 text-sm text-brand-subtext">
               Scanned {totalScanned} candidate members across target interaction pages.
             </p>
           </div>
 
-          <div className="flex items-center space-x-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3">
             {singleSearchResponse && (
               <ExportButtons
                 filmSlug={singleSearchResponse.film?.slug || filmList[0]}
@@ -170,42 +171,42 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
                 matches={singleSearchResponse.matches}
               />
             )}
-            <span className="text-xs font-mono text-brand-green font-bold bg-brand-darker px-3 py-1.5 rounded-xl border border-brand-border">
+            <span className="whitespace-nowrap font-mono text-xs font-bold text-brand-subtext tabular-nums">
               {elapsedSec.toFixed(2)}s
             </span>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Multi-Film Results Grid */}
       {isMulti && tasteMatchResponse && tasteMatchResponse.matches.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="result-grid result-grid--two" aria-label="Multi-film scout results">
           {tasteMatchResponse.matches.map((match, idx) => (
             <TasteMatchCard key={match.username} match={match} index={idx} />
           ))}
-        </div>
+        </section>
       )}
 
       {/* Single-Film Results Grid */}
       {!isMulti && singleSearchResponse && singleSearchResponse.matches.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <section className="result-grid result-grid--three" aria-label="Scout results">
           {singleSearchResponse.matches.map((match, idx) => (
             <ScoutResultCard key={match.username} match={match} index={idx} />
           ))}
-        </div>
+        </section>
       )}
 
       {/* Empty State */}
       {(singleSearchResponse || tasteMatchResponse) && totalMatches === 0 && (
-        <div className="text-center py-16 glass-card rounded-3xl space-y-3">
-          <Compass className="w-10 h-10 mx-auto text-brand-muted opacity-40" />
-          <p className="font-bold text-white text-base font-display">
+        <section className="empty-state">
+          <Compass className="h-8 w-8 text-brand-muted" />
+          <h2 className="text-xl font-bold text-white">
             No matching members found in &quot;{locationParam}&quot;.
-          </p>
-          <p className="text-xs text-brand-subtext max-w-md mx-auto leading-relaxed">
+          </h2>
+          <p className="max-w-md text-sm text-brand-subtext">
             Try increasing Scan Depth, adding more film targets, or setting Location to &quot;Anywhere&quot;.
           </p>
-        </div>
+        </section>
       )}
     </div>
   );
