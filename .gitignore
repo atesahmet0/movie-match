@@ -17,8 +17,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -45,7 +45,7 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
-cache/
-.cache/
+/cache/
+/.cache/
 results_*.json
 results_*.csv

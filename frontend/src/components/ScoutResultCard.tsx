@@ -14,7 +14,7 @@ interface ScoutResultCardProps {
   index?: number;
 }
 
-export default function ScoutResultCard({ match }: ScoutResultCardProps) {
+function ScoutResultCard({ match }: ScoutResultCardProps) {
   const [avatarError, setAvatarError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -124,3 +124,5 @@ export default function ScoutResultCard({ match }: ScoutResultCardProps) {
     </>
   );
 }
+
+export default React.memo(ScoutResultCard);

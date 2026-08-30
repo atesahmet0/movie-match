@@ -1,12 +1,9 @@
 /* Hallmark · page: /scout · macrostructure: Workbench · theme: Midnight Cinema
  */
 import { Metadata } from "next";
-import { fetchSingleSearch, fetchTasteMatch } from "@/lib/api";
 import ScoutForm from "@/components/ScoutForm";
-import ScoutResultCard from "@/components/ScoutResultCard";
-import TasteMatchCard from "@/components/TasteMatchCard";
-import ExportButtons from "@/components/ExportButtons";
-import { Compass, Search, Users } from "lucide-react";
+import ScoutSearchResults from "@/components/ScoutSearchResults";
+import { Search } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -72,52 +69,6 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
       ? resolvedParams.include_bio === "true"
       : false;
 
-  let singleSearchResponse = null;
-  let tasteMatchResponse = null;
-  let errorMsg = null;
-
-  if (filmList.length > 1) {
-    // Multi-film scout
-    try {
-      tasteMatchResponse = await fetchTasteMatch({
-        films: filmList,
-        location_query: locationParam,
-        min_shared_films: 1,
-        sentiment: sentimentParam,
-        max_pages_per_film: maxPagesParam,
-        limit_matches: limitParam,
-        include_bio: includeBioParam,
-      });
-    } catch (err: unknown) {
-      errorMsg = err instanceof Error ? err.message : "Error executing multi-film scout search";
-    }
-  } else if (filmList.length === 1) {
-    // Single-film scout
-    try {
-      singleSearchResponse = await fetchSingleSearch({
-        film: filmList[0],
-        location: locationParam,
-        sentiment: sentimentParam,
-        max_pages: maxPagesParam,
-        limit: limitParam,
-        include_bio: includeBioParam,
-      });
-    } catch (err: unknown) {
-      errorMsg = err instanceof Error ? err.message : "Error executing scout search";
-    }
-  }
-
-  const isMulti = filmList.length > 1;
-  const totalMatches = isMulti
-    ? tasteMatchResponse?.matches_count || 0
-    : singleSearchResponse?.matches_count || 0;
-  const totalScanned = isMulti
-    ? tasteMatchResponse?.stats?.total_users_discovered || 0
-    : singleSearchResponse?.stats?.total_users_discovered || 0;
-  const elapsedSec = isMulti
-    ? tasteMatchResponse?.stats?.elapsed_seconds || 0
-    : singleSearchResponse?.stats?.elapsed_seconds || 0;
-
   return (
     <div className="space-y-10">
       <section className="workspace-grid pt-4" aria-labelledby="scout-title">
@@ -142,72 +93,14 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
         />
       </section>
 
-      {errorMsg && (
-        <div role="alert" className="rounded-lg border border-[color:var(--color-error)] bg-[color:var(--color-error-soft)] p-4 text-sm text-[color:var(--color-error)]">
-          {errorMsg}
-        </div>
-      )}
-
-      {/* Multi-Film Stats Bar */}
-      {(singleSearchResponse || tasteMatchResponse) && (
-        <section className="result-summary" aria-live="polite">
-          <div>
-            <h2 className="flex items-center gap-2 text-xl font-bold text-white">
-              <Users className="w-4 h-4 text-brand-green" />
-              <span>
-                Found {totalMatches} Matches across {filmList.length} {filmList.length === 1 ? "Film" : "Films"} in {locationParam}
-              </span>
-            </h2>
-            <p className="mt-1 text-sm text-brand-subtext">
-              Scanned {totalScanned} candidate members across target interaction pages.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {singleSearchResponse && (
-              <ExportButtons
-                filmSlug={singleSearchResponse.film?.slug || filmList[0]}
-                stats={singleSearchResponse.stats}
-                matches={singleSearchResponse.matches}
-              />
-            )}
-            <span className="whitespace-nowrap font-mono text-xs font-bold text-brand-subtext tabular-nums">
-              {elapsedSec.toFixed(2)}s
-            </span>
-          </div>
-        </section>
-      )}
-
-      {/* Multi-Film Results Grid */}
-      {isMulti && tasteMatchResponse && tasteMatchResponse.matches.length > 0 && (
-        <section className="result-grid result-grid--two" aria-label="Multi-film scout results">
-          {tasteMatchResponse.matches.map((match, idx) => (
-            <TasteMatchCard key={match.username} match={match} index={idx} />
-          ))}
-        </section>
-      )}
-
-      {/* Single-Film Results Grid */}
-      {!isMulti && singleSearchResponse && singleSearchResponse.matches.length > 0 && (
-        <section className="result-grid result-grid--three" aria-label="Scout results">
-          {singleSearchResponse.matches.map((match, idx) => (
-            <ScoutResultCard key={match.username} match={match} index={idx} />
-          ))}
-        </section>
-      )}
-
-      {/* Empty State */}
-      {(singleSearchResponse || tasteMatchResponse) && totalMatches === 0 && (
-        <section className="empty-state">
-          <Compass className="h-8 w-8 text-brand-muted" />
-          <h2 className="text-xl font-bold text-white">
-            No matching members found in &quot;{locationParam}&quot;.
-          </h2>
-          <p className="max-w-md text-sm text-brand-subtext">
-            Try increasing Scan Depth, adding more film targets, or setting Location to &quot;Anywhere&quot;.
-          </p>
-        </section>
-      )}
+      <ScoutSearchResults
+        films={filmList}
+        location={locationParam}
+        sentiment={sentimentParam}
+        maxPages={maxPagesParam}
+        limit={limitParam}
+        includeBio={includeBioParam}
+      />
     </div>
   );
 }

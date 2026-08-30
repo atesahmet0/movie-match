@@ -7,9 +7,21 @@ import pytest
 from movie_match.scraper.letterboxd import LetterboxdScraper
 
 
+class MemoryQueryCache:
+    def __init__(self):
+        self.data = {}
+
+    async def get_query_result(self, key):
+        return self.data.get(key)
+
+    async def save_query_result(self, key, value):
+        self.data[key] = value
+
+
 @pytest.mark.asyncio
 async def test_film_search_coalesces_requests_and_reuses_cache(monkeypatch):
-    scraper = LetterboxdScraper(client=object(), cache=object())
+    shared_cache = MemoryQueryCache()
+    scraper = LetterboxdScraper(client=object(), cache=shared_cache)
     calls = 0
     results = [
         {"slug": f"alien-{index}", "title": f"Alien {index}"}
@@ -36,10 +48,18 @@ async def test_film_search_coalesces_requests_and_reuses_cache(monkeypatch):
     assert second == results[:2]
     assert cached == results[:3]
 
+    second_process = LetterboxdScraper(client=object(), cache=shared_cache)
+    monkeypatch.setattr(
+        second_process,
+        "_fetch_film_search",
+        lambda _query: pytest.fail("persistent cache should avoid an upstream fetch"),
+    )
+    assert await second_process.search_films("alien", limit=1) == results[:1]
+
 
 @pytest.mark.asyncio
 async def test_film_search_does_not_cache_failures(monkeypatch):
-    scraper = LetterboxdScraper(client=object(), cache=object())
+    scraper = LetterboxdScraper(client=object(), cache=MemoryQueryCache())
     calls = 0
 
     async def flaky_fetch(_query: str):

@@ -121,11 +121,14 @@ class LetterboxdScraper:
         self,
         query: SearchQuery,
         progress_callback: Optional[Callable[[str, int, int, int], None]] = None,
+        result_callback: Optional[Callable[[UserMatch], None]] = None,
+        cancel_event: Optional[asyncio.Event] = None,
     ) -> Tuple[List[UserMatch], ScanStats]:
         """
         Search for users matching target location and sentiment with stream pipelining and multi-tier caching.
         """
         start_time = time.time()
+        http_requests_at_start = debug_tracker.http_requests_total
         slug = extract_slug_from_input(query.film_input)
         film_meta = await self.get_film_info(slug)
         film_title = film_meta.title or slug.replace("-", " ").title()
@@ -155,13 +158,17 @@ class LetterboxdScraper:
                 break
 
             for page in range(1, query.max_pages + 1):
+                if cancel_event and cancel_event.is_set():
+                    raise asyncio.CancelledError
                 if len(matches) >= query.limit_matches:
                     break
 
                 logger.debug(f"[Scraper] Scanning endpoint '{endpoint_suffix}' ({desc}) - Page {page}/{query.max_pages}")
 
                 # 1. Check film page cache first
+                cache_started = time.monotonic()
                 items = await self.cache.get_film_page(slug, endpoint_suffix, page)
+                stats.cache_lookup_seconds += time.monotonic() - cache_started
                 if items is None:
                     url = (
                         f"https://letterboxd.com/{endpoint_suffix}page/{page}/"
@@ -174,10 +181,12 @@ class LetterboxdScraper:
                         logger.debug(f"[Scraper] Endpoint '{endpoint_suffix}' returned status {resp.status_code if resp else 'None'} on page {page} - stopping pagination")
                         break
 
+                    parse_started = time.monotonic()
                     if "reviews" in endpoint_suffix:
                         items = parse_users_from_reviews_page(resp.text)
                     else:
                         items = parse_users_from_rating_or_like_page(resp.text)
+                    stats.parse_seconds += time.monotonic() - parse_started
 
                     if not items:
                         logger.debug(f"[Scraper] No users parsed from '{url}' - stopping pagination")
@@ -247,6 +256,10 @@ class LetterboxdScraper:
                                 found_via=cand.get("found_via", ""),
                             )
                         )
+                        if stats.time_to_first_result is None:
+                            stats.time_to_first_result = time.time() - start_time
+                        if result_callback:
+                            result_callback(matches[-1])
                         stats.matches_count = len(matches)
                         logger.info(f"[green]✨ Match found:[/green] @{profile.username} ({profile.display_name}) in '{matched_text}' [dim]({len(matches)}/{query.limit_matches})[/dim]")
                         if len(matches) >= query.limit_matches:
@@ -268,6 +281,8 @@ class LetterboxdScraper:
                     else 25
                 )
                 for i in range(0, len(uncached_usernames), batch_size):
+                    if cancel_event and cancel_event.is_set():
+                        raise asyncio.CancelledError
                     chunk = uncached_usernames[i : i + batch_size]
                     logger.debug(f"[Scraper] Fetching {len(chunk)} uncached profiles concurrently (batch {i // batch_size + 1})...")
 
@@ -315,6 +330,10 @@ class LetterboxdScraper:
                                     found_via=cand.get("found_via", ""),
                                 )
                             )
+                            if stats.time_to_first_result is None:
+                                stats.time_to_first_result = time.time() - start_time
+                            if result_callback:
+                                result_callback(matches[-1])
                             stats.matches_count = len(matches)
                             logger.info(f"[green]✨ Match found:[/green] @{p.username} ({p.display_name}) in '{matched_text}' [dim]({len(matches)}/{query.limit_matches})[/dim]")
                             if len(matches) >= query.limit_matches:
@@ -335,6 +354,7 @@ class LetterboxdScraper:
                         break
 
         stats.elapsed_seconds = time.time() - start_time
+        stats.upstream_requests = debug_tracker.http_requests_total - http_requests_at_start
         logger.info(
             f"🏁 User search finished in {stats.elapsed_seconds:.2f}s: {len(matches)} matches found "
             f"from {stats.total_users_discovered} candidates ({stats.total_pages_scanned} pages scanned)"
@@ -521,6 +541,7 @@ class LetterboxdScraper:
         self,
         query: MultiFilmMatchQuery,
         progress_callback: Optional[Callable[[str, int, int, int], None]] = None,
+        cancel_event: Optional[asyncio.Event] = None,
     ) -> Tuple[List[TasteMatchResult], ScanStats]:
         """
         Search for users matching multiple target films in the specified location with Taste Compatibility score.
@@ -530,6 +551,7 @@ class LetterboxdScraper:
         just pinned favorites.
         """
         start_time = time.time()
+        http_requests_at_start = debug_tracker.http_requests_total
         clean_slugs = list(dict.fromkeys(extract_slug_from_input(f) for f in query.films if f.strip()))
         if not clean_slugs:
             return [], ScanStats()
@@ -615,12 +637,26 @@ class LetterboxdScraper:
         # Metadata lookups are independent and the HTTP client already enforces a
         # safe concurrency limit. Resolving them together removes one full network
         # round trip per film from the critical path on a cold search.
+        metadata_started = time.monotonic()
         film_metadata = await asyncio.gather(
             *(self.get_film_info(slug) for slug in clean_slugs)
         )
+        stats.metadata_seconds = time.monotonic() - metadata_started
         metadata_by_slug = dict(zip(clean_slugs, film_metadata))
 
-        for film_idx, slug in enumerate(clean_slugs, 1):
+        scan_slugs = sorted(
+            clean_slugs,
+            key=lambda slug: (
+                metadata_by_slug[slug].member_count is None if metadata_by_slug[slug] else True,
+                metadata_by_slug[slug].member_count
+                if metadata_by_slug[slug] and metadata_by_slug[slug].member_count is not None
+                else float("inf"),
+            ),
+        )
+
+        for film_idx, slug in enumerate(scan_slugs, 1):
+            if cancel_event and cancel_event.is_set():
+                raise asyncio.CancelledError
             film_meta = metadata_by_slug[slug] or FilmMetadata(
                 slug=slug,
                 title=slug.replace("-", " ").title(),
@@ -630,12 +666,16 @@ class LetterboxdScraper:
             film_member_counts[slug] = film_meta.member_count
             endpoints = sentiment_plan.get_film_endpoints(slug)[:2]
 
-            logger.debug(f"[Scraper] Scouting film {film_idx}/{len(clean_slugs)}: '{slug}' ({film_title})")
+            logger.debug(f"[Scraper] Scouting film {film_idx}/{len(scan_slugs)}: '{slug}' ({film_title})")
 
             for endpoint_suffix, desc in endpoints:
                 for page in range(1, query.max_pages_per_film + 1):
+                    if cancel_event and cancel_event.is_set():
+                        raise asyncio.CancelledError
                     # Check cache first
+                    cache_started = time.monotonic()
                     items = await self.cache.get_film_page(slug, endpoint_suffix, page)
+                    stats.cache_lookup_seconds += time.monotonic() - cache_started
                     if items is None:
                         url = (
                             f"https://letterboxd.com/{endpoint_suffix}page/{page}/"
@@ -647,10 +687,12 @@ class LetterboxdScraper:
                         if not resp or resp.status_code != 200:
                             break
 
+                        parse_started = time.monotonic()
                         if "reviews" in endpoint_suffix:
                             items = parse_users_from_reviews_page(resp.text)
                         else:
                             items = parse_users_from_rating_or_like_page(resp.text)
+                        stats.parse_seconds += time.monotonic() - parse_started
 
                         if not items:
                             break
@@ -728,19 +770,38 @@ class LetterboxdScraper:
 
                     if progress_callback:
                         progress_callback(
-                            f"Scouting film {film_idx}/{len(clean_slugs)} ({slug}) - Page {page}",
+                            f"Scouting film {film_idx}/{len(scan_slugs)} ({slug}) - Page {page}",
                             stats.total_pages_scanned,
                             stats.total_users_discovered,
                             len([u for u, ints in user_film_interactions.items() if len(ints) >= query.min_shared_films]),
                         )
 
+            qualified_candidates = sum(
+                1
+                for interactions in user_film_interactions.values()
+                if len(interactions) >= query.min_shared_films
+            )
+            candidate_target = min(1500, max(query.limit_matches * 3, query.limit_matches + 10))
+            if (
+                film_idx >= max(2, query.min_shared_films)
+                and qualified_candidates >= candidate_target
+            ):
+                logger.info(
+                    "Stopping multi-film scan after rare-first candidate target "
+                    f"was reached ({qualified_candidates}/{candidate_target})"
+                )
+                break
+
         # Cross-reference candidate profile details / library for all location matches
         logger.debug(f"[Matcher] Cross-referencing libraries for {len(user_profile_cache)} location-matched users...")
         profile_entries = list(user_profile_cache.items())
-        cached_details = await asyncio.gather(
-            *(self.cache.get_user_profile_detail(u_name) for u_name, _ in profile_entries)
+        detail_started = time.monotonic()
+        cached_details = await self.cache.get_user_profile_details_batch(
+            [u_name for u_name, _ in profile_entries]
         )
-        for (u_name, (p, matched_text, fields)), cached_detail in zip(profile_entries, cached_details):
+        stats.cache_lookup_seconds += time.monotonic() - detail_started
+        for u_name, (p, matched_text, fields) in profile_entries:
+            cached_detail = cached_details.get(u_name.lower())
             if u_name not in user_film_interactions:
                 user_film_interactions[u_name] = []
 
@@ -836,6 +897,8 @@ class LetterboxdScraper:
         results.sort(key=lambda r: (r.compatibility_score, r.shared_films_count), reverse=True)
         stats.matches_count = len(results)
         stats.elapsed_seconds = time.time() - start_time
+        stats.time_to_first_result = stats.elapsed_seconds if results else None
+        stats.upstream_requests = debug_tracker.http_requests_total - http_requests_at_start
         logger.info(f"🏁 Taste match finished in {stats.elapsed_seconds:.2f}s: {len(results)} matches found")
 
         return results[:query.limit_matches], stats
@@ -858,6 +921,13 @@ class LetterboxdScraper:
                 return cached_results[:limit]
             del self._film_search_cache[cache_key]
 
+        persistent_key = f"film-search:{cache_key}"
+        persistent = await self.cache.get_query_result(persistent_key)
+        if persistent is not None:
+            persistent_results = persistent.get("results", [])
+            self._film_search_cache[cache_key] = (time.monotonic(), persistent_results)
+            return persistent_results[:limit]
+
         task = self._film_search_inflight.get(cache_key)
         if task is None:
             task = asyncio.create_task(self._fetch_film_search(clean_q))
@@ -875,6 +945,8 @@ class LetterboxdScraper:
         self._film_search_cache.move_to_end(cache_key)
         while len(self._film_search_cache) > FILM_SEARCH_CACHE_SIZE:
             self._film_search_cache.popitem(last=False)
+        if results:
+            await self.cache.save_query_result(persistent_key, {"results": results})
         return results[:limit]
 
     async def _fetch_film_search(self, query: str) -> List[Dict[str, Any]]:

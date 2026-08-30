@@ -122,6 +122,15 @@ async def test_cache_user_detail_and_films(tmp_path):
     assert len(cached_detail.favorite_films) == 2
     assert cached_detail.favorite_films[0].slug == "alien"
 
+    batch = await cache.get_user_profile_details_batch(["karsten", "missing"])
+    assert list(batch) == ["karsten"]
+    assert batch["karsten"].stats["films"] == "400"
+
+    await cache.save_query_result("search:test", {"matches": [{"username": "karsten"}]})
+    assert await cache.get_query_result("search:test") == {
+        "matches": [{"username": "karsten"}]
+    }
+
     # User films
     films = [
         UserFilmItem(slug="the-odyssey", title="The Odyssey", user_rating=4.0, user_liked=True),
@@ -163,5 +172,4 @@ async def test_cache_user_profile_with_favorite_films(tmp_path):
     assert len(batch["verbakimatto"].favorite_films) == 4
 
     await cache.close()
-
 

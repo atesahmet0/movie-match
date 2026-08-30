@@ -88,7 +88,7 @@ export default function ScoutForm({
             }
           >
             {form.isPending ? (
-                <span>Scouting… ({form.elapsedSeconds.toFixed(1)}s)</span>
+                <span>Opening search…</span>
             ) : (
               <span>
                 Scout {form.selectedFilms.length}{" "}
@@ -102,8 +102,6 @@ export default function ScoutForm({
       {/* Compound 4: Dynamic Live Scouting Status Progression */}
       <StatusProgress
         isPending={form.isPending}
-        elapsedSeconds={form.elapsedSeconds}
-        statusStep={form.statusStep}
         selectedFilmsCount={form.selectedFilms.length}
         locations={form.locations}
         maxPages={form.maxPages}

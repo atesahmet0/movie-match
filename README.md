@@ -35,6 +35,12 @@ PROXY_URL="http://username:password@proxy-host:port"
 # PostgreSQL database configuration (optional; falls back to local SQLite if omitted)
 DATABASE_URL="postgresql://postgres:password@localhost:5432/movie_match"
 
+# Optional cross-process hot cache. PostgreSQL/SQLite remains the durable fallback.
+REDIS_URL="redis://localhost:6379/0"
+
+# Warm common film metadata and autocomplete results in the background (default: true)
+MOVIE_MATCH_WARM_CACHE="true"
+
 # Token required for history/cache inspection and waitlist administration
 MOVIE_MATCH_ADMIN_TOKEN="change-this-to-a-long-random-secret"
 ```
@@ -139,6 +145,8 @@ uv run movie-match serve --port 8000
 ```
 * Interactive OpenAPI documentation: `http://127.0.0.1:8000/docs`
 * Health check: `http://127.0.0.1:8000/health`
+* Live operational metrics: `http://127.0.0.1:8000/api/metrics`
+* Progressive search stream: `http://127.0.0.1:8000/api/search/stream?films=alien`
 
 ### Step 2: Start the Next.js SSR Frontend
 ```bash
@@ -153,7 +161,7 @@ Open `http://localhost:3000` in your browser.
 ## 🏗️ Architecture
 
 - **Backend (`movie_match/`)**: Python FastAPI async REST API providing endpoints for geo-matching, multi-film taste soulmates, user profiles, category films, and search history caching.
-- **Database Layer (`movie_match/cache/db.py`)**: Dual-backend support with PostgreSQL connection pooling (`asyncpg`) and SQLite fallback (`aiosqlite`).
+- **Database Layer (`movie_match/cache/db.py`)**: PostgreSQL/SQLite durable caching plus optional Redis hot caching shared across backend processes.
 - **Frontend (`frontend/`)**: Next.js App Router (TypeScript + Tailwind CSS) leveraging React Server Components for fast SSR page loads, dynamic OpenGraph/SEO metadata, responsive dark mode, and client interaction controls.
 
 ---

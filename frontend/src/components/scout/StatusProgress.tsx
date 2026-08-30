@@ -1,13 +1,11 @@
 /* Hallmark · component: StatusProgress · genre: editorial utility · theme: Studio Projection */
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { CheckCircle2, Globe, Layers, Loader2, Sparkles, Users } from "lucide-react";
 
 export interface StatusProgressProps {
   isPending: boolean;
-  elapsedSeconds: number;
-  statusStep: number;
   selectedFilmsCount: number;
   locations: string[];
   maxPages: number;
@@ -15,13 +13,25 @@ export interface StatusProgressProps {
 
 export function StatusProgress({
   isPending,
-  elapsedSeconds,
-  statusStep,
   selectedFilmsCount,
   locations,
   maxPages,
 }: StatusProgressProps) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!isPending) return;
+    const started = performance.now();
+    const interval = window.setInterval(
+      () => setElapsedSeconds((performance.now() - started) / 1000),
+      250
+    );
+    return () => window.clearInterval(interval);
+  }, [isPending]);
+
   if (!isPending) return null;
+
+  const statusStep = elapsedSeconds > 7 ? 4 : elapsedSeconds > 3.5 ? 3 : elapsedSeconds > 1.2 ? 2 : 1;
 
   const steps = [
     { label: "Connect", detail: `${selectedFilmsCount} target films`, icon: Globe },

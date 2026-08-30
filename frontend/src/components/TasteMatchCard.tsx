@@ -14,7 +14,7 @@ interface TasteMatchCardProps {
   index: number;
 }
 
-export default function TasteMatchCard({ match, index }: TasteMatchCardProps) {
+function TasteMatchCard({ match, index }: TasteMatchCardProps) {
   const [avatarError, setAvatarError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -154,3 +154,5 @@ export default function TasteMatchCard({ match, index }: TasteMatchCardProps) {
     </>
   );
 }
+
+export default React.memo(TasteMatchCard);

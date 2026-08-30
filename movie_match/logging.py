@@ -4,7 +4,8 @@ import logging
 import os
 import sys
 import time
-from typing import Dict, Optional
+from collections import deque
+from typing import Any, Dict, Optional
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.panel import Panel
@@ -97,6 +98,63 @@ class DebugTracker:
 
 # Global tracker instance
 debug_tracker = DebugTracker()
+
+
+class SearchPerformanceTracker:
+    """Bounded operational metrics for live search health."""
+
+    def __init__(self) -> None:
+        self.searches_total = 0
+        self.search_cache_hits = 0
+        self.searches_cancelled = 0
+        self.active_searches = 0
+        self.durations = deque(maxlen=200)
+        self.first_result_times = deque(maxlen=200)
+
+    def started(self) -> None:
+        self.active_searches += 1
+
+    def finished(
+        self,
+        duration: float,
+        *,
+        cache_hit: bool = False,
+        cancelled: bool = False,
+        time_to_first_result: Optional[float] = None,
+    ) -> None:
+        self.active_searches = max(0, self.active_searches - 1)
+        self.searches_total += 1
+        self.search_cache_hits += int(cache_hit)
+        self.searches_cancelled += int(cancelled)
+        self.durations.append(duration)
+        if time_to_first_result is not None:
+            self.first_result_times.append(time_to_first_result)
+
+    def snapshot(self) -> Dict[str, Any]:
+        cache_ratio = self.search_cache_hits / self.searches_total if self.searches_total else 0.0
+        avg_duration = sum(self.durations) / len(self.durations) if self.durations else 0.0
+        avg_first = (
+            sum(self.first_result_times) / len(self.first_result_times)
+            if self.first_result_times
+            else 0.0
+        )
+        return {
+            "searches_total": self.searches_total,
+            "active_searches": self.active_searches,
+            "searches_cancelled": self.searches_cancelled,
+            "search_cache_hits": self.search_cache_hits,
+            "search_cache_hit_ratio": round(cache_ratio, 4),
+            "average_search_seconds": round(avg_duration, 4),
+            "average_time_to_first_result_seconds": round(avg_first, 4),
+            "http_requests_total": debug_tracker.http_requests_total,
+            "http_retries": debug_tracker.http_retries,
+            "http_rate_limits": debug_tracker.http_rate_limits,
+            "cache_hits_total": debug_tracker.cache_hits,
+            "cache_misses_total": debug_tracker.cache_misses,
+        }
+
+
+performance_tracker = SearchPerformanceTracker()
 
 
 def is_env_debug_enabled() -> bool:

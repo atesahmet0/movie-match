@@ -150,3 +150,9 @@ class ScanStats(BaseModel):
     cache_hits: int = 0
     matches_count: int = 0
     elapsed_seconds: float = 0.0
+    time_to_first_result: Optional[float] = None
+    metadata_seconds: float = 0.0
+    cache_lookup_seconds: float = 0.0
+    parse_seconds: float = 0.0
+    upstream_requests: int = 0
+    cache_status: str = "miss"
