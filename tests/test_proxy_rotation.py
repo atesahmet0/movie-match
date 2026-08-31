@@ -153,3 +153,27 @@ def test_adaptive_limit_recovers_proportionally_for_large_pools():
     asyncio.run(client._record_success())
 
     assert client._adaptive_limit == 15  # +24//8, not +1
+
+
+# ── Webshare connection modes (https://apidocs.webshare.io/proxy-connection) ──
+
+
+def test_rotation_mode_detection():
+    """A '-rotate' username rotates per request; a numeric suffix is sticky."""
+    from movie_match.scraper.client import _proxy_rotation_mode
+
+    assert _proxy_rotation_mode("http://user-rotate:pw@p.webshare.io:80") == "rotating"
+    assert _proxy_rotation_mode("http://user-us-rotate:pw@p.webshare.io:80") == "rotating"
+    assert _proxy_rotation_mode("http://user-12345:pw@p.webshare.io:80") == "sticky"
+    assert _proxy_rotation_mode("http://user:pw@p.webshare.io:80") == "backbone"
+    assert _proxy_rotation_mode("http://user:pw@1.2.3.4:8080") == "direct"
+    assert _proxy_rotation_mode("not a url") == "direct"
+
+
+def test_rotation_mode_reported_in_metrics(monkeypatch):
+    monkeypatch.setenv("PROXY_URL", "http://user-rotate:secret@p.webshare.io:80")
+    monkeypatch.delenv("WEBSHARE_PROXY_URLS", raising=False)
+    monkeypatch.delenv("PROXY_URLS", raising=False)
+
+    metrics = AntiBotHttpClient().metrics_snapshot()
+    assert metrics["rotation_modes"] == ["rotating"]

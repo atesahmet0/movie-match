@@ -3,10 +3,12 @@
 import asyncio
 import os
 import random
+import re
 import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+from urllib.parse import urlsplit
 
 from curl_cffi.requests import AsyncSession, Response
 
@@ -27,6 +29,33 @@ BLOCK_STATUSES = {403, 429}
 # Session pool size when no proxy list is configured — every session would share
 # the one exit address, so extra parallelism buys blocks, not throughput.
 DEFAULT_POOL_SIZE = 5
+
+# Webshare's backbone endpoint. Per their docs, appending "-rotate" to the proxy
+# username yields a new exit IP on every request, and cannot be combined with a
+# session ID; a trailing numeric segment instead pins a sticky session to one IP.
+# See https://apidocs.webshare.io/proxy-connection
+WEBSHARE_BACKBONE_HOST = "p.webshare.io"
+
+
+def _proxy_rotation_mode(url: str) -> str:
+    """Classify how a proxy URL assigns exit addresses.
+
+    Only the backbone endpoint is classifiable — a direct proxy is one fixed
+    address by definition. Returns "rotating", "sticky", "backbone", or "direct".
+    """
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+        username = parts.username or ""
+    except ValueError:
+        return "direct"
+    if host != WEBSHARE_BACKBONE_HOST:
+        return "direct"
+    if username.endswith("-rotate"):
+        return "rotating"
+    if re.search(r"-\d+$", username):
+        return "sticky"
+    return "backbone"
 RETRYABLE_SERVER_STATUSES = {500, 502, 503, 504}
 
 DEFAULT_HEADERS = {
@@ -161,11 +190,20 @@ class AntiBotHttpClient:
             for index in range(len(self._slots)):
                 self._available_slots.put_nowait(index)
             self._session = self._slots[0].session
+            modes = sorted({_proxy_rotation_mode(u) for u in self.proxy_urls})
             logger.debug(
                 "HTTP session pool initialized "
                 f"(sessions={len(self._slots)}, proxy={'yes' if self.proxy_urls else 'no'}, "
-                f"endpoints={len(self.proxy_urls)})"
+                f"endpoints={len(self.proxy_urls)}, modes={modes or ['none']})"
             )
+            # A sticky backbone session pins every slot to one exit address, so a
+            # pool sized for rotation would pile all of it onto that address.
+            if modes == ["sticky"] and self.session_pool_size > DEFAULT_POOL_SIZE:
+                logger.warning(
+                    f"Proxy is a sticky Webshare session but the pool holds "
+                    f"{self.session_pool_size} sessions — they all share one exit IP. "
+                    "Use a '-rotate' username or lower PROXY_SESSION_POOL_CEILING."
+                )
 
     async def close(self):
         for task in list(self._cooldown_tasks):
@@ -267,6 +305,7 @@ class AntiBotHttpClient:
         return {
             "configured": bool(self.proxy_urls),
             "endpoints": len(self.proxy_urls),
+            "rotation_modes": sorted({_proxy_rotation_mode(u) for u in self.proxy_urls}),
             "session_pool_size": len(self._slots) or self.session_pool_size,
             "active_requests": self._active_requests,
             "adaptive_concurrency": self._adaptive_limit,
