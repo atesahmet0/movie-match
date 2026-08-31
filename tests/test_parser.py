@@ -5,6 +5,7 @@ from movie_match.matcher.sentiment import parse_star_rating_from_class, rating_t
 from movie_match.scraper.parser import (
     extract_slug_from_input,
     parse_film_page,
+    parse_film_stats,
     parse_user_profile_page,
     parse_users_from_rating_or_like_page,
     parse_users_from_reviews_page,
@@ -197,3 +198,25 @@ def test_parse_user_films_page():
     assert films[1].user_rating == 5.0
     assert films[1].user_liked is False
 
+
+
+def test_parse_film_stats_reads_the_watcher_count():
+    """The count lives on the /csi/film/<slug>/stats/ fragment, not the film page."""
+    html = """
+    <div class="production-statistic -watches" aria-label="Watched by 532,659&nbsp;members">
+      <a class="tooltip" href="/film/buffalo-66/members/"
+         title="Watched by 532,659&nbsp;members" data-html="true">532K</a>
+    </div>
+    <div class="production-statistic -likes">
+      <a class="tooltip" title="Liked by 203,948&nbsp;members">204K</a>
+    </div>
+    """
+    assert parse_film_stats(html) == 532_659
+
+
+def test_parse_film_stats_missing_or_blocked_returns_none():
+    """A blocked fragment must leave the count unknown rather than guess."""
+    assert parse_film_stats("") is None
+    assert parse_film_stats("<html><body>403 Forbidden</body></html>") is None
+    # The likes line alone must not be mistaken for the watcher count.
+    assert parse_film_stats('<a title="Liked by 203,948&nbsp;members">204K</a>') is None

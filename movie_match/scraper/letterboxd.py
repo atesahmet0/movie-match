@@ -28,6 +28,7 @@ from movie_match.scraper.client import AntiBotHttpClient
 from movie_match.scraper.parser import (
     extract_slug_from_input,
     parse_film_page,
+    parse_film_stats,
     parse_user_films_page,
     parse_user_profile_detail,
     parse_user_profile_page,
@@ -82,13 +83,32 @@ class LetterboxdScraper:
             return cached
 
         url = f"https://letterboxd.com/film/{slug}/"
-        resp = await self.client.get(url)
+        # The watcher count drives the rarity weighting and the rarest-film-first
+        # scan order, and it lives on a separate fragment. Fetching it alongside
+        # the film page keeps it off the critical path, and the result is cached
+        # with the metadata so it costs one extra request per film, once.
+        stats_url = f"https://letterboxd.com/csi/film/{slug}/stats/"
+        resp, stats_resp = await asyncio.gather(
+            self.client.get(url),
+            self.client.get(stats_url),
+            return_exceptions=True,
+        )
+        if isinstance(resp, BaseException):
+            resp = None
+        if isinstance(stats_resp, BaseException):
+            stats_resp = None
         if not resp or resp.status_code != 200:
             if strict:
                 return None
             return FilmMetadata(slug=slug, title=slug.replace("-", " ").title(), url=url)
 
         meta = parse_film_page(resp.text, slug)
+        # A blocked or missing stats fragment simply leaves the count unknown,
+        # which is the behaviour every caller already handles.
+        if stats_resp is not None and stats_resp.status_code == 200:
+            member_count = parse_film_stats(stats_resp.text)
+            if member_count:
+                meta.member_count = member_count
         await self.cache.save_film_metadata(meta)
         return meta
 

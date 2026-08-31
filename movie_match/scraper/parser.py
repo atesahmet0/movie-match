@@ -21,6 +21,26 @@ def extract_slug_from_input(user_input: str) -> str:
     return clean.lower()
 
 
+def parse_film_stats(html: str) -> Optional[int]:
+    """Extract a film's watcher count from its stats fragment.
+
+    Letterboxd serves the counts from `/csi/film/<slug>/stats/` rather than the
+    film page, which is why reading them off the film page always came back
+    empty. The number appears twice in that fragment — once as the tooltip's
+    `title` and once as the surrounding `aria-label` — so match the text
+    directly instead of depending on either element surviving a redesign.
+    """
+    if not html:
+        return None
+    m = re.search(r"Watched by\s*([\d,]+)(?:&nbsp;|&#160;|\s| )*members", html, re.I)
+    if not m:
+        return None
+    try:
+        return int(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
 def parse_film_page(html: str, slug: str) -> FilmMetadata:
     """Extract film title, year, director, rating, and poster from film page."""
     tree = HTMLParser(html)
