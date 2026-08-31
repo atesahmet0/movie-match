@@ -133,7 +133,13 @@ export interface ScanStats {
   upstream_requests?: number;
   cache_status?: "hit" | "miss" | string;
   partial?: boolean;
-  stop_reason?: "time_budget" | "request_budget" | "profile_budget" | string | null;
+  stop_reason?:
+    | "time_budget"
+    | "request_budget"
+    | "profile_budget"
+    | "strong_match"
+    | string
+    | null;
 }
 
 export interface SearchResponse {

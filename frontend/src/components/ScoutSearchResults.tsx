@@ -48,6 +48,7 @@ export default function ScoutSearchResults({
   const [error, setError] = useState<string | null>(null);
   const deferredMatches = useDeferredValue(matches);
   const isMulti = films.length > 1;
+  const topMatch = deferredMatches[0] as TasteMatchResult | undefined;
   const { activeUsername } = useTaste();
   // The URL param wins (a shared link is explicit), but a connected profile
   // still applies when the scout form was submitted without one.
@@ -78,10 +79,12 @@ export default function ScoutSearchResults({
     const searchStartedAt = Date.now();
     let completionTimer: number | null = null;
     let timedOut = false;
+    // Outlasts the server's own budgets (180s scan, 195s endpoint) so a slow
+    // search ends with partial results rather than a client-side abort.
     const timeoutId = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, 60_000);
+    }, 200_000);
 
     const run = async () => {
       setMatches([]);
@@ -132,7 +135,9 @@ export default function ScoutSearchResults({
               setMatches(payload.matches as StreamMatch[]);
               if (!isMulti) setSinglePayload(payload as SearchResponse);
               setProgress(
-                payload.stats.partial
+                payload.stats.stop_reason === "strong_match"
+                  ? "Found a strong match — stopped searching."
+                  : payload.stats.partial
                   ? "Time limit reached — showing the best matches found so far."
                   : searchRun
                   ? "Results refreshed."
@@ -203,7 +208,11 @@ export default function ScoutSearchResults({
                 <Users className="h-4 w-4 text-brand-green" />
               )}
               <span>
-                {isSearching ? "Scouting" : "Found"} {matches.length} {matches.length === 1 ? "match" : "matches"}
+                {isSearching
+                  ? `Scouting for a strong match (${matches.length} so far)`
+                  : isMulti && matches.length > 0
+                  ? `Best match: ${topMatch?.display_name || topMatch?.username}`
+                  : `Found ${matches.length} ${matches.length === 1 ? "match" : "matches"}`}
               </span>
             </h2>
             <p className="mt-1 text-sm text-brand-subtext">{progress}</p>
@@ -231,22 +240,45 @@ export default function ScoutSearchResults({
         </div>
       )}
 
-      {deferredMatches.length > 0 && (
-        <section
-          className={`result-grid ${isMulti ? "result-grid--two" : "result-grid--three"}`}
-          aria-label="Scout results"
-        >
-          {isMulti
-            ? deferredMatches.map((match, index) => (
-                <TasteMatchCard
-                  key={match.username}
-                  match={match as TasteMatchResult}
-                  index={index}
-                />
-              ))
-            : deferredMatches.map((match) => (
-                <ScoutResultCard key={match.username} match={match as UserMatch} />
-              ))}
+      {deferredMatches.length > 0 && isMulti && (
+        <div className="space-y-8">
+          {/* The search stops at the first convincing candidate, so the list is
+              a headline plus context — not a leaderboard of equals. */}
+          <section aria-label="Best match" className="space-y-3">
+            <h3 className="font-mono text-xs font-bold uppercase tracking-wide text-brand-green">
+              Best match
+            </h3>
+            <TasteMatchCard
+              match={deferredMatches[0] as TasteMatchResult}
+              index={0}
+              highlight
+            />
+          </section>
+
+          {deferredMatches.length > 1 && (
+            <section aria-label="Other candidates" className="space-y-3">
+              <h3 className="font-mono text-xs font-bold uppercase tracking-wide text-brand-muted">
+                Other high-ranking candidates ({deferredMatches.length - 1})
+              </h3>
+              <div className="result-grid result-grid--two">
+                {deferredMatches.slice(1).map((match, index) => (
+                  <TasteMatchCard
+                    key={match.username}
+                    match={match as TasteMatchResult}
+                    index={index + 1}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {deferredMatches.length > 0 && !isMulti && (
+        <section className="result-grid result-grid--three" aria-label="Scout results">
+          {deferredMatches.map((match) => (
+            <ScoutResultCard key={match.username} match={match as UserMatch} />
+          ))}
         </section>
       )}
 

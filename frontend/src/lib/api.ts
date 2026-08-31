@@ -131,7 +131,7 @@ export async function fetchTasteMatch(params: {
         source_username: params.source_username || undefined,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(200_000),
     });
 
     if (!res.ok) {

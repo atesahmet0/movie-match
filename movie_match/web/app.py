@@ -337,7 +337,7 @@ async def api_taste_match(query: MultiFilmMatchQuery, request: Request):
 
     cancel_event = asyncio.Event()
     task = asyncio.create_task(_run_taste_search(query, cancel_event=cancel_event))
-    endpoint_timeout = max(10.0, float(os.getenv("SEARCH_ENDPOINT_TIMEOUT_SECONDS", "50")))
+    endpoint_timeout = max(10.0, float(os.getenv("SEARCH_ENDPOINT_TIMEOUT_SECONDS", "195")))
     deadline = time.monotonic() + endpoint_timeout
     try:
         while not task.done():

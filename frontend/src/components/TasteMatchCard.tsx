@@ -12,9 +12,11 @@ import { Badge } from "@/components/ui/badge";
 interface TasteMatchCardProps {
   match: TasteMatchResult;
   index: number;
+  /** Renders the card as the headline result the search stopped for. */
+  highlight?: boolean;
 }
 
-function TasteMatchCard({ match, index }: TasteMatchCardProps) {
+function TasteMatchCard({ match, index, highlight = false }: TasteMatchCardProps) {
   const [avatarError, setAvatarError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -28,7 +30,11 @@ function TasteMatchCard({ match, index }: TasteMatchCardProps) {
 
   return (
     <>
-      <article className="glass-card flex flex-col justify-between p-5 sm:p-6">
+      <article
+        className={`glass-card flex flex-col justify-between p-5 sm:p-6 ${
+          highlight ? "border-brand-green/50 ring-1 ring-brand-green/30" : ""
+        }`}
+      >
         <div>
           <div className="flex items-start justify-between mb-4 gap-3">
             <div className="flex items-center space-x-3.5 min-w-0">
@@ -128,7 +134,9 @@ function TasteMatchCard({ match, index }: TasteMatchCardProps) {
         </div>
 
         <div className="pt-3.5 mt-3.5 border-t border-brand-border flex items-center justify-between">
-          <span className="text-xs font-mono text-brand-muted">Match #{index + 1}</span>
+          <span className="text-xs font-mono text-brand-muted">
+            {highlight ? "Best match" : `Match #${index + 1}`}
+          </span>
 
           <div className="flex items-center gap-2">
             <button

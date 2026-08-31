@@ -606,10 +606,23 @@ class LetterboxdScraper:
             film_slug=discovery_slugs[0],
         )
         deadline = time.monotonic() + max(
-            5.0, float(os.getenv("SEARCH_MAX_SECONDS", "45"))
+            5.0, float(os.getenv("SEARCH_MAX_SECONDS", "180"))
         )
-        request_budget = max(25, int(os.getenv("SEARCH_MAX_UPSTREAM_REQUESTS", "400")))
-        profile_budget = max(25, int(os.getenv("SEARCH_MAX_PROFILE_FETCHES", "250")))
+        request_budget = max(25, int(os.getenv("SEARCH_MAX_UPSTREAM_REQUESTS", "1200")))
+        profile_budget = max(25, int(os.getenv("SEARCH_MAX_PROFILE_FETCHES", "750")))
+        # The scan hunts for one convincing match rather than a wide pool: it
+        # stops the moment a candidate clears this bar, and otherwise spends the
+        # full budget looking for one, returning the best of what it found.
+        #
+        # Quality and evidence are gated separately rather than through the
+        # shrunk ranking score. Shrinkage caps what a thin match can reach, so a
+        # single bar on it would be unreachable on small film sets and every
+        # search would burn the whole budget.
+        strong_match_score = float(os.getenv("SEARCH_STRONG_MATCH_SCORE", "85"))
+        strong_match_confidence = float(os.getenv("SEARCH_STRONG_MATCH_CONFIDENCE", "0.6"))
+        strong_match_min_shared = max(
+            query.min_shared_films, int(os.getenv("SEARCH_STRONG_MATCH_MIN_SHARED", "2"))
+        )
 
         def _budget_reason() -> Optional[str]:
             if cancel_event and cancel_event.is_set():
@@ -683,6 +696,61 @@ class LetterboxdScraper:
             for film in fingerprint.films
         }
         film_member_counts: Dict[str, Optional[int]] = {}
+
+        total_films_count = len(scoring_slugs)
+        all_target_tiers = (
+            [fingerprint.get_tier(s) for s in scoring_slugs] if fingerprint else None
+        )
+
+        def _score_interactions(interactions: List[FilmInteraction]):
+            """Score one candidate's interactions with the current evidence.
+
+            Used both mid-scan (to spot a strong match early) and for the final
+            ranking, so the bar the scan stops at is the same number the result
+            is ranked by. Mid-scan the evidence is partial: the library
+            cross-reference afterwards adds shared films, which raises
+            confidence but can move the averaged signals either way, so the
+            reported score may differ slightly from the one that triggered the
+            stop.
+            """
+            film_signals = [
+                FilmSignals(
+                    user_rating=fi.user_rating,
+                    user_liked=fi.user_liked,
+                    is_favorite=fi.is_favorite,
+                    found_via=fi.found_via,
+                    film_tier=(
+                        fi.film_tier
+                        if fi.film_tier != "unknown" or not fingerprint
+                        else fingerprint.get_tier(fi.film_slug)
+                    ),
+                    source_rating=(
+                        fingerprint.get_source_rating(fi.film_slug) if fingerprint else None
+                    ),
+                    member_count=film_member_counts.get(fi.film_slug),
+                )
+                for fi in interactions
+            ]
+            return compute_compatibility_score(
+                film_signals, total_films_count, all_target_tiers,
+            )
+
+        def _found_strong_match() -> Optional[str]:
+            """Return the username of a candidate already good enough to stop for."""
+            for u_name, interactions in user_film_interactions.items():
+                if source_user_lower and u_name.lower() == source_user_lower:
+                    continue
+                if len(interactions) < strong_match_min_shared:
+                    continue
+                if u_name not in user_profile_cache:
+                    continue
+                score = _score_interactions(interactions)
+                if (
+                    score.overall >= strong_match_score
+                    and score.confidence >= strong_match_confidence
+                ):
+                    return u_name
+            return None
 
         def _register_location_match(
             u: str,
@@ -911,19 +979,18 @@ class LetterboxdScraper:
                 if stop_scanning:
                     break
 
-            qualified_candidates = sum(
-                1
-                for interactions in user_film_interactions.values()
-                if len(interactions) >= query.min_shared_films
-            )
-            candidate_target = min(1500, max(query.limit_matches * 3, query.limit_matches + 10))
-            if (
-                film_idx >= max(2, query.min_shared_films)
-                and qualified_candidates >= candidate_target
-            ):
+            # Skip when the loop is already unwinding on an exhausted budget —
+            # that is a truncation, and should be reported as one.
+            strong_match = None if stop_scanning else _found_strong_match()
+            if strong_match:
+                # A convincing match is the goal, so stop looking. This is a
+                # successful finish, not a truncation — leave stats.partial off
+                # so the UI does not report it as a budget cut.
+                stats.stop_reason = "strong_match"
                 logger.info(
-                    "Stopping multi-film scan after rare-first candidate target "
-                    f"was reached ({qualified_candidates}/{candidate_target})"
+                    f"Stopping multi-film scan: @{strong_match} cleared the strong-match "
+                    f"bar (score >= {strong_match_score}, confidence >= {strong_match_confidence}) "
+                    f"after {film_idx}/{len(scan_slugs)} films"
                 )
                 break
 
@@ -976,8 +1043,6 @@ class LetterboxdScraper:
 
         # Assemble and rank taste match results using weighted scoring model
         results: List[TasteMatchResult] = []
-        total_films_count = len(scoring_slugs)
-        all_target_tiers = [fingerprint.get_tier(s) for s in scoring_slugs] if fingerprint else None
         if fingerprint:
             for interactions in user_film_interactions.values():
                 for interaction in interactions:
@@ -991,22 +1056,7 @@ class LetterboxdScraper:
             if len(interactions) >= query.min_shared_films and u in user_profile_cache:
                 p, matched_text, fields = user_profile_cache[u]
 
-                # Build scoring signals from interactions, including source ratings and tiers
-                film_signals = [
-                    FilmSignals(
-                        user_rating=fi.user_rating,
-                        user_liked=fi.user_liked,
-                        is_favorite=fi.is_favorite,
-                        found_via=fi.found_via,
-                        film_tier=fi.film_tier,
-                        source_rating=fingerprint.get_source_rating(fi.film_slug) if fingerprint else None,
-                        member_count=film_member_counts.get(fi.film_slug),
-                    )
-                    for fi in interactions
-                ]
-                score = compute_compatibility_score(
-                    film_signals, total_films_count, all_target_tiers,
-                )
+                score = _score_interactions(interactions)
 
                 res = TasteMatchResult(
                     username=p.username,

@@ -460,3 +460,52 @@ async def test_taste_search_returns_partial_results_at_profile_budget(
     assert stats.stop_reason == "profile_budget"
     assert stats.profiles_fetched == 25
     await cache.close()
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Strong-match stop policy
+# ───────────────────────────────────────────────────────────────────────
+
+def _strong(score) -> bool:
+    """Mirror of the scan's stop gate: quality AND enough evidence."""
+    return score.overall >= 85.0 and score.confidence >= 0.6
+
+
+def test_strong_match_gate_accepts_a_broad_enthusiastic_candidate():
+    """Four shared films with no ratings should still be able to stop the scan.
+
+    Gating on the shrunk ranking score instead would cap this case at 83.3 and
+    make the bar unreachable on a four-film target, burning the full budget on
+    every search.
+    """
+    signals = [
+        FilmSignals(is_favorite=True, found_via="Pinned Favorite", film_tier="favorite")
+        for _ in range(4)
+    ]
+    score = compute_compatibility_score(signals, 4, ["favorite"] * 4)
+    assert _strong(score)
+    assert score.ranking_score < 85.0  # the shrunk score alone would reject it
+
+
+def test_strong_match_gate_rejects_a_thin_candidate():
+    """One shared film scores perfectly but carries too little evidence to stop."""
+    signals = [
+        FilmSignals(
+            user_rating=5.0, user_liked=True, is_favorite=True,
+            found_via="Pinned Favorite", film_tier="favorite",
+        )
+    ]
+    score = compute_compatibility_score(signals, 4, ["favorite"] * 4)
+    assert score.intensity == 100.0 and score.affinity == 100.0
+    assert not _strong(score)  # one of four films, confidence 0.167
+
+
+def test_strong_match_gate_rejects_a_broad_but_lukewarm_candidate():
+    """Plenty of evidence, but the shared taste is weak."""
+    signals = [
+        FilmSignals(user_rating=2.0, found_via="All Member Ratings", film_tier="recent")
+        for _ in range(6)
+    ]
+    score = compute_compatibility_score(signals, 6, ["recent"] * 6)
+    assert score.confidence == 1.0
+    assert not _strong(score)
