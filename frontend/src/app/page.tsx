@@ -2,8 +2,14 @@
  */
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
+import MatchResults from "@/components/MatchResults";
 import TasteSoulmatesSection from "@/components/TasteSoulmatesSection";
+import { fetchUserProfile } from "@/lib/api";
+import { UserProfileDetail } from "@/lib/types";
 import { Heart, MapPin, Users } from "lucide-react";
+
+/** How many pinned favorites a member should share to count as a Movie Match. */
+const TARGET_SHARED_FAVORITES = 3;
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +42,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const filmsParam = typeof resolvedParams.films === "string" ? resolvedParams.films : "";
   const locationParam =
     typeof resolvedParams.location === "string" ? resolvedParams.location.trim() : "";
+  const runParam = typeof resolvedParams.run === "string" ? resolvedParams.run : "";
   const minSharedParam =
     typeof resolvedParams.minShared === "string"
       ? parseInt(resolvedParams.minShared) || 1
@@ -64,8 +71,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     )
   );
 
-  // Preserve old shared URLs while moving every actual search to the streamed UI.
-  if (filmList.length > 0) {
+  // Movie Match never scouts by film list. A films-only link is an old scout
+  // share, so it keeps going to the scout tab; anything with a member runs the
+  // match here, on that member's pinned favorites.
+  if (filmList.length > 0 && !userParam) {
     const params = new URLSearchParams({
       films: filmList.join(","),
       location: locationParam || "Anywhere",
@@ -73,9 +82,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       max_pages: String(maxPagesParam),
       limit: String(limitParam),
     });
-    if (userParam) params.set("user", userParam);
     redirect(`/scout?${params.toString()}`);
   }
+
+  // Resolved once on the server so the pinned favorites shown in the panel are
+  // exactly the films the match runs on.
+  let profile: UserProfileDetail | null = null;
+  if (userParam) {
+    try {
+      profile = (await fetchUserProfile(userParam))?.profile ?? null;
+    } catch {
+      profile = null;
+    }
+  }
+  const favoriteSlugs = (profile?.favorite_films ?? [])
+    .map((film) => film.slug)
+    .filter(Boolean);
+  const matchLocation = locationParam || profile?.location || "Anywhere";
 
   return (
     <div className="space-y-10">
@@ -118,9 +141,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <TasteSoulmatesSection
           initialUser={userParam}
           initialLocation={locationParam || "Anywhere"}
-          initialMinShared={minSharedParam}
+          initialProfile={profile}
         />
       </section>
+
+      {runParam && favoriteSlugs.length > 0 && profile && (
+        <MatchResults
+          username={profile.username}
+          favoriteFilms={favoriteSlugs}
+          location={matchLocation}
+          targetShared={TARGET_SHARED_FAVORITES}
+          searchRun={runParam}
+        />
+      )}
     </div>
   );
 }

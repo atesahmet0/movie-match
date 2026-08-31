@@ -140,6 +140,10 @@ export interface ScanStats {
     | "strong_match"
     | string
     | null;
+  /** Shared-film goal the scan aimed for. */
+  target_shared_films?: number;
+  /** True when nobody reached that goal and lower-ranking members are shown. */
+  fallback_used?: boolean;
 }
 
 export interface SearchResponse {

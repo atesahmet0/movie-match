@@ -1,17 +1,12 @@
 "use client";
 
-import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+import React, { useDeferredValue, useMemo } from "react";
 import { Compass, Loader2, Users } from "lucide-react";
 import ExportButtons from "@/components/ExportButtons";
 import ScoutResultCard from "@/components/ScoutResultCard";
 import TasteMatchCard from "@/components/TasteMatchCard";
-import {
-  ScanStats,
-  SearchResponse,
-  TasteMatchResponse,
-  TasteMatchResult,
-  UserMatch,
-} from "@/lib/types";
+import { SearchResponse, TasteMatchResult, UserMatch } from "@/lib/types";
+import { useSearchStream } from "@/lib/hooks/use-search-stream";
 import { useTaste } from "@/lib/taste-context";
 
 interface ScoutSearchResultsProps {
@@ -26,9 +21,6 @@ interface ScoutSearchResultsProps {
   searchRun?: string;
 }
 
-type StreamMatch = UserMatch | TasteMatchResult;
-type CompletePayload = SearchResponse | TasteMatchResponse;
-
 export default function ScoutSearchResults({
   films,
   location,
@@ -40,15 +32,7 @@ export default function ScoutSearchResults({
   sourceUsername = "",
   searchRun = "",
 }: ScoutSearchResultsProps) {
-  const [matches, setMatches] = useState<StreamMatch[]>([]);
-  const [stats, setStats] = useState<ScanStats | null>(null);
-  const [singlePayload, setSinglePayload] = useState<SearchResponse | null>(null);
-  const [progress, setProgress] = useState("Preparing search…");
-  const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const deferredMatches = useDeferredValue(matches);
   const isMulti = films.length > 1;
-  const topMatch = deferredMatches[0] as TasteMatchResult | undefined;
   const { activeUsername } = useTaste();
   // The URL param wins (a shared link is explicit), but a connected profile
   // still applies when the scout form was submitted without one.
@@ -73,126 +57,13 @@ export default function ScoutSearchResults({
     return `/api/search/stream?${params.toString()}`;
   }, [films, location, sentiment, maxPages, limit, includeBio, minShared, effectiveSourceUsername, searchRun]);
 
-  useEffect(() => {
-    if (!searchUrl) return;
-    const controller = new AbortController();
-    const searchStartedAt = Date.now();
-    let completionTimer: number | null = null;
-    let timedOut = false;
-    // Outlasts the server's own budgets (180s scan, 195s endpoint) so a slow
-    // search ends with partial results rather than a client-side abort.
-    const timeoutId = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 200_000);
-
-    const run = async () => {
-      setMatches([]);
-      setStats(null);
-      setSinglePayload(null);
-      setError(null);
-      setProgress("Searching for cinephiles with shared taste…");
-      setIsSearching(true);
-
-      try {
-        const response = await fetch(searchUrl, {
-          signal: controller.signal,
-          headers: { Accept: "text/event-stream" },
-          cache: "no-store",
-        });
-        if (!response.ok || !response.body) {
-          throw new Error(`Search failed (HTTP ${response.status})`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        const consumeEvent = (block: string) => {
-          if (!block || block.startsWith(":")) return;
-          let eventName = "message";
-          const dataLines: string[] = [];
-          for (const line of block.split("\n")) {
-            if (line.startsWith("event:")) eventName = line.slice(6).trim();
-            if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
-          }
-          if (dataLines.length === 0) return;
-          const data = JSON.parse(dataLines.join("\n"));
-
-          if (eventName === "progress") {
-            setProgress(data.message || "Searching…");
-          } else if (eventName === "result") {
-            const next = data.match as StreamMatch;
-            setMatches((current) =>
-              current.some((match) => match.username === next.username)
-                ? current
-                : [...current, next]
-            );
-          } else if (eventName === "complete") {
-            const payload = data.payload as CompletePayload;
-            const finishSearch = () => {
-              setStats(payload.stats);
-              setMatches(payload.matches as StreamMatch[]);
-              if (!isMulti) setSinglePayload(payload as SearchResponse);
-              setProgress(
-                payload.stats.stop_reason === "strong_match"
-                  ? "Found a strong match — stopped searching."
-                  : payload.stats.partial
-                  ? "Time limit reached — showing the best matches found so far."
-                  : searchRun
-                  ? "Results refreshed."
-                  : "Search complete."
-              );
-              setIsSearching(false);
-            };
-            const feedbackDelay = searchRun
-              ? Math.max(0, 600 - (Date.now() - searchStartedAt))
-              : 0;
-            if (feedbackDelay > 0) {
-              completionTimer = window.setTimeout(finishSearch, feedbackDelay);
-            } else {
-              finishSearch();
-            }
-          } else if (eventName === "error") {
-            throw new Error("The search service could not finish this request.");
-          } else if (eventName === "cancelled") {
-            throw new Error("The search was cancelled before it finished.");
-          }
-        };
-
-        while (true) {
-          const { value, done } = await reader.read();
-          buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, "\n");
-          const blocks = buffer.split("\n\n");
-          buffer = blocks.pop() || "";
-          blocks.forEach(consumeEvent);
-          if (done) {
-            if (buffer.trim()) consumeEvent(buffer.trim());
-            break;
-          }
-        }
-      } catch (caught) {
-        if (controller.signal.aborted && !timedOut) return;
-        setError(
-          timedOut
-            ? "Search timed out. Any matches found so far are shown below; try selecting a specific city or country for faster results."
-            : caught instanceof Error
-            ? caught.message
-            : "The search could not be completed. Please try again."
-        );
-        setIsSearching(false);
-      } finally {
-        window.clearTimeout(timeoutId);
-      }
-    };
-
-    void run();
-    return () => {
-      window.clearTimeout(timeoutId);
-      if (completionTimer !== null) window.clearTimeout(completionTimer);
-      controller.abort();
-    };
-  }, [searchUrl, isMulti, searchRun]);
+  const { matches, stats, payload, progress, isSearching, error } = useSearchStream({
+    url: searchUrl,
+    runKey: searchRun,
+  });
+  const deferredMatches = useDeferredValue(matches);
+  const topMatch = deferredMatches[0] as TasteMatchResult | undefined;
+  const singlePayload = !isMulti ? (payload as SearchResponse | null) : null;
 
   if (!searchUrl) return null;
 

@@ -138,6 +138,15 @@ class MultiFilmMatchQuery(BaseModel):
     limit_matches: int = Field(10, ge=1, le=500)
     concurrency: int = Field(15, ge=1, le=50)
     source_username: Optional[str] = None
+    # Movie Match runs on the source member's pinned favorites alone. The
+    # fingerprint expansion (top rated / liked / recent) is deliberately off so
+    # the evidence shown is the same set of films the member pinned.
+    favorites_only: bool = False
+    # How many of those films a candidate should share to count as a real
+    # match. This is a goal, not a filter: when nothing reaches it inside the
+    # time budget the scan still returns the next highest ranking members.
+    # Unset means the goal is simply `min_shared_films`.
+    target_shared_films: Optional[int] = Field(None, ge=1, le=50)
 
     @model_validator(mode="after")
     def validate_match_request(self) -> "MultiFilmMatchQuery":
@@ -167,3 +176,7 @@ class ScanStats(BaseModel):
     cache_status: str = "miss"
     partial: bool = False
     stop_reason: Optional[str] = None
+    # Shared-film goal the scan aimed for, and whether it had to fall back to
+    # lower-ranking members because nobody reached it.
+    target_shared_films: int = 0
+    fallback_used: bool = False

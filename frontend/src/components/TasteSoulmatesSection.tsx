@@ -22,7 +22,8 @@ interface TasteSoulmatesSectionProps {
   initialUser?: string;
   initialLocation?: string;
   initialFilms?: string[];
-  initialMinShared?: number;
+  /** Profile already resolved on the server; skips the client fetch. */
+  initialProfile?: UserProfileDetail | null;
 }
 
 const DEMO_USERS = ["karsten", "davidehrlich", "verbakimatto"];
@@ -31,19 +32,20 @@ const POPULAR_LOCATIONS = ["Anywhere", "Ankara", "Istanbul", "London", "Berlin",
 export default function TasteSoulmatesSection({
   initialUser = "",
   initialLocation = "",
-  initialMinShared = 1,
+  initialProfile = null,
 }: TasteSoulmatesSectionProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { activeUsername, setActiveUsername, addFilm, clearFilms } = useTaste();
 
   const [usernameInput, setUsernameInput] = useState(initialUser || activeUsername || "");
-  const [userProfile, setUserProfile] = useState<UserProfileDetail | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfileDetail | null>(initialProfile);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
 
-  const [targetLocation, setTargetLocation] = useState(initialLocation || "Anywhere");
-  const [minShared] = useState(initialMinShared || 1);
+  const [targetLocation, setTargetLocation] = useState(
+    initialLocation || initialProfile?.location || "Anywhere"
+  );
 
   // Status timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -90,6 +92,15 @@ export default function TasteSoulmatesSection({
   };
 
   useEffect(() => {
+    // A shared link arrives with the profile already resolved server-side, so
+    // only the connected-member state still needs adopting.
+    if (initialProfile && activeUsername !== initialProfile.username) {
+      setActiveUsername(initialProfile.username);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProfile?.username]);
+
+  useEffect(() => {
     const userToLoad = initialUser || activeUsername;
     if (userToLoad && !userProfile) {
       // Profile loading is intentionally triggered by the URL/local-storage input.
@@ -125,19 +136,22 @@ export default function TasteSoulmatesSection({
 
     const favoriteSlugs = (userProfile.favorite_films || []).map((f) => f.slug);
     if (favoriteSlugs.length === 0) {
-      setProfileError("Your profile has no pinned 4 favorites yet. Please select films manually.");
+      setProfileError(
+        "This profile has no pinned favorites yet. Pin some films on Letterboxd, then run the match again."
+      );
       return;
     }
 
     const loc = overrideLocation || targetLocation || userProfile.location || "Anywhere";
-    const filmsParam = favoriteSlugs.join(",");
     const run = Date.now();
 
+    // The match runs here, on this member's pinned favorites. The scout tab
+    // takes a film list; Movie Match takes a member.
     startTransition(() => {
       router.push(
-        `/scout?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
+        `/?user=${encodeURIComponent(userProfile.username)}&location=${encodeURIComponent(
           loc
-        )}&user=${encodeURIComponent(userProfile.username)}&min_shared=${minShared}&max_pages=6&limit=10&run=${run}`
+        )}&run=${run}`
       );
     });
   };

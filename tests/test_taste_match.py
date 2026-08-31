@@ -509,3 +509,173 @@ def test_strong_match_gate_rejects_a_broad_but_lukewarm_candidate():
     score = compute_compatibility_score(signals, 6, ["recent"] * 6)
     assert score.confidence == 1.0
     assert not _strong(score)
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Movie Match: favorites-only evidence, a shared-film goal, and its fallback
+# ───────────────────────────────────────────────────────────────────────
+
+def test_favorites_only_fingerprint_ignores_the_rest_of_the_library():
+    """Movie Match scores on pinned favorites, not the expanded film pool."""
+    detail = UserProfileDetail(
+        username="pinner",
+        favorite_films=[
+            UserFilmItem(slug="stalker", title="Stalker", user_rating=5.0),
+            UserFilmItem(slug="persona", title="Persona", user_rating=5.0),
+        ],
+        top_rated_films=[UserFilmItem(slug="mirror", title="Mirror", user_rating=5.0)],
+        liked_films=[UserFilmItem(slug="eraserhead", title="Eraserhead", user_liked=True)],
+        recent_films=[UserFilmItem(slug="oppenheimer", title="Oppenheimer")],
+    )
+    fp = build_fingerprint(username="pinner", profile_detail=detail, favorites_only=True)
+    assert set(fp.film_slugs) == {"stalker", "persona"}
+    assert all(f.tier == FilmTier.FAVORITE for f in fp.films)
+
+
+async def _seed_four_favorites(cache) -> list[str]:
+    slugs = ["buffalo-66", "princess-mononoke", "the-usual-suspects", "alien"]
+    for slug in slugs:
+        await cache.save_film_metadata(
+            FilmMetadata(slug=slug, title=slug.replace("-", " ").title())
+        )
+        await cache.save_film_page(slug, f"film/{slug}/likes/", 1, [])
+        await cache.save_film_page(slug, f"film/{slug}/ratings/rated/4-5/", 1, [])
+    return slugs
+
+
+@pytest.mark.asyncio
+async def test_movie_match_falls_back_to_next_highest_when_goal_unmet(tmp_path):
+    """Nobody shares 3 favorites, so the best-ranked member is returned anyway."""
+    cache = CacheDB(db_path=tmp_path / "fallback.db", ttl_seconds=1000)
+    await cache.init()
+    slugs = await _seed_four_favorites(cache)
+
+    for name in ("alpha", "beta"):
+        await cache.save_user_profile(
+            UserProfile(username=name, display_name=name, location="Ankara, Turkey")
+        )
+    await cache.save_film_page(
+        slugs[0],
+        f"film/{slugs[0]}/likes/",
+        1,
+        [
+            {"username": "alpha", "user_rating": 5.0, "user_liked": True},
+            {"username": "beta", "user_rating": 4.0, "user_liked": True},
+        ],
+    )
+
+    async with LetterboxdScraper(cache=cache) as scraper:
+        matches, stats = await scraper.find_taste_matches(
+            MultiFilmMatchQuery(
+                films=slugs,
+                location_query="Ankara",
+                min_shared_films=1,
+                target_shared_films=3,
+                favorites_only=True,
+                max_pages_per_film=1,
+            )
+        )
+
+    assert stats.target_shared_films == 3
+    assert stats.fallback_used is True
+    assert [m.username for m in matches] == ["alpha", "beta"]
+    assert all(m.shared_films_count == 1 for m in matches)
+    await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_movie_match_puts_the_goal_reaching_member_first(tmp_path):
+    """A member who liked 3 of the favorites outranks one who liked a single film."""
+    cache = CacheDB(db_path=tmp_path / "goal.db", ttl_seconds=1000)
+    await cache.init()
+    slugs = await _seed_four_favorites(cache)
+
+    await cache.save_user_profile(
+        UserProfile(username="thin", display_name="Thin", location="Ankara")
+    )
+    await cache.save_user_profile(
+        UserProfile(
+            username="broad",
+            display_name="Broad",
+            location="Ankara",
+            favorite_films=[
+                UserFilmItem(slug=slug, title=slug, user_rating=5.0, user_liked=True)
+                for slug in slugs[:3]
+            ],
+        )
+    )
+    await cache.save_film_page(
+        slugs[0],
+        f"film/{slugs[0]}/likes/",
+        1,
+        [
+            {"username": "thin", "user_rating": 5.0, "user_liked": True},
+            {"username": "broad", "user_rating": 5.0, "user_liked": True},
+        ],
+    )
+
+    async with LetterboxdScraper(cache=cache) as scraper:
+        matches, stats = await scraper.find_taste_matches(
+            MultiFilmMatchQuery(
+                films=slugs,
+                location_query="Ankara",
+                min_shared_films=1,
+                target_shared_films=3,
+                favorites_only=True,
+                max_pages_per_film=1,
+            )
+        )
+
+    assert stats.fallback_used is False
+    assert matches[0].username == "broad"
+    assert matches[0].shared_films_count == 3
+    await cache.close()
+
+
+@pytest.mark.asyncio
+async def test_library_film_counts_only_when_the_candidate_liked_it(tmp_path):
+    """A merely-watched favorite is not evidence of shared taste."""
+    cache = CacheDB(db_path=tmp_path / "liked_only.db", ttl_seconds=1000)
+    await cache.init()
+    slugs = await _seed_four_favorites(cache)
+
+    await cache.save_user_profile(
+        UserProfile(username="watcher", display_name="Watcher", location="Ankara")
+    )
+    await cache.save_user_profile_detail(
+        UserProfileDetail(
+            username="watcher",
+            display_name="Watcher",
+            location="Ankara",
+            recent_films=[
+                # Watched and panned — must not count.
+                UserFilmItem(slug=slugs[1], title=slugs[1], user_rating=2.0),
+            ],
+            liked_films=[
+                UserFilmItem(slug=slugs[2], title=slugs[2], user_liked=True),
+            ],
+        )
+    )
+    await cache.save_film_page(
+        slugs[0],
+        f"film/{slugs[0]}/likes/",
+        1,
+        [{"username": "watcher", "user_rating": 5.0, "user_liked": True}],
+    )
+
+    async with LetterboxdScraper(cache=cache) as scraper:
+        matches, _ = await scraper.find_taste_matches(
+            MultiFilmMatchQuery(
+                films=slugs,
+                location_query="Ankara",
+                min_shared_films=1,
+                target_shared_films=3,
+                favorites_only=True,
+                max_pages_per_film=1,
+            )
+        )
+
+    assert len(matches) == 1
+    shared = {f.film_slug for f in matches[0].shared_films}
+    assert shared == {slugs[0], slugs[2]}
+    assert slugs[1] not in shared

@@ -624,8 +624,16 @@ class LetterboxdScraper:
         # search would burn the whole budget.
         strong_match_score = float(os.getenv("SEARCH_STRONG_MATCH_SCORE", "85"))
         strong_match_confidence = float(os.getenv("SEARCH_STRONG_MATCH_CONFIDENCE", "0.6"))
+        # The shared-film goal. A member who shares this many of the target
+        # films is what the scan is hunting for; it can never exceed the number
+        # of films we are matching on (a 2-favorite profile cannot yield 3).
+        target_shared_films = max(
+            query.min_shared_films,
+            min(query.target_shared_films or query.min_shared_films, len(discovery_slugs)),
+        )
+        stats.target_shared_films = target_shared_films
         strong_match_min_shared = max(
-            query.min_shared_films, int(os.getenv("SEARCH_STRONG_MATCH_MIN_SHARED", "2"))
+            target_shared_films, int(os.getenv("SEARCH_STRONG_MATCH_MIN_SHARED", "2"))
         )
 
         def _budget_reason() -> Optional[str]:
@@ -674,6 +682,7 @@ class LetterboxdScraper:
                 username=source_user_lower,
                 profile_detail=source_profile_detail,
                 explicit_slugs=discovery_slugs,
+                favorites_only=query.favorites_only,
             )
             logger.info(
                 f"Taste fingerprint created for @{source_user_lower}: "
@@ -691,6 +700,21 @@ class LetterboxdScraper:
 
         matcher = LocationMatcher(query.location_query, include_bio=query.include_bio)
         sentiment_plan = SentimentPlan(query.sentiment, query.rating_range)
+
+        def _library_film_counts(film: UserFilmItem) -> bool:
+            """Did the candidate actually like this target film?
+
+            The library sweep pools top-rated, liked and recent watches
+            together, so without this a film a candidate merely watched — or
+            panned — would count as shared taste. Only the plain "liked" search
+            can judge this from a library row; rating-range and disliked
+            searches keep the discovery endpoints as their authority.
+            """
+            if query.sentiment != SentimentType.LIKED or query.rating_range:
+                return True
+            return bool(film.user_liked) or (
+                film.user_rating is not None and film.user_rating >= 4.0
+            )
 
         user_film_interactions: Dict[str, List[FilmInteraction]] = {}
         user_profile_cache: Dict[str, Tuple[UserProfile, str, List[str]]] = {}
@@ -974,7 +998,7 @@ class LetterboxdScraper:
                             f"Finding shared fans of {film_display} ({film_idx}/{len(scan_slugs)})...",
                             stats.total_pages_scanned,
                             stats.total_users_discovered,
-                            len([u for u, ints in user_film_interactions.items() if len(ints) >= query.min_shared_films]),
+                            len([u for u, ints in user_film_interactions.items() if len(ints) >= target_shared_films]),
                         )
 
                     if stop_scanning:
@@ -1032,7 +1056,7 @@ class LetterboxdScraper:
                     + (cached_detail.recent_films or [])
                 )
                 for lf in all_lib_films:
-                    if lf.slug in scoring_slugs:
+                    if lf.slug in scoring_slugs and _library_film_counts(lf):
                         if not any(i.film_slug == lf.slug for i in user_film_interactions[u_name]):
                             user_film_interactions[u_name].append(
                                 FilmInteraction(
@@ -1093,10 +1117,28 @@ class LetterboxdScraper:
         # Sort by the evidence-shrunk ranking score, not the displayed score: a
         # one-film match with no ratings can score high on the signals we could
         # measure, and should not outrank a well-evidenced match because of it.
+        # Members who reached the shared-film goal come first; below that the
+        # order is by evidence-shrunk ranking score. When nobody reached the
+        # goal inside the budget the list is still returned — the next highest
+        # ranking member is the answer, flagged so the UI can say so.
         results.sort(
-            key=lambda r: (r.ranking_score, r.compatibility_score, r.shared_films_count),
+            key=lambda r: (
+                r.shared_films_count >= target_shared_films,
+                r.ranking_score,
+                r.compatibility_score,
+                r.shared_films_count,
+            ),
             reverse=True,
         )
+        stats.fallback_used = bool(results) and not any(
+            r.shared_films_count >= target_shared_films for r in results
+        )
+        if stats.fallback_used:
+            logger.info(
+                f"No member shared {target_shared_films} of the target films; "
+                f"falling back to the next highest ranking member "
+                f"@{results[0].username} ({results[0].shared_films_count} shared)"
+            )
         stats.matches_count = len(results)
         stats.elapsed_seconds = time.time() - start_time
         stats.time_to_first_result = stats.elapsed_seconds if results else None

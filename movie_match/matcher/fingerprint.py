@@ -86,6 +86,7 @@ def build_fingerprint(
     profile_detail: Optional[UserProfileDetail] = None,
     favorite_films: Optional[List[UserFilmItem]] = None,
     explicit_slugs: Optional[List[str]] = None,
+    favorites_only: bool = False,
 ) -> TasteFingerprint:
     """Build a TasteFingerprint from available user data.
 
@@ -97,6 +98,10 @@ def build_fingerprint(
     5. Explicit slugs (from the API query, if no profile available)
 
     Deduplicates by slug, keeping the highest-tier occurrence.
+
+    With `favorites_only`, steps 2-4 are skipped: the fingerprint stays the
+    pinned favorites (plus any explicit slugs), which is what Movie Match
+    matches on so that every film it scores is one the member actually pinned.
     """
     seen_slugs: Set[str] = set()
     films: List[FingerprintFilm] = []
@@ -125,7 +130,7 @@ def build_fingerprint(
     )
     _add_films(fav_source, FilmTier.FAVORITE, TIER_LIMITS[FilmTier.FAVORITE])
 
-    if profile_detail:
+    if profile_detail and not favorites_only:
         # 2. Top-rated films (★4.5+)
         top_rated = [
             f for f in (profile_detail.top_rated_films or [])

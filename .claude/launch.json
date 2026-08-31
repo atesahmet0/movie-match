@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "movie-match-backend",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "movie-match", "serve", "--port", "8000"],
+      "port": 8000
     }
   ]
 }

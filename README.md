@@ -12,6 +12,7 @@ A high-performance, anti-bot resilient tool and web platform to scout Letterboxd
   - **PostgreSQL**: Production-ready connection pooling with native array lookups (`ANY($1::text[])`) and zero lock contention under concurrent multi-user searches.
   - **SQLite Fallback**: Zero-config local development and offline CLI caching when `DATABASE_URL` is omitted.
 - **Multi-Film Taste Soulmate Matching**: Weighted algorithm computing taste compatibility, genre breadth, rating correlation, and affinity scores across multiple films and user libraries.
+- **Movie Match (favorites-only)**: The `/` page matches a member using nothing but the four films pinned to their public Letterboxd profile, counting only films the candidate actually liked. It aims for a member who shares at least three of them and, when the time budget expires with nobody reaching that bar, returns the next highest ranking member instead of nothing. Scouting by an arbitrary film list stays on the separate `/scout` tab.
 - **Intelligent Geo-Hierarchy & Diacritics Folding**:
   - Automatically matches regional aliases (e.g. searching `Turkey` matches `Ankara`, `İstanbul`, `İzmir`, `Antalya`, `Bursa`, `Kadıköy`, `Çankaya`, etc.).
   - Searching `Ankara` matches `Ankara`, `Çankaya`, `Kızılay`, `Bilkent`, `ODTÜ`, `METU`, etc.

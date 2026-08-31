@@ -372,6 +372,8 @@ async def api_stream_search(
     limit: int = Query(10, ge=1, le=500),
     include_bio: bool = Query(False),
     min_shared: int = Query(1, ge=1, le=50),
+    target_shared: Optional[int] = Query(None, ge=1, le=50),
+    favorites_only: bool = Query(False),
     source_username: Optional[str] = Query(None),
     refresh: bool = Query(False),
 ):
@@ -406,7 +408,10 @@ async def api_stream_search(
 
         async def run_search() -> None:
             try:
-                if len(clean_films) == 1:
+                # Movie Match always scores against the member's favorites as a
+                # set, so it stays on the taste path even when a profile pins
+                # only one film.
+                if len(clean_films) == 1 and not favorites_only:
                     payload = await _run_single_search(
                         SearchQuery(
                             film_input=clean_films[0],
@@ -435,6 +440,8 @@ async def api_stream_search(
                             max_pages_per_film=max_pages,
                             limit_matches=limit,
                             source_username=source_username,
+                            favorites_only=favorites_only,
+                            target_shared_films=target_shared,
                         ),
                         progress_callback=on_progress,
                         cancel_event=cancel_event,
