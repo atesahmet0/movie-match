@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useDeferredValue, useMemo } from "react";
+import React, { useDeferredValue, useMemo, useEffect, useRef } from "react";
 import { Compass, Loader2, Users } from "lucide-react";
 import ExportButtons from "@/components/ExportButtons";
 import ScoutResultCard from "@/components/ScoutResultCard";
@@ -8,6 +8,7 @@ import TasteMatchCard from "@/components/TasteMatchCard";
 import { SearchResponse, TasteMatchResult, UserMatch } from "@/lib/types";
 import { useSearchStream } from "@/lib/hooks/use-search-stream";
 import { useTaste } from "@/lib/taste-context";
+import { trackSearchCompleted, trackSearchFailed } from "@/lib/analytics";
 
 interface ScoutSearchResultsProps {
   films: string[];
@@ -61,6 +62,30 @@ export default function ScoutSearchResults({
     url: searchUrl,
     runKey: searchRun,
   });
+
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    if (isSearching) {
+      trackedRef.current = false;
+    } else if (!isSearching && searchUrl && !trackedRef.current) {
+      trackedRef.current = true;
+      if (error) {
+        trackSearchFailed({
+          type: "scout",
+          error: error,
+        });
+      } else {
+        trackSearchCompleted({
+          type: "scout",
+          matchesCount: matches.length,
+          durationMs: stats ? stats.elapsed_seconds * 1000 : undefined,
+          location: location,
+        });
+      }
+    }
+  }, [isSearching, error, matches.length, stats, location, searchUrl]);
+
   const deferredMatches = useDeferredValue(matches);
   const topMatch = deferredMatches[0] as TasteMatchResult | undefined;
   const singlePayload = !isMulti ? (payload as SearchResponse | null) : null;

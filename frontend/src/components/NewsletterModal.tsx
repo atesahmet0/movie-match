@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { Check, Mail, Sparkles, BellRing, Film } from "lucide-react";
 import { subscribeNewsletter } from "@/lib/api";
+import { trackNewsletterSubscribed } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -54,6 +55,10 @@ export default function NewsletterModal({
 
       if (response.success) {
         setIsSuccess(true);
+        trackNewsletterSubscribed({
+          source: source,
+          feature: topic,
+        });
       } else {
         setErrorMessage(response.message);
       }

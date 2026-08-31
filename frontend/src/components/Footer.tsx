@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { Mail, Check, Sparkles, ArrowRight } from "lucide-react";
 import { subscribeNewsletter } from "@/lib/api";
+import { trackNewsletterSubscribed } from "@/lib/analytics";
 import NewsletterModal from "@/components/NewsletterModal";
 
 export default function Footer() {
@@ -36,6 +37,10 @@ export default function Footer() {
       if (res.success) {
         setInlineSuccess(true);
         setInlineEmail("");
+        trackNewsletterSubscribed({
+          source: "footer_inline",
+          feature: "newsletter_and_updates",
+        });
       } else {
         setInlineError(res.message);
       }

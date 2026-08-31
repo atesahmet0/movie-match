@@ -4,11 +4,12 @@
  */
 "use client";
 
-import React, { useDeferredValue, useMemo } from "react";
+import React, { useDeferredValue, useMemo, useEffect, useRef } from "react";
 import { Compass, Loader2, Sparkles } from "lucide-react";
 import TasteMatchCard from "@/components/TasteMatchCard";
 import { TasteMatchResult } from "@/lib/types";
 import { useSearchStream } from "@/lib/hooks/use-search-stream";
+import { trackSearchCompleted, trackSearchFailed } from "@/lib/analytics";
 
 interface MatchResultsProps {
   /** The connected member, excluded from their own results. */
@@ -57,6 +58,29 @@ export default function MatchResults({
     runKey: searchRun,
     initialProgress: "Reading who liked your favorites…",
   });
+
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    if (isSearching) {
+      trackedRef.current = false;
+    } else if (!isSearching && searchUrl && !trackedRef.current) {
+      trackedRef.current = true;
+      if (error) {
+        trackSearchFailed({
+          type: "taste_match",
+          error: error,
+        });
+      } else {
+        trackSearchCompleted({
+          type: "taste_match",
+          matchesCount: matches.length,
+          durationMs: stats ? stats.elapsed_seconds * 1000 : undefined,
+          location: location,
+        });
+      }
+    }
+  }, [isSearching, error, matches.length, stats, location, searchUrl]);
 
   const deferredMatches = useDeferredValue(matches) as TasteMatchResult[];
   const goal = stats?.target_shared_films || Math.min(targetShared, favoriteFilms.length);

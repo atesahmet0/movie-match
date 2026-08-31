@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { fetchUserProfile } from "@/lib/api";
+import { identifyUser, trackSearchStarted } from "@/lib/analytics";
 import { UserFilmItem, UserProfileDetail } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,10 @@ export default function TasteSoulmatesSection({
       if (data && data.profile) {
         setUserProfile(data.profile);
         setActiveUsername(clean);
+        identifyUser(clean, {
+          display_name: data.profile.display_name,
+          location: data.profile.location,
+        });
 
         if (data.profile.location && !initialLocation) {
           setTargetLocation(data.profile.location);
@@ -145,6 +150,13 @@ export default function TasteSoulmatesSection({
     const loc = overrideLocation || targetLocation || userProfile.location || "Anywhere";
     const run = Date.now();
 
+    trackSearchStarted({
+      type: "taste_match",
+      sourceUsername: userProfile.username,
+      filmCount: favoriteSlugs.length,
+      location: loc,
+    });
+
     // The match runs here, on this member's pinned favorites. The scout tab
     // takes a film list; Movie Match takes a member.
     startTransition(() => {
@@ -155,6 +167,7 @@ export default function TasteSoulmatesSection({
       );
     });
   };
+
 
   return (
     <div className="w-full space-y-4">

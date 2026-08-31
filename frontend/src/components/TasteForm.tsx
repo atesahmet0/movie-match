@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useTaste } from "@/lib/taste-context";
 import { fetchFilmInfo } from "@/lib/api";
+import { trackFilmSelected, trackFilmRemoved, trackSearchStarted } from "@/lib/analytics";
 import { FilmSearchResult } from "@/lib/types";
 import { FilmCombobox } from "@/components/ui/FilmCombobox";
 import { motion, AnimatePresence } from "framer-motion";
@@ -156,6 +157,11 @@ export default function TasteForm({
           title: filmMeta.title || metaSlug,
           year: filmMeta.year,
         });
+        trackFilmSelected({
+          slug: metaSlug,
+          title: filmMeta.title,
+          year: filmMeta.year,
+        });
       }
       setComboboxValue("");
       setIsAddingFilm(false);
@@ -173,12 +179,19 @@ export default function TasteForm({
             year: meta.year,
             poster_url: meta.poster_url,
           });
+          trackFilmSelected({
+            slug: resolvedSlug,
+            title: meta.title,
+            year: meta.year,
+          });
         }
       } else {
         addFilm({ slug: cleanSlug, title: cleanSlug.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase()) });
+        trackFilmSelected({ slug: cleanSlug });
       }
     } catch {
       addFilm({ slug: cleanSlug, title: cleanSlug });
+      trackFilmSelected({ slug: cleanSlug });
     } finally {
       setComboboxValue("");
       setIsAddingFilm(false);
@@ -198,17 +211,17 @@ export default function TasteForm({
     setLocations((prev) => {
       const filtered = prev.filter((l) => l.toLowerCase() !== "anywhere");
       if (filtered.some((l) => l.toLowerCase() === clean.toLowerCase())) {
-        return filtered;
+        return prev;
       }
       return [...filtered, clean];
     });
     setLocationInput("");
   };
 
-  const handleRemoveLocation = (locToRemove: string) => {
+  const handleRemoveLocation = (loc: string) => {
     setLocations((prev) => {
-      const filtered = prev.filter((l) => l !== locToRemove);
-      return filtered.length > 0 ? filtered : ["Anywhere"];
+      const filtered = prev.filter((l) => l !== loc);
+      return filtered.length === 0 ? ["Anywhere"] : filtered;
     });
   };
 
@@ -243,6 +256,14 @@ export default function TasteForm({
     const uniqueSlugs = Array.from(new Set(selectedFilms.map((f) => f.slug.trim()).filter(Boolean)));
     const filmsParam = uniqueSlugs.join(",");
     const locParam = locations.join(",");
+
+    trackSearchStarted({
+      type: "taste_match",
+      filmCount: uniqueSlugs.length,
+      location: locParam,
+      minShared: minShared,
+      maxPages: maxPages,
+    });
 
     startTransition(() => {
       router.push(
@@ -300,7 +321,10 @@ export default function TasteForm({
                     </span>
                     <button
                       type="button"
-                      onClick={() => removeFilm(film.slug)}
+                      onClick={() => {
+                        removeFilm(film.slug);
+                        trackFilmRemoved(film.slug);
+                      }}
                       className="text-[#667788] hover:text-red-400 p-0.5 rounded-md hover:bg-[#222b33] transition"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -308,6 +332,7 @@ export default function TasteForm({
                   </motion.div>
                 ))}
               </AnimatePresence>
+
 
               {selectedFilms.length === 0 && (
                 <span className="text-xs text-[#667788] px-2 italic select-none">

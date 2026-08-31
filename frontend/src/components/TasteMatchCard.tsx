@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { MapPin, ArrowRight, Star, Heart, Eye } from "lucide-react";
 import { TasteMatchResult } from "@/lib/types";
+import { trackMemberProfileViewed, trackOutboundLetterboxdClick } from "@/lib/analytics";
 import { UserDetailModal } from "@/components/ui/UserDetailModal";
 import { Badge } from "@/components/ui/badge";
 
@@ -28,6 +29,16 @@ function TasteMatchCard({ match, index, highlight = false }: TasteMatchCardProps
   const isHighMatch = match.compatibility_score >= 75;
   const isMediumMatch = match.compatibility_score >= 50 && match.compatibility_score < 75;
 
+  const handleOpenModal = () => {
+    setIsModalOpen(true);
+    trackMemberProfileViewed({
+      username: match.username,
+      matchPercentage: match.compatibility_score,
+      sharedFilmsCount: match.shared_films?.length || 0,
+      location: match.location,
+    });
+  };
+
   return (
     <>
       <article
@@ -40,7 +51,7 @@ function TasteMatchCard({ match, index, highlight = false }: TasteMatchCardProps
             <div className="flex items-center space-x-3.5 min-w-0">
               <button
                 type="button"
-                onClick={() => setIsModalOpen(true)}
+                onClick={handleOpenModal}
                 className="flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg"
                 aria-label={`View ${match.display_name || match.username}`}
               >
@@ -56,67 +67,58 @@ function TasteMatchCard({ match, index, highlight = false }: TasteMatchCardProps
               <div className="min-w-0">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={handleOpenModal}
                   className="block min-h-11 max-w-full cursor-pointer truncate text-left text-base font-bold text-white underline-offset-4 hover:underline"
                 >
                   {match.display_name || match.username}
                 </button>
-                <span className="block font-mono text-xs text-brand-muted">
-                  @{match.username}
-                </span>
+                <div className="flex items-center space-x-1.5 text-xs text-brand-muted mt-0.5">
+                  <MapPin className="w-3.5 h-3.5 text-brand-subtext shrink-0" />
+                  <span className="truncate">{match.location || "Anywhere"}</span>
+                </div>
               </div>
             </div>
 
-            <div className="text-right shrink-0">
+            <div className="text-right flex flex-col items-end gap-1">
               <Badge
-                variant={isHighMatch ? "matchHigh" : isMediumMatch ? "matchMedium" : "matchLow"}
-                className="text-xs px-2.5 py-1"
+                variant={isHighMatch ? "default" : isMediumMatch ? "outline" : "secondary"}
+                className={`font-mono text-xs font-bold ${
+                  isHighMatch
+                    ? "bg-brand-green text-brand-dark"
+                    : isMediumMatch
+                    ? "text-brand-orange border-brand-orange/40"
+                    : "text-brand-muted"
+                }`}
               >
-                {match.compatibility_score}% Match
+                {match.compatibility_score}% match
               </Badge>
-              <span className="mt-1 block font-mono text-xs text-brand-muted tabular-nums">
-                {match.shared_films_count} of {match.total_target_films} Films
+              <span className="text-[11px] text-brand-muted font-mono">
+                {match.shared_films_count} of {match.total_target_films} shared
               </span>
-              {/* The score is computed over the signals we could measure, so a
-                  thin match can still score high — say so rather than let the
-                  percentage speak alone. */}
-              {match.confidence < 0.6 && (
-                <span className="mt-0.5 block font-mono text-xs text-brand-muted/70">
-                  Limited evidence
-                </span>
-              )}
             </div>
           </div>
 
-          {/* Location Tag */}
-          <div className="mb-3.5">
-            <Badge variant="location" className="text-xs py-1 px-2.5 rounded-lg">
-              <MapPin className="w-3 h-3 text-brand-green shrink-0" />
-              <span>{match.matched_location || match.location || "Anywhere"}</span>
-            </Badge>
-          </div>
-
-          {/* Shared Films List */}
-          <div className="space-y-1.5 mb-3.5">
-            <span className="text-sm font-semibold text-brand-subtext">
-              Shared films
-            </span>
-            <div className="space-y-1.5">
-              {match.shared_films.map((f) => (
+          {/* Shared Films Chips with Rating info */}
+          <div className="space-y-2 mb-3">
+            <div className="text-xs font-semibold text-brand-muted uppercase tracking-wider">
+              Shared Favorites:
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {match.shared_films.map((f, i) => (
                 <div
-                  key={f.film_slug}
-                  className="flex items-center justify-between gap-2 border-t border-brand-border py-2 text-sm first:border-t-0"
+                  key={i}
+                  className="inline-flex items-center space-x-1.5 bg-brand-darker border border-brand-border px-2.5 py-1 rounded-lg text-xs"
                 >
-                  <span className="truncate font-semibold text-white">
+                  <span className="font-semibold text-white truncate max-w-[140px]">
                     {f.film_title || f.film_slug}
                   </span>
-                  <div className="flex items-center gap-1.5 shrink-0 font-mono">
-                    {f.user_rating_stars && (
-                      <span className="flex items-center gap-0.5 text-xs font-bold text-brand-text">
-                        <Star className="w-3 h-3 fill-brand-green" />
-                        {f.user_rating_stars}
+                  <div className="flex items-center space-x-1 text-[11px] text-brand-subtext border-l border-brand-border pl-1.5">
+                    {f.user_rating ? (
+                      <span className="flex items-center text-brand-green font-mono">
+                        <Star className="w-3 h-3 fill-brand-green mr-0.5" />
+                        {f.user_rating}
                       </span>
-                    )}
+                    ) : null}
                     {f.user_liked && (
                       <Heart className="w-3.5 h-3.5 text-brand-orange fill-brand-orange" />
                     )}
@@ -125,6 +127,7 @@ function TasteMatchCard({ match, index, highlight = false }: TasteMatchCardProps
               ))}
             </div>
           </div>
+
 
           {match.bio && (
             <p className="line-clamp-2 border-t border-brand-border pt-3 text-sm leading-relaxed text-brand-subtext">
@@ -141,7 +144,7 @@ function TasteMatchCard({ match, index, highlight = false }: TasteMatchCardProps
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setIsModalOpen(true)}
+              onClick={handleOpenModal}
               className="inline-flex min-h-10 cursor-pointer items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-sm font-semibold text-brand-subtext transition-colors hover:bg-brand-darker hover:text-white"
             >
               <Eye className="w-3.5 h-3.5 text-brand-blue" />
@@ -152,6 +155,12 @@ function TasteMatchCard({ match, index, highlight = false }: TasteMatchCardProps
               href={match.profile_url || `https://letterboxd.com/${match.username}/`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() =>
+                trackOutboundLetterboxdClick({
+                  target: "user",
+                  identifier: match.username,
+                })
+              }
               className="inline-flex min-h-10 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-sm font-semibold text-brand-text underline decoration-brand-green decoration-2 underline-offset-4 hover:text-brand-green"
             >
               <span>Profile</span>

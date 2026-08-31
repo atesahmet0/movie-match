@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { Check, Lock, Mail } from "lucide-react";
 import { submitWaitlistEmail } from "@/lib/api";
+import { trackWaitlistJoined } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ export default function UpcomingFeatureModal({
       const response = await submitWaitlistEmail(trimmed, featureKey);
       if (response.success) {
         setIsSuccess(true);
+        trackWaitlistJoined({ featureKey });
       } else {
         setErrorMessage(response.message);
       }

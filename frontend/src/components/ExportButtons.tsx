@@ -5,6 +5,7 @@
 import React, { useState } from "react";
 import { Check, FileJson, FileSpreadsheet } from "lucide-react";
 import { ScanStats, UserMatch } from "@/lib/types";
+import { trackExport } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 
 interface ExportButtonsProps {
@@ -27,6 +28,7 @@ export default function ExportButtons({ filmSlug, stats, matches }: ExportButton
     downloadAnchor.click();
     downloadAnchor.remove();
 
+    trackExport({ format: "json", count: matches.length });
     setExportedFormat("json");
     setTimeout(() => setExportedFormat(null), 2000);
   };
@@ -60,6 +62,7 @@ export default function ExportButtons({ filmSlug, stats, matches }: ExportButton
     downloadAnchor.click();
     downloadAnchor.remove();
 
+    trackExport({ format: "csv", count: matches.length });
     setExportedFormat("csv");
     setTimeout(() => setExportedFormat(null), 2000);
   };

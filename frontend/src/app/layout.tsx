@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { TasteProvider } from "@/lib/taste-context";
 import { QueryProvider } from "@/lib/query-provider";
+import { PostHogProvider } from "@/components/providers/posthog-provider";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -59,16 +60,19 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${newsreader.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
-        <QueryProvider>
-          <TasteProvider>
-            <div className="app-shell">
-              <Navbar />
-              <main className="page-frame flex-1">{children}</main>
-              <Footer />
-            </div>
-          </TasteProvider>
-        </QueryProvider>
+        <PostHogProvider>
+          <QueryProvider>
+            <TasteProvider>
+              <div className="app-shell">
+                <Navbar />
+                <main className="page-frame flex-1">{children}</main>
+                <Footer />
+              </div>
+            </TasteProvider>
+          </QueryProvider>
+        </PostHogProvider>
       </body>
     </html>
   );
 }
+

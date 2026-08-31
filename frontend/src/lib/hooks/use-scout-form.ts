@@ -4,6 +4,7 @@ import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { fetchFilmInfo } from "@/lib/api";
 import { useTaste } from "@/lib/taste-context";
+import { trackFilmSelected, trackFilmRemoved, trackSearchStarted } from "@/lib/analytics";
 import { FilmSearchResult, SelectedFilmChip } from "@/lib/types";
 
 export interface UseScoutFormProps {
@@ -115,6 +116,11 @@ export function useScoutForm({
         if (prev.some((f) => f.slug.toLowerCase() === metaSlug)) return prev;
         return [...prev, { slug: metaSlug, title: filmMeta.title, year: filmMeta.year }];
       });
+      trackFilmSelected({
+        slug: metaSlug,
+        title: filmMeta.title,
+        year: filmMeta.year,
+      });
       setComboboxValue("");
       setIsAddingFilm(false);
       return;
@@ -136,17 +142,24 @@ export function useScoutForm({
             },
           ];
         });
+        trackFilmSelected({
+          slug: resolvedSlug,
+          title: meta.title,
+          year: meta.year,
+        });
       } else {
         setSelectedFilms((prev) => {
           if (prev.some((f) => f.slug.toLowerCase() === cleanSlug)) return prev;
           return [...prev, { slug: cleanSlug, title: cleanSlug.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase()) }];
         });
+        trackFilmSelected({ slug: cleanSlug });
       }
     } catch {
       setSelectedFilms((prev) => {
         if (prev.some((f) => f.slug.toLowerCase() === cleanSlug)) return prev;
         return [...prev, { slug: cleanSlug, title: cleanSlug }];
       });
+      trackFilmSelected({ slug: cleanSlug });
     } finally {
       setComboboxValue("");
       setIsAddingFilm(false);
@@ -155,6 +168,7 @@ export function useScoutForm({
 
   const removeFilm = (slugToRemove: string) => {
     setSelectedFilms((prev) => prev.filter((f) => f.slug !== slugToRemove));
+    trackFilmRemoved(slugToRemove);
   };
 
   const clearFilms = () => {
@@ -210,9 +224,19 @@ export function useScoutForm({
     if (selectedFilms.length === 0) return;
 
     const uniqueSlugs = Array.from(new Set(selectedFilms.map((f) => f.slug.trim()).filter(Boolean)));
+    const locParam = locations.join(",");
+
+    trackSearchStarted({
+      type: "scout",
+      filmCount: uniqueSlugs.length,
+      location: locParam,
+      sentiment,
+      maxPages,
+    });
+
     const params = new URLSearchParams({
       films: uniqueSlugs.join(","),
-      location: locations.join(","),
+      location: locParam,
       sentiment,
       max_pages: String(maxPages),
       limit: String(limit),
@@ -227,6 +251,7 @@ export function useScoutForm({
       router.push(`/scout?${params.toString()}`, { scroll: false });
     });
   };
+
 
   return {
     // Film State & Actions

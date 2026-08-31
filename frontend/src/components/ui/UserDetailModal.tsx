@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { UserMatch, TasteMatchResult } from "@/lib/types";
 import { useTaste } from "@/lib/taste-context";
+import { trackOutboundLetterboxdClick } from "@/lib/analytics";
 
 interface UserDetailModalProps {
   user: UserMatch | TasteMatchResult | null;
@@ -224,6 +225,12 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
               href={user.profile_url || `https://letterboxd.com/${user.username}/`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() =>
+                trackOutboundLetterboxdClick({
+                  target: "user",
+                  identifier: user.username,
+                })
+              }
               className="flex items-center justify-center gap-1.5"
             >
               <ExternalLink className="w-3.5 h-3.5" />

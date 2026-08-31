@@ -1,3 +1,4 @@
+import { captureException } from "./analytics";
 import {
   FilmMetadata,
   FilmSearchResponse,
@@ -31,15 +32,23 @@ export async function fetchUserProfile(username: string): Promise<UserProfileRes
     if (!res.ok) {
       if (res.status === 404) return null;
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Profile lookup failed (HTTP ${res.status})`);
+      const errorMsg = err.detail || `Profile lookup failed (HTTP ${res.status})`;
+      captureException(new Error(errorMsg), {
+        endpoint: "/api/user",
+        username: clean,
+        status: res.status,
+      });
+      throw new Error(errorMsg);
     }
 
     return await res.json();
   } catch (error) {
     console.warn("fetchUserProfile error:", error);
+    captureException(error, { endpoint: "/api/user", username: clean });
     throw error;
   }
 }
+
 
 export async function fetchUserFilms(
   username: string,
@@ -90,11 +99,18 @@ export async function fetchSingleSearch(params: {
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Search failed (HTTP ${res.status})`);
+      const errorMsg = err.detail || `Search failed (HTTP ${res.status})`;
+      captureException(new Error(errorMsg), {
+        endpoint: "/api/search",
+        film: params.film,
+        status: res.status,
+      });
+      throw new Error(errorMsg);
     }
     return await res.json();
   } catch (error) {
     console.error("fetchSingleSearch error:", error);
+    captureException(error, { endpoint: "/api/search", film: params.film });
     throw error;
   }
 }
@@ -136,12 +152,23 @@ export async function fetchTasteMatch(params: {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Taste match failed (HTTP ${res.status})`);
+      const errorMsg = err.detail || `Taste match failed (HTTP ${res.status})`;
+      captureException(new Error(errorMsg), {
+        endpoint: "/api/taste-match",
+        film_count: uniqueFilms.length,
+        status: res.status,
+      });
+      throw new Error(errorMsg);
     }
 
     return await res.json();
   } catch (error) {
     console.error("fetchTasteMatch error:", error);
+    captureException(error, {
+      endpoint: "/api/taste-match",
+      film_count: uniqueFilms.length,
+      location: params.location_query,
+    });
     const isTimeout =
       error instanceof Error &&
       (error.name === "TimeoutError" || error.message.toLowerCase().includes("timeout"));

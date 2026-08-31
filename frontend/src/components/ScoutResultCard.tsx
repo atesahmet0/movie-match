@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { MapPin, Heart, ArrowRight, Star, Eye } from "lucide-react";
 import { UserMatch } from "@/lib/types";
+import { trackMemberProfileViewed, trackOutboundLetterboxdClick } from "@/lib/analytics";
 import { UserDetailModal } from "@/components/ui/UserDetailModal";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,6 +24,14 @@ function ScoutResultCard({ match }: ScoutResultCardProps) {
       ? match.avatar_url
       : "https://s.ltrbxd.com/static/img/avatar80-CTtJ8HSs.png";
 
+  const handleOpenModal = () => {
+    setIsModalOpen(true);
+    trackMemberProfileViewed({
+      username: match.username,
+      location: match.location,
+    });
+  };
+
   return (
     <>
       <article className="glass-card flex flex-col justify-between p-5 sm:p-6">
@@ -30,7 +39,7 @@ function ScoutResultCard({ match }: ScoutResultCardProps) {
           <div className="flex items-center space-x-3.5 mb-3.5">
             <button
               type="button"
-              onClick={() => setIsModalOpen(true)}
+              onClick={handleOpenModal}
               className="flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg"
               aria-label={`View ${match.display_name || match.username}`}
             >
@@ -46,7 +55,7 @@ function ScoutResultCard({ match }: ScoutResultCardProps) {
             <div className="min-w-0 flex-1">
               <button
                 type="button"
-                onClick={() => setIsModalOpen(true)}
+                onClick={handleOpenModal}
                 className="block min-h-11 max-w-full cursor-pointer truncate text-left text-base font-bold text-white underline-offset-4 hover:underline"
               >
                 {match.display_name || match.username}
@@ -95,7 +104,7 @@ function ScoutResultCard({ match }: ScoutResultCardProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setIsModalOpen(true)}
+              onClick={handleOpenModal}
               className="inline-flex min-h-10 cursor-pointer items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-sm font-semibold text-brand-subtext transition-colors hover:bg-brand-darker hover:text-white"
             >
               <Eye className="w-3.5 h-3.5 text-brand-blue" />
@@ -106,6 +115,12 @@ function ScoutResultCard({ match }: ScoutResultCardProps) {
               href={match.profile_url || `https://letterboxd.com/${match.username}/`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() =>
+                trackOutboundLetterboxdClick({
+                  target: "user",
+                  identifier: match.username,
+                })
+              }
               className="inline-flex min-h-10 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-sm font-semibold text-brand-text underline decoration-brand-green decoration-2 underline-offset-4 hover:text-brand-green"
             >
               <span>Profile</span>
