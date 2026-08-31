@@ -12,7 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from movie_match.logging import get_logger, is_debug_enabled, performance_tracker, setup_logging
-from movie_match.models import MultiFilmMatchQuery, SearchQuery, SentimentType, WaitlistRequest
+from movie_match.models import (
+    MultiFilmMatchQuery,
+    NewsletterRequest,
+    SearchQuery,
+    SentimentType,
+    WaitlistRequest,
+)
 from movie_match.scraper.letterboxd import LetterboxdScraper
 from movie_match.scraper.parser import extract_slug_from_input
 
@@ -618,6 +624,27 @@ async def api_save_waitlist(req: WaitlistRequest):
         "status": "success",
         "lead_id": lead_id,
         "message": "Thank you! You have been added to the early access waitlist.",
+    }
+
+
+@app.post("/api/newsletter")
+async def api_save_newsletter(req: NewsletterRequest):
+    """Save email subscriber to database for newsletter and upcoming changes."""
+    email = req.email.strip()
+    if not email or "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    feature_tag = req.feature or "newsletter"
+    if req.source:
+        feature_tag = f"{feature_tag}:{req.source}"
+
+    cache = (await get_shared_scraper()).cache
+    lead_id = await cache.save_waitlist_lead(email=email, feature=feature_tag)
+
+    return {
+        "status": "success",
+        "lead_id": lead_id,
+        "message": "Thank you! You're subscribed to MovieMatch updates and dispatches.",
     }
 
 

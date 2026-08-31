@@ -38,6 +38,7 @@ async def test_waitlist_api_endpoint(tmp_path, monkeypatch):
     test_db = tmp_path / "api_waitlist.db"
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("POSTGRES_URL", raising=False)
+    monkeypatch.setenv("MOVIE_MATCH_ADMIN_TOKEN", "secret-test-token")
     monkeypatch.setattr("movie_match.cache.db.DEFAULT_DB_PATH", test_db)
 
     transport = ASGITransport(app=app)
@@ -56,9 +57,27 @@ async def test_waitlist_api_endpoint(tmp_path, monkeypatch):
         assert data["status"] == "success"
         assert "lead_id" in data
 
-        # Get list
-        res_list = await client.get("/api/waitlist")
+        # Valid newsletter submission
+        res_news = await client.post(
+            "/api/newsletter",
+            json={"email": "newsletter_reader@moviematch.com", "feature": "newsletter", "source": "footer"}
+        )
+        assert res_news.status_code == 200
+        news_data = res_news.json()
+        assert news_data["status"] == "success"
+        assert "lead_id" in news_data
+
+        # Invalid newsletter email
+        res_news_invalid = await client.post(
+            "/api/newsletter",
+            json={"email": "invalid"}
+        )
+        assert res_news_invalid.status_code == 400
+
+        # Get list with admin token
+        res_list = await client.get("/api/waitlist", headers={"x-admin-token": "secret-test-token"})
         assert res_list.status_code == 200
         list_data = res_list.json()
-        assert list_data["count"] >= 1
+        assert list_data["count"] >= 2
         assert any(l["email"] == "tester@moviematch.com" for l in list_data["leads"])
+        assert any(l["email"] == "newsletter_reader@moviematch.com" for l in list_data["leads"])

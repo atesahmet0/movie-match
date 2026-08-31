@@ -273,3 +273,45 @@ export async function submitWaitlistEmail(
     };
   }
 }
+
+export async function subscribeNewsletter(
+  email: string,
+  options: { feature?: string; source?: string } = {}
+): Promise<{ success: boolean; message: string }> {
+  const clean = email.trim();
+  if (!clean) return { success: false, message: "Email is required." };
+  if (!clean.includes("@") || !clean.includes(".")) {
+    return { success: false, message: "Please enter a valid email address." };
+  }
+
+  const { feature = "newsletter", source = "web" } = options;
+
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/newsletter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: clean, feature, source }),
+      cache: "no-store",
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        success: false,
+        message: data.detail || "Failed to subscribe. Please try again.",
+      };
+    }
+
+    return {
+      success: true,
+      message: data.message || "Thank you! You're subscribed to MovieMatch updates.",
+    };
+  } catch (error) {
+    console.error("subscribeNewsletter error:", error);
+    return {
+      success: false,
+      message: "Network error submitting email. Please try again.",
+    };
+  }
+}
+

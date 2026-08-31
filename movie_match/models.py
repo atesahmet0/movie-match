@@ -70,6 +70,12 @@ class WaitlistRequest(BaseModel):
     feature: Optional[str] = "extended_tier"
 
 
+class NewsletterRequest(BaseModel):
+    email: str
+    feature: Optional[str] = "newsletter"
+    source: Optional[str] = "web"
+
+
 class UserFilmItem(BaseModel):
     slug: str
     title: str = ""
