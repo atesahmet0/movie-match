@@ -113,6 +113,12 @@ class BaseCacheBackend(ABC):
         pass
 
     @abstractmethod
+    async def get_saved_matched_users(
+        self, limit: int = 100, location: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
     async def get_user_profile_detail(self, username: str) -> Optional[UserProfileDetail]:
         pass
 
@@ -164,7 +170,7 @@ class SqliteCacheBackend(BaseCacheBackend):
         query_ttl: float = DEFAULT_QUERY_TTL,
         ttl_seconds: Optional[float] = None,
     ):
-        self.db_path = db_path or DEFAULT_DB_PATH
+        self.db_path = Path(db_path) if db_path is not None else DEFAULT_DB_PATH
         self.profile_ttl = ttl_seconds if ttl_seconds is not None else profile_ttl
         self.interaction_ttl = interaction_ttl
         self.query_ttl = query_ttl
@@ -725,6 +731,55 @@ class SqliteCacheBackend(BaseCacheBackend):
             await self.init()
         await self._conn.execute("DELETE FROM search_history")
         await self._conn.commit()
+
+    async def get_saved_matched_users(
+        self, limit: int = 100, location: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        if not self._conn:
+            await self.init()
+        if location and location.lower() != "anywhere":
+            cursor = await self._conn.execute(
+                """
+                SELECT username, display_name, location, bio, avatar_url, profile_url, is_pro, is_patron, favorite_films_json, updated_at
+                FROM user_profiles
+                WHERE LOWER(location) LIKE ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (f"%{location.lower()}%", limit),
+            )
+        else:
+            cursor = await self._conn.execute(
+                """
+                SELECT username, display_name, location, bio, avatar_url, profile_url, is_pro, is_patron, favorite_films_json, updated_at
+                FROM user_profiles
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+        rows = await cursor.fetchall()
+        users = []
+        for r in rows:
+            favs = []
+            if r[8]:
+                try:
+                    favs = json.loads(r[8])
+                except Exception:
+                    pass
+            users.append({
+                "username": r[0],
+                "display_name": r[1] or r[0],
+                "location": r[2] or "",
+                "bio": r[3] or "",
+                "avatar_url": r[4] or "",
+                "profile_url": r[5] or f"https://letterboxd.com/{r[0]}/",
+                "is_pro": bool(r[6]),
+                "is_patron": bool(r[7]),
+                "favorite_films": favs,
+                "saved_at": r[9],
+            })
+        return users
 
     async def get_user_profile_detail(self, username: str) -> Optional[UserProfileDetail]:
         if not self._conn:
@@ -1464,6 +1519,56 @@ class PostgresCacheBackend(BaseCacheBackend):
         async with self.pool.acquire() as conn:
             await conn.execute("DELETE FROM search_history")
 
+    async def get_saved_matched_users(
+        self, limit: int = 100, location: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        if not self.pool:
+            await self.init()
+        async with self.pool.acquire() as conn:
+            if location and location.lower() != "anywhere":
+                rows = await conn.fetch(
+                    """
+                    SELECT username, display_name, location, bio, avatar_url, profile_url, is_pro, is_patron, favorite_films_json, updated_at
+                    FROM user_profiles
+                    WHERE LOWER(location) LIKE $1
+                    ORDER BY updated_at DESC
+                    LIMIT $2
+                    """,
+                    f"%{location.lower()}%",
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT username, display_name, location, bio, avatar_url, profile_url, is_pro, is_patron, favorite_films_json, updated_at
+                    FROM user_profiles
+                    ORDER BY updated_at DESC
+                    LIMIT $1
+                    """,
+                    limit,
+                )
+            users = []
+            for r in rows:
+                favs = []
+                if r["favorite_films_json"]:
+                    try:
+                        favs = json.loads(r["favorite_films_json"])
+                    except Exception:
+                        pass
+                users.append({
+                    "username": r["username"],
+                    "display_name": r["display_name"] or r["username"],
+                    "location": r["location"] or "",
+                    "bio": r["bio"] or "",
+                    "avatar_url": r["avatar_url"] or "",
+                    "profile_url": r["profile_url"] or f"https://letterboxd.com/{r['username']}/",
+                    "is_pro": bool(r["is_pro"]),
+                    "is_patron": bool(r["is_patron"]),
+                    "favorite_films": favs,
+                    "saved_at": r["updated_at"],
+                })
+            return users
+
     async def get_user_profile_detail(self, username: str) -> Optional[UserProfileDetail]:
         if not self.pool:
             await self.init()
@@ -1666,11 +1771,31 @@ class CacheDB(BaseCacheBackend):
                 ttl_seconds=ttl_seconds,
             )
             self.backend_type = "sqlite"
+        self.db_path = db_path
+        self.profile_ttl = profile_ttl
+        self.interaction_ttl = interaction_ttl
+        self.query_ttl = query_ttl
+        self.ttl_seconds = ttl_seconds
         self._redis_url = os.getenv("REDIS_URL")
         self._redis = None
 
     async def init(self) -> None:
-        await self.backend.init()
+        try:
+            await self.backend.init()
+        except Exception as exc:
+            if self.backend_type == "postgres":
+                logger.warning(f"PostgreSQL connection failed ({exc}). Falling back to local SQLite cache.")
+                self.backend = SqliteCacheBackend(
+                    db_path=self.db_path,
+                    profile_ttl=self.profile_ttl,
+                    interaction_ttl=self.interaction_ttl,
+                    query_ttl=self.query_ttl,
+                    ttl_seconds=self.ttl_seconds,
+                )
+                self.backend_type = "sqlite"
+                await self.backend.init()
+            else:
+                raise
         if self._redis_url and redis_async is not None and self._redis is None:
             candidate = redis_async.from_url(
                 self._redis_url,
@@ -1750,6 +1875,11 @@ class CacheDB(BaseCacheBackend):
 
     async def clear_search_history(self) -> None:
         await self.backend.clear_search_history()
+
+    async def get_saved_matched_users(
+        self, limit: int = 100, location: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return await self.backend.get_saved_matched_users(limit=limit, location=location)
 
     async def get_user_profile_detail(self, username: str) -> Optional[UserProfileDetail]:
         return await self.backend.get_user_profile_detail(username)

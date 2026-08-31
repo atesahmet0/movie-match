@@ -11,6 +11,18 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
+from movie_match.analytics import (
+    capture_backend_exception,
+    capture_event,
+    flush_analytics,
+    init_analytics,
+    shutdown_analytics,
+    track_api_request,
+    track_search_cancelled,
+    track_search_completed,
+    track_search_failed,
+    track_search_started,
+)
 from movie_match.logging import get_logger, is_debug_enabled, performance_tracker, setup_logging
 from movie_match.models import (
     MultiFilmMatchQuery,
@@ -101,6 +113,7 @@ async def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(debug=is_debug_enabled())
+    init_analytics()
     logger.info("🎬 Movie Match FastAPI backend started")
     global _warm_task
     if os.getenv("MOVIE_MATCH_WARM_CACHE", "true").lower() not in {"0", "false", "no"}:
@@ -118,6 +131,7 @@ async def lifespan(app: FastAPI):
             await _shared_scraper.cache.close()
             _shared_scraper = None
             _shared_loop = None
+        shutdown_analytics()
 
 
 app = FastAPI(
@@ -126,6 +140,55 @@ app = FastAPI(
     version="0.2.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def posthog_telemetry_middleware(request: Request, call_next):
+    start_time = time.time()
+    req_content_length = request.headers.get("content-length")
+    req_size = int(req_content_length) if req_content_length and req_content_length.isdigit() else 0
+    client_ip = request.client.host if request.client else "unknown"
+    client_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:12] if client_ip != "unknown" else None
+
+    try:
+        response = await call_next(request)
+        duration_ms = (time.time() - start_time) * 1000
+        resp_content_length = response.headers.get("content-length")
+        resp_size = int(resp_content_length) if resp_content_length and resp_content_length.isdigit() else 0
+
+        if request.url.path.startswith("/api"):
+            track_api_request(
+                path=request.url.path,
+                method=request.method,
+                status_code=response.status_code,
+                duration_ms=duration_ms,
+                request_size_bytes=req_size,
+                response_size_bytes=resp_size,
+                client_ip_hash=client_hash,
+            )
+        return response
+    except Exception as exc:
+        duration_ms = (time.time() - start_time) * 1000
+        capture_backend_exception(
+            exc,
+            context={
+                "path": request.url.path,
+                "method": request.method,
+                "duration_ms": duration_ms,
+                "client_ip_hash": client_hash,
+            },
+        )
+        if request.url.path.startswith("/api"):
+            track_api_request(
+                path=request.url.path,
+                method=request.method,
+                status_code=500,
+                duration_ms=duration_ms,
+                request_size_bytes=req_size,
+                response_size_bytes=0,
+                client_ip_hash=client_hash,
+            )
+        raise
 
 
 app.add_middleware(
@@ -198,12 +261,36 @@ async def _run_single_search(
     cache_key = _query_cache_key("single", query.model_dump(mode="json"))
     use_coalescing = result_callback is None and progress_callback is None and cancel_event is None
     task: Optional[asyncio.Task] = None
+
+    track_search_started(
+        "single_scout",
+        {
+            "film": query.film_input,
+            "location": query.location_query,
+            "sentiment": query.sentiment.value,
+            "rating_range": query.rating_range,
+            "source_username": query.source_username,
+        },
+    )
+
     try:
         scraper = await get_shared_scraper()
         cached = None if bypass_cache else await scraper.cache.get_query_result(cache_key)
         if cached is not None:
             cached["stats"]["cache_status"] = "hit"
-            performance_tracker.finished(time.monotonic() - started, cache_hit=True)
+            elapsed_sec = time.monotonic() - started
+            performance_tracker.finished(elapsed_sec, cache_hit=True)
+            matched_names = [m["username"] for m in cached.get("matches", [])]
+            track_search_completed(
+                search_type="single_scout",
+                duration_sec=elapsed_sec,
+                matches_count=len(cached.get("matches", [])),
+                location=query.location_query,
+                films_count=1,
+                upstream_requests=0,
+                cache_status="hit",
+                matched_usernames=matched_names,
+            )
             return cached
 
         task = _search_inflight.get(cache_key) if use_coalescing else None
@@ -220,16 +307,32 @@ async def _run_single_search(
             if use_coalescing:
                 _search_inflight[cache_key] = task
         payload = await asyncio.shield(task) if use_coalescing else await task
+        elapsed_sec = time.monotonic() - started
         performance_tracker.finished(
-            time.monotonic() - started,
+            elapsed_sec,
             time_to_first_result=payload["stats"].get("time_to_first_result"),
+        )
+        matched_names = [m["username"] for m in payload.get("matches", [])]
+        track_search_completed(
+            search_type="single_scout",
+            duration_sec=elapsed_sec,
+            matches_count=len(payload.get("matches", [])),
+            location=query.location_query,
+            films_count=1,
+            upstream_requests=payload.get("stats", {}).get("upstream_requests", 0),
+            cache_status=payload.get("stats", {}).get("cache_status", "miss"),
+            matched_usernames=matched_names,
         )
         return payload
     except asyncio.CancelledError:
-        performance_tracker.finished(time.monotonic() - started, cancelled=True)
+        elapsed_sec = time.monotonic() - started
+        performance_tracker.finished(elapsed_sec, cancelled=True)
+        track_search_cancelled("single_scout", elapsed_sec)
         raise
-    except Exception:
-        performance_tracker.finished(time.monotonic() - started)
+    except Exception as exc:
+        elapsed_sec = time.monotonic() - started
+        performance_tracker.finished(elapsed_sec)
+        track_search_failed("single_scout", str(exc), elapsed_sec)
         raise
     finally:
         if use_coalescing and task is not None and task.done() and _search_inflight.get(cache_key) is task:
@@ -249,12 +352,23 @@ async def _compute_taste_search(
         progress_callback=progress_callback,
         cancel_event=cancel_event,
     )
+    matches_serialized = [match.model_dump(mode="json") for match in matches]
+    history_id = await scraper.cache.save_search_history(
+        film_slug=",".join(query.films[:4]),
+        film_title=", ".join(query.films[:4]),
+        location_query=query.location_query,
+        sentiment=query.sentiment.value,
+        rating_range=query.rating_range,
+        matches_count=len(matches),
+        results_json=json.dumps(matches_serialized, ensure_ascii=False),
+    )
     payload = {
         "status": "success",
+        "history_id": history_id,
         "films": query.films,
         "stats": stats.model_dump(mode="json"),
         "matches_count": len(matches),
-        "matches": [match.model_dump(mode="json") for match in matches],
+        "matches": matches_serialized,
     }
     if not stats.partial:
         await scraper.cache.save_query_result(cache_key, payload)
@@ -273,12 +387,36 @@ async def _run_taste_search(
     cache_key = _query_cache_key("taste", query.model_dump(mode="json"))
     use_coalescing = progress_callback is None and cancel_event is None
     task: Optional[asyncio.Task] = None
+
+    track_search_started(
+        "taste_match",
+        {
+            "films": query.films,
+            "location": query.location_query,
+            "min_shared_films": query.min_shared_films,
+            "sentiment": query.sentiment.value,
+            "source_username": query.source_username,
+        },
+    )
+
     try:
         scraper = await get_shared_scraper()
         cached = None if bypass_cache else await scraper.cache.get_query_result(cache_key)
         if cached is not None:
             cached["stats"]["cache_status"] = "hit"
-            performance_tracker.finished(time.monotonic() - started, cache_hit=True)
+            elapsed_sec = time.monotonic() - started
+            performance_tracker.finished(elapsed_sec, cache_hit=True)
+            matched_names = [m["username"] for m in cached.get("matches", [])]
+            track_search_completed(
+                search_type="taste_match",
+                duration_sec=elapsed_sec,
+                matches_count=len(cached.get("matches", [])),
+                location=query.location_query,
+                films_count=len(query.films),
+                upstream_requests=0,
+                cache_status="hit",
+                matched_usernames=matched_names,
+            )
             return cached
 
         task = _search_inflight.get(cache_key) if use_coalescing else None
@@ -294,16 +432,33 @@ async def _run_taste_search(
             if use_coalescing:
                 _search_inflight[cache_key] = task
         payload = await asyncio.shield(task) if use_coalescing else await task
+        elapsed_sec = time.monotonic() - started
         performance_tracker.finished(
-            time.monotonic() - started,
+            elapsed_sec,
             time_to_first_result=payload["stats"].get("time_to_first_result"),
+        )
+        matched_names = [m["username"] for m in payload.get("matches", [])]
+        track_search_completed(
+            search_type="taste_match",
+            duration_sec=elapsed_sec,
+            matches_count=len(payload.get("matches", [])),
+            location=query.location_query,
+            films_count=len(query.films),
+            upstream_requests=payload.get("stats", {}).get("upstream_requests", 0),
+            cache_status=payload.get("stats", {}).get("cache_status", "miss"),
+            stop_reason=payload.get("stats", {}).get("stop_reason"),
+            matched_usernames=matched_names,
         )
         return payload
     except asyncio.CancelledError:
-        performance_tracker.finished(time.monotonic() - started, cancelled=True)
+        elapsed_sec = time.monotonic() - started
+        performance_tracker.finished(elapsed_sec, cancelled=True)
+        track_search_cancelled("taste_match", elapsed_sec)
         raise
-    except Exception:
-        performance_tracker.finished(time.monotonic() - started)
+    except Exception as exc:
+        elapsed_sec = time.monotonic() - started
+        performance_tracker.finished(elapsed_sec)
+        track_search_failed("taste_match", str(exc), elapsed_sec)
         raise
     finally:
         if use_coalescing and task is not None and task.done() and _search_inflight.get(cache_key) is task:
@@ -610,6 +765,22 @@ async def api_search_films(
     return {"status": "success", "query": q, "results": results}
 
 
+@app.get("/api/matches/saved-users")
+async def api_saved_matched_users(
+    limit: int = Query(50, ge=1, le=500),
+    location: Optional[str] = Query(None, description="Optional location filter (e.g. London, Turkey, Berlin)"),
+):
+    """Retrieve list of candidate and matched Letterboxd users saved in the database."""
+    scraper = await get_shared_scraper()
+    users = await scraper.cache.get_saved_matched_users(limit=limit, location=location)
+    return {
+        "status": "success",
+        "count": len(users),
+        "location_filter": location,
+        "users": users,
+    }
+
+
 @app.post("/api/waitlist")
 async def api_save_waitlist(req: WaitlistRequest):
     """Save email lead to database waitlist for upcoming features."""
@@ -619,6 +790,14 @@ async def api_save_waitlist(req: WaitlistRequest):
 
     cache = (await get_shared_scraper()).cache
     lead_id = await cache.save_waitlist_lead(email=email, feature=req.feature or "extended_tier")
+
+    capture_event(
+        "backend_waitlist_joined",
+        {
+            "feature": req.feature or "extended_tier",
+            "email_domain": email.split("@")[-1],
+        },
+    )
 
     return {
         "status": "success",
@@ -640,6 +819,15 @@ async def api_save_newsletter(req: NewsletterRequest):
 
     cache = (await get_shared_scraper()).cache
     lead_id = await cache.save_waitlist_lead(email=email, feature=feature_tag)
+
+    capture_event(
+        "backend_newsletter_subscribed",
+        {
+            "source": req.source or "unknown",
+            "feature": feature_tag,
+            "email_domain": email.split("@")[-1],
+        },
+    )
 
     return {
         "status": "success",

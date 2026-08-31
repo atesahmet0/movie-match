@@ -12,6 +12,12 @@ from urllib.parse import urlsplit
 
 from curl_cffi.requests import AsyncSession, Response
 
+from movie_match.analytics import (
+    capture_backend_exception,
+    track_circuit_breaker,
+    track_http_request,
+    track_proxy_block,
+)
 from movie_match.logging import debug_tracker, get_logger
 
 try:
@@ -283,6 +289,11 @@ class AntiBotHttpClient:
                     f"Proxy circuit opened for {self._circuit_pause:.1f}s after "
                     f"{len(self._block_events)} recent blocks"
                 )
+                track_circuit_breaker(
+                    event="circuit_opened",
+                    pause_sec=self._circuit_pause,
+                    recent_blocks=len(self._block_events),
+                )
 
     async def _record_success(self) -> None:
         self._success_streak += 1
@@ -357,6 +368,20 @@ class AntiBotHttpClient:
                 )
                 elapsed_sec = time.time() - req_start
                 elapsed_ms = elapsed_sec * 1000
+                resp_bytes = len(response.content) if hasattr(response, "content") and response.content else 0
+                proxy_mode = _proxy_rotation_mode(slot.proxy_url) if slot.proxy_url else "direct"
+
+                track_http_request(
+                    url=url,
+                    status_code=response.status_code,
+                    duration_sec=elapsed_sec,
+                    retry_attempt=attempt,
+                    max_retries=self.max_retries,
+                    response_bytes=resp_bytes,
+                    proxy_mode=proxy_mode,
+                    proxy_used=bool(slot.proxy_url),
+                    session_generation=slot.generation,
+                )
 
                 if response.status_code == 200:
                     debug_tracker.record_http_request(elapsed_sec, 200, retry=(attempt > 1))
@@ -377,6 +402,14 @@ class AntiBotHttpClient:
                     await self._record_block()
                     await self._rotate_slot(index)
                     backoff = min(3.0, 0.45 * (2 ** (attempt - 1)) + random.uniform(0.05, 0.25))
+                    track_proxy_block(
+                        url=url,
+                        status_code=response.status_code,
+                        backoff_sec=backoff,
+                        attempt=attempt,
+                        max_retries=self.max_retries,
+                        session_generation=slot.generation,
+                    )
                     await self._release_slot(index, cooldown=backoff if will_retry else 0.0)
                     released = True
                     if not will_retry:
@@ -419,6 +452,23 @@ class AntiBotHttpClient:
                 elapsed_sec = time.time() - req_start
                 will_retry = attempt < self.max_retries
                 debug_tracker.record_http_request(elapsed_sec, None, retry=will_retry)
+                slot_proxy = self._slots[index].proxy_url if index < len(self._slots) else None
+                proxy_mode = _proxy_rotation_mode(slot_proxy) if slot_proxy else "direct"
+                slot_gen = self._slots[index].generation if index < len(self._slots) else 1
+
+                track_http_request(
+                    url=url,
+                    status_code=None,
+                    duration_sec=elapsed_sec,
+                    retry_attempt=attempt,
+                    max_retries=self.max_retries,
+                    response_bytes=0,
+                    proxy_mode=proxy_mode,
+                    proxy_used=bool(slot_proxy),
+                    session_generation=slot_gen,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+
                 try:
                     await self._rotate_slot(index)
                 except Exception:
@@ -428,6 +478,14 @@ class AntiBotHttpClient:
                 if not will_retry:
                     logger.error(
                         f"Request failed permanently ({type(exc).__name__}: {exc}) on {url}"
+                    )
+                    capture_backend_exception(
+                        exc,
+                        context={
+                            "url": url,
+                            "attempt": attempt,
+                            "proxy_mode": proxy_mode,
+                        },
                     )
                     return None
                 backoff = min(3.0, 0.5 * (2 ** (attempt - 1)) + random.uniform(0.1, 0.3))
