@@ -10,7 +10,6 @@ import { useScoutForm, UseScoutFormProps } from "@/lib/hooks/use-scout-form";
 import {
   FilmSelector,
   LocationPicker,
-  FilterControls,
   StatusProgress,
 } from "@/components/scout";
 
@@ -60,18 +59,6 @@ export default function ScoutForm({
             onTogglePresetLocation={form.togglePresetLocation}
           />
 
-          {/* Compound 3: Filter Controls */}
-          <FilterControls
-            sentiment={form.sentiment}
-            onSentimentChange={form.setSentiment}
-            maxPages={form.maxPages}
-            onMaxPagesChange={form.setMaxPages}
-            limit={form.limit}
-            onLimitChange={form.setLimit}
-            includeBio={form.includeBio}
-            onIncludeBioChange={form.setIncludeBio}
-          />
-
           {/* Submit Action */}
           <Button
             type="submit"
@@ -99,7 +86,7 @@ export default function ScoutForm({
         </form>
       </div>
 
-      {/* Compound 4: Dynamic Live Scouting Status Progression */}
+      {/* Compound 3: Dynamic Live Scouting Status Progression */}
       <StatusProgress
         isPending={form.isPending}
         selectedFilmsCount={form.selectedFilms.length}
@@ -113,5 +100,4 @@ export default function ScoutForm({
 // Attach Compound Subcomponents
 ScoutForm.FilmSelector = FilmSelector;
 ScoutForm.LocationPicker = LocationPicker;
-ScoutForm.FilterControls = FilterControls;
 ScoutForm.StatusProgress = StatusProgress;

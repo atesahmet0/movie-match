@@ -19,7 +19,6 @@ import { useTaste } from "@/lib/taste-context";
 import { fetchFilmInfo } from "@/lib/api";
 import { FilmSearchResult } from "@/lib/types";
 import { FilmCombobox } from "@/components/ui/FilmCombobox";
-import UpcomingFeatureModal from "@/components/UpcomingFeatureModal";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface TasteFormProps {
@@ -80,40 +79,8 @@ export default function TasteForm({
   const [locationInput, setLocationInput] = useState("");
 
   const [minShared, setMinShared] = useState(initialMinShared || 1);
-  const [maxPages, setMaxPages] = useState(initialPages || 2);
-  const [limit, setLimit] = useState(initialLimit || 10);
-
-  // Upcoming feature modal state
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState("");
-  const [modalDesc, setModalDesc] = useState("");
-  const [modalKey, setModalKey] = useState("");
-
-  const handleDepthChange = (val: string) => {
-    if (val === "extended") {
-      setModalTitle("Extended Scan Depth");
-      setModalDesc(
-        "Extended scan depth parses up to 5+ pages of user ratings per film (~400 candidates/film) to discover deeply hidden taste twins. Enter your email to be notified when Extended Tier goes live!"
-      );
-      setModalKey("extended_scan_depth");
-      setModalOpen(true);
-      return;
-    }
-    setMaxPages(2);
-  };
-
-  const handleLimitChange = (val: number) => {
-    if (val !== 10) {
-      setModalTitle(`${val} Matches Limit`);
-      setModalDesc(
-        `High-volume match scouting (${val} matches) requires dedicated scraper clusters and is currently in early access. Enter your email to join the waitlist!`
-      );
-      setModalKey(`matches_limit_${val}`);
-      setModalOpen(true);
-      return;
-    }
-    setLimit(10);
-  };
+  const [maxPages] = useState(initialPages || 2);
+  const [limit] = useState(initialLimit || 10);
 
   // Live status progress
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -290,12 +257,12 @@ export default function TasteForm({
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="glass-card p-6 sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Section 1: Film Matrix Basket */}
+          {/* Section 1: Film Selection */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-[#00e054]" />
-                Taste Matrix Basket ({selectedFilms.length} Selected)
+                Selected Films ({selectedFilms.length} Selected)
               </label>
               {selectedFilms.length > 0 && (
                 <button
@@ -458,58 +425,26 @@ export default function TasteForm({
             </div>
           </div>
 
-          {/* Section 3: Fine Tuning Parameters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-[#2c3440]">
-            <div>
+          {/* Section 3: Match Criteria */}
+          {selectedFilms.length > 1 && (
+            <div className="pt-4 border-t border-[#2c3440]">
               <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
                 <span>Min Shared Films</span>
-                <span className="text-[#00e054] font-mono font-bold">{minShared} / {selectedFilms.length || 1}</span>
+                <span className="text-[#00e054] font-mono font-bold">{minShared} / {selectedFilms.length}</span>
               </label>
               <select
                 value={minShared}
                 onChange={(e) => setMinShared(parseInt(e.target.value) || 1)}
                 className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054] cursor-pointer"
               >
-                {Array.from({ length: Math.max(selectedFilms.length, 1) }, (_, i) => i + 1).map((num) => (
+                {Array.from({ length: selectedFilms.length }, (_, i) => i + 1).map((num) => (
                   <option key={num} value={num}>
                     At least {num} {num === 1 ? "film" : "films"}
                   </option>
                 ))}
               </select>
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
-                <span>Scan Depth</span>
-                <span className="text-[#40bcf4] font-mono font-bold">Basic (2 pgs)</span>
-              </label>
-              <select
-                value={maxPages >= 4 ? "extended" : "basic"}
-                onChange={(e) => handleDepthChange(e.target.value)}
-                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054] cursor-pointer"
-              >
-                <option value="basic">Basic (150 candidates/film) — Default</option>
-                <option value="extended">Extended (400+ candidates/film) 🔒</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-white mb-1.5 flex items-center justify-between">
-                <span>Matches Limit</span>
-                <span className="text-[#ff8000] font-mono font-bold">{limit} Matches</span>
-              </label>
-              <select
-                value={limit}
-                onChange={(e) => handleLimitChange(parseInt(e.target.value) || 10)}
-                className="w-full text-xs bg-[#14181c] border border-[#2c3440] rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#00e054] cursor-pointer"
-              >
-                <option value={10}>10 Matches (Default)</option>
-                <option value={25}>25 Matches 🔒</option>
-                <option value={50}>50 Matches 🔒</option>
-                <option value={100}>100 Matches 🔒</option>
-              </select>
-            </div>
-          </div>
+          )}
 
           {/* Submit Button */}
           <button
@@ -525,7 +460,7 @@ export default function TasteForm({
             ) : (
               <>
                 <Sparkles className="w-5 h-5" />
-                <span>Find Movie Matches ({selectedFilms.length} Films)</span>
+                <span>Find Movie Matches ({selectedFilms.length} {selectedFilms.length === 1 ? "Film" : "Films"})</span>
               </>
             )}
           </button>
@@ -547,13 +482,13 @@ export default function TasteForm({
               </span>
               <div>
                 <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Scanning Taste Graph</span>
+                  <span>Finding Movie Matches</span>
                   <span className="text-xs font-mono text-[#00e054]">
                     &bull; {selectedFilms.length} Films across {locations.join(", ")}
                   </span>
                 </h4>
                 <p className="text-[11px] text-[#99aabb]">
-                  Correlating user ratings and favorites via rotating proxy pipeline
+                  Finding cinephiles with matching favorites and ratings
                 </p>
               </div>
             </div>
@@ -579,8 +514,8 @@ export default function TasteForm({
                 <Globe className="w-4 h-4 text-[#00e054] animate-pulse shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">1. Matrix Load</span>
-                <span className="text-[10px] text-[#99aabb] block truncate">{selectedFilms.length} target films</span>
+                <span className="block font-semibold truncate text-xs">1. Target Films</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">{selectedFilms.length} {selectedFilms.length === 1 ? "film" : "films"}</span>
               </div>
             </div>
 
@@ -599,8 +534,8 @@ export default function TasteForm({
                 <Layers className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">2. Film Overlap</span>
-                <span className="text-[10px] text-[#99aabb] block truncate">{maxPages} pages / film</span>
+                <span className="block font-semibold truncate text-xs">2. Discover Cinephiles</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">Finding film lovers</span>
               </div>
             </div>
 
@@ -619,7 +554,7 @@ export default function TasteForm({
                 <Users className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">3. Profile Match</span>
+                <span className="block font-semibold truncate text-xs">3. Check Locations</span>
                 <span className="text-[10px] text-[#99aabb] block truncate">{locations.join(", ")}</span>
               </div>
             </div>
@@ -637,22 +572,13 @@ export default function TasteForm({
                 <Sparkles className="w-4 h-4 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className="block font-semibold truncate text-xs">4. Scoring</span>
-                <span className="text-[10px] text-[#99aabb] block truncate">Calculating overlap</span>
+                <span className="block font-semibold truncate text-xs">4. Rank Matches</span>
+                <span className="text-[10px] text-[#99aabb] block truncate">Calculating compatibility</span>
               </div>
             </div>
           </div>
         </motion.div>
       )}
-
-      {/* Upcoming Feature Early Access Modal */}
-      <UpcomingFeatureModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        featureTitle={modalTitle}
-        featureDescription={modalDesc}
-        featureKey={modalKey}
-      />
     </div>
   );
 }

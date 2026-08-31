@@ -8,14 +8,13 @@ export interface StatusProgressProps {
   isPending: boolean;
   selectedFilmsCount: number;
   locations: string[];
-  maxPages: number;
+  maxPages?: number;
 }
 
 export function StatusProgress({
   isPending,
   selectedFilmsCount,
   locations,
-  maxPages,
 }: StatusProgressProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -34,10 +33,26 @@ export function StatusProgress({
   const statusStep = elapsedSeconds > 7 ? 4 : elapsedSeconds > 3.5 ? 3 : elapsedSeconds > 1.2 ? 2 : 1;
 
   const steps = [
-    { label: "Connect", detail: `${selectedFilmsCount} target films`, icon: Globe },
-    { label: "Read activity", detail: `${maxPages} pages per film`, icon: Layers },
-    { label: "Check profiles", detail: locations.join(", "), icon: Users },
-    { label: "Rank matches", detail: "Applying filters", icon: Sparkles },
+    {
+      label: "Target films",
+      detail: `${selectedFilmsCount} ${selectedFilmsCount === 1 ? "film" : "films"} selected`,
+      icon: Globe,
+    },
+    {
+      label: "Discover cinephiles",
+      detail: "Finding film lovers",
+      icon: Layers,
+    },
+    {
+      label: "Check locations",
+      detail: locations.join(", "),
+      icon: Users,
+    },
+    {
+      label: "Rank taste matches",
+      detail: "Calculating shared films",
+      icon: Sparkles,
+    },
   ];
 
   return (
@@ -46,9 +61,9 @@ export function StatusProgress({
         <div className="flex items-start gap-3">
           <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin text-brand-green" />
           <div>
-            <h2 className="text-lg font-bold text-white">Scouting public member activity</h2>
+            <h2 className="text-lg font-bold text-white">Finding movie matches</h2>
             <p className="mt-1 text-sm text-brand-subtext">
-              Reading film activity, checking profiles, and applying your filters.
+              Discovering cinephiles with shared favorites in your selected area.
             </p>
           </div>
         </div>

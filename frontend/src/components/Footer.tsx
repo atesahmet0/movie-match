@@ -6,7 +6,7 @@ export default function Footer() {
     <footer className="mt-auto border-t border-brand-border">
       <div className="mx-auto flex w-full max-w-[86rem] flex-col gap-3 px-4 py-6 text-sm text-brand-muted sm:px-6 md:flex-row md:items-center md:justify-between lg:px-12">
         <p className="m-0">
-          MovieMatch finds public Letterboxd members through shared film activity and location.
+          MovieMatch finds public Letterboxd members through shared favorite films and location.
         </p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 whitespace-nowrap">
           <Link href="/" className="text-brand-subtext underline-offset-4 hover:text-white hover:underline">

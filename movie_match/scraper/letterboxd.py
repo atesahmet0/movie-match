@@ -351,8 +351,9 @@ class LetterboxdScraper:
                             logger.debug(f"[dim]No match: @{p.username} (loc='{p.location}')[/dim]")
 
                     if progress_callback:
+                        film_display = film_title or query.film_input
                         progress_callback(
-                            f"Streaming {desc} (Page {page})",
+                            f"Discovering cinephiles who loved {film_display}...",
                             stats.total_pages_scanned,
                             stats.total_users_discovered,
                             stats.matches_count,
@@ -896,8 +897,9 @@ class LetterboxdScraper:
                             break
 
                     if progress_callback:
+                        film_display = film_title or slug
                         progress_callback(
-                            f"Scouting film {film_idx}/{len(scan_slugs)} ({slug}) - Page {page}",
+                            f"Finding shared fans of {film_display} ({film_idx}/{len(scan_slugs)})...",
                             stats.total_pages_scanned,
                             stats.total_users_discovered,
                             len([u for u, ints in user_film_interactions.items() if len(ints) >= query.min_shared_films]),

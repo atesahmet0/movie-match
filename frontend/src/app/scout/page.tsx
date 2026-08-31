@@ -30,7 +30,7 @@ export async function generateMetadata({ searchParams }: ScoutPageProps): Promis
 
   return {
     title: "Find Members by Location — MovieMatch",
-    description: "Filter cinephiles by movie, location, and sentiment.",
+    description: "Find cinephiles who love the same movies in your area.",
   };
 }
 
@@ -84,7 +84,7 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
           <Search className="h-7 w-7 text-brand-green" aria-hidden="true" />
           <h1 id="scout-title" className="page-title">Scout the audience.</h1>
           <p className="page-lede">
-            Choose one or more films, set a location, and decide which kind of activity counts. Results show the public evidence behind every member.
+            Choose one or more films and set a location. Results show the public evidence behind every member.
           </p>
           <p className="max-w-[48ch] border-t border-brand-border pt-5 text-sm text-brand-subtext">
             One film finds people around that title. Several films rank members by overlap across the set.

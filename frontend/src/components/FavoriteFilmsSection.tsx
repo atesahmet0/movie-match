@@ -55,7 +55,7 @@ export default function FavoriteFilmsSection({
             </h2>
           </div>
           <p className="text-xs text-brand-subtext mt-0.5">
-            Your top cinema cornerstones. Instant 1-click match with locals sharing this exact matrix.
+            Your top cinema cornerstones. Instant 1-click match with locals sharing these favorites.
           </p>
         </div>
 

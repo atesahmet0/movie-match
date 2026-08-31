@@ -595,15 +595,6 @@
               <option value="4">Match all 4 films</option>
             </select>
           </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-gray-300 mb-1.5">Scan Depth</label>
-            <select x-model="tastePages" class="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus">
-              <option value="1">Quick (1 Page per film)</option>
-              <option value="2">Balanced (2 Pages per film)</option>
-              <option value="3">Deep (3 Pages per film)</option>
-            </select>
-          </div>
         </div>
 
         <button 
@@ -745,37 +736,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-brand-border">
-            <div>
-              <label class="block text-xs font-semibold text-gray-300 mb-1.5">Sentiment Filter</label>
-              <select x-model="searchSentiment" class="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus">
-                <option value="liked">Liked / High Rating (4-5 Stars)</option>
-                <option value="disliked">Disliked / Low Rating (0.5-2 Stars)</option>
-                <option value="all">All Members (Watched / Rated)</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-xs font-semibold text-gray-300 mb-1.5">Scan Depth</label>
-              <select x-model="searchPages" class="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus">
-                <option value="2">2 Pages (~150 candidates)</option>
-                <option value="3">3 Pages (~225 candidates)</option>
-                <option value="5">5 Pages (~375 candidates)</option>
-                <option value="10">10 Pages (~750 candidates)</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-xs font-semibold text-gray-300 mb-1.5">Matches Limit</label>
-              <select x-model="searchLimit" class="w-full text-xs bg-brand-darker border border-brand-border rounded-xl px-3 py-2.5 text-white focus:outline-none glow-focus">
-                <option value="25">Stop at 25 Matches</option>
-                <option value="50">Stop at 50 Matches</option>
-                <option value="100">Stop at 100 Matches</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-2 pt-2 border-t border-brand-border">
             <input type="checkbox" id="scout-bio" x-model="searchIncludeBio" class="rounded bg-brand-darker border-brand-border text-brand-green focus:ring-0 w-4 h-4 cursor-pointer" />
             <label for="scout-bio" class="text-xs text-gray-300 cursor-pointer">
               Search member profile bio in addition to location field

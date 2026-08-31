@@ -145,7 +145,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
               <div className="flex items-center justify-between font-mono text-xs font-bold text-brand-muted">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-brand-green" />
-                  <span>Shared Films in Taste Matrix ({matchResult.shared_films.length})</span>
+                  <span>Shared Films ({matchResult.shared_films.length})</span>
                 </span>
                 {/* Below the 3-pair threshold the backend reports a neutral
                     placeholder, so showing a percentage would invent a

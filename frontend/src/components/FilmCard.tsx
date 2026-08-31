@@ -109,7 +109,7 @@ export default function FilmCard({ film, isFavorite = false }: FilmCardProps) {
               ? "bg-brand-orange text-black border-brand-orange shadow-sm shadow-brand-orange/20 font-bold"
               : "bg-brand-darker text-brand-subtext border-brand-border hover:text-white hover:border-brand-borderLight"
           }`}
-          title={isSelected ? "Remove from Taste Matrix" : "Add to Taste Matrix"}
+          title={isSelected ? "Remove from selection" : "Add to selection"}
         >
           {isSelected ? (
             <>

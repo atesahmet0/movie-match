@@ -88,7 +88,7 @@ export default function ScoutSearchResults({
       setStats(null);
       setSinglePayload(null);
       setError(null);
-      setProgress("Connecting to the search stream…");
+      setProgress("Searching for cinephiles with shared taste…");
       setIsSearching(true);
 
       try {
@@ -136,8 +136,6 @@ export default function ScoutSearchResults({
                   ? "Time limit reached — showing the best matches found so far."
                   : searchRun
                   ? "Results refreshed."
-                  : payload.stats.cache_status === "hit"
-                  ? "Loaded from the shared search cache."
                   : "Search complete."
               );
               setIsSearching(false);
@@ -172,7 +170,7 @@ export default function ScoutSearchResults({
         if (controller.signal.aborted && !timedOut) return;
         setError(
           timedOut
-            ? "This search reached its one-minute limit. Any matches already found are shown below; try fewer pages or a narrower location for a faster result."
+            ? "Search timed out. Any matches found so far are shown below; try selecting a specific city or country for faster results."
             : caught instanceof Error
             ? caught.message
             : "The search could not be completed. Please try again."
@@ -220,7 +218,7 @@ export default function ScoutSearchResults({
             )}
             {stats && (
               <span className="font-mono text-xs text-brand-subtext tabular-nums">
-                {stats.elapsed_seconds.toFixed(2)}s · {stats.upstream_requests || 0} upstream
+                {stats.elapsed_seconds.toFixed(1)}s
               </span>
             )}
           </div>
@@ -257,7 +255,7 @@ export default function ScoutSearchResults({
           <Compass className="h-8 w-8 text-brand-muted" />
           <h2 className="text-xl font-bold text-white">No matching members found in &quot;{location}&quot;.</h2>
           <p className="max-w-md text-sm text-brand-subtext">
-            Try increasing Scan Depth, adding more film targets, or setting Location to Anywhere.
+            Try adding more film targets or setting Location to Anywhere.
           </p>
         </section>
       )}

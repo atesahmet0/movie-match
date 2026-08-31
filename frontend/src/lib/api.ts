@@ -147,7 +147,7 @@ export async function fetchTasteMatch(params: {
       (error.name === "TimeoutError" || error.message.toLowerCase().includes("timeout"));
     throw new Error(
       isTimeout
-        ? "This search took too long. Try fewer pages or a narrower location."
+        ? "This search took too long. Try a narrower location or different film titles."
         : "The search service is temporarily unavailable. Please try again."
     );
   }
