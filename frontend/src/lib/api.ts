@@ -125,7 +125,7 @@ export async function fetchTasteMatch(params: {
         location_query: params.location_query?.trim() || "Anywhere",
         min_shared_films: params.min_shared_films || 1,
         sentiment: params.sentiment || "liked",
-        max_pages_per_film: params.max_pages_per_film || 2,
+        max_pages_per_film: params.max_pages_per_film || 6,
         limit_matches: params.limit_matches || 10,
         include_bio: params.include_bio ?? false,
         source_username: params.source_username || undefined,

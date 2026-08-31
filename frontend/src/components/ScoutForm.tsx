@@ -21,7 +21,7 @@ export default function ScoutForm({
   initialFilms = ["parasite-2019"],
   initialLocation = "Anywhere",
   initialSentiment = "liked",
-  initialPages = 2,
+  initialPages = 6,
   initialLimit = 10,
   initialIncludeBio = false,
   className = "",

@@ -131,7 +131,10 @@ class MultiFilmMatchQuery(BaseModel):
     sentiment: SentimentType = SentimentType.LIKED
     rating_range: Optional[str] = None
     include_bio: bool = False
-    max_pages_per_film: int = Field(2, ge=1, le=20)
+    # Depth is what converts the time budget into actual work. With the scan
+    # hunting for one strong match under a 180s budget, 2 pages per film runs
+    # dry long before the budget does.
+    max_pages_per_film: int = Field(6, ge=1, le=20)
     limit_matches: int = Field(10, ge=1, le=500)
     concurrency: int = Field(15, ge=1, le=50)
     source_username: Optional[str] = None

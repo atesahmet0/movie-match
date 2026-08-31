@@ -58,10 +58,10 @@ export default async function ScoutPage({ searchParams }: ScoutPageProps) {
     typeof resolvedParams.sentiment === "string" ? resolvedParams.sentiment : "liked";
   const maxPagesParam =
     typeof resolvedParams.max_pages === "string"
-      ? parseInt(resolvedParams.max_pages) || 2
+      ? parseInt(resolvedParams.max_pages) || 6
       : typeof resolvedParams.maxPages === "string"
-      ? parseInt(resolvedParams.maxPages) || 2
-      : 2;
+      ? parseInt(resolvedParams.maxPages) || 6
+      : 6;
   const limitParam =
     typeof resolvedParams.limit === "string" ? parseInt(resolvedParams.limit) || 10 : 10;
   const includeBioParam =

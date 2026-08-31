@@ -137,7 +137,7 @@ export default function TasteSoulmatesSection({
       router.push(
         `/scout?films=${encodeURIComponent(filmsParam)}&location=${encodeURIComponent(
           loc
-        )}&user=${encodeURIComponent(userProfile.username)}&min_shared=${minShared}&max_pages=2&limit=10&run=${run}`
+        )}&user=${encodeURIComponent(userProfile.username)}&min_shared=${minShared}&max_pages=6&limit=10&run=${run}`
       );
     });
   };

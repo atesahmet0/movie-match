@@ -19,7 +19,7 @@ export function useScoutForm({
   initialFilms = ["parasite-2019"],
   initialLocation = "Anywhere",
   initialSentiment = "liked",
-  initialPages = 2,
+  initialPages = 6,
   initialLimit = 10,
   initialIncludeBio = false,
 }: UseScoutFormProps = {}) {
@@ -43,7 +43,7 @@ export function useScoutForm({
   const [locationInput, setLocationInput] = useState("");
 
   const [sentiment, setSentiment] = useState(initialSentiment || "liked");
-  const [maxPages, setMaxPages] = useState(initialPages || 2);
+  const [maxPages, setMaxPages] = useState(initialPages || 6);
   const [limit, setLimit] = useState(initialLimit || 10);
   const [includeBio, setIncludeBio] = useState(initialIncludeBio === true);
 
