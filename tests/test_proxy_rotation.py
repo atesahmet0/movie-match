@@ -83,3 +83,60 @@ def test_multiple_exported_webshare_endpoints_are_supported(monkeypatch):
     assert client._proxy_for_slot(0) == client.proxy_urls[0]
     assert client._proxy_for_slot(1) == client.proxy_urls[1]
     assert client._proxy_for_slot(2) == client.proxy_urls[0]
+
+
+def test_pool_scales_with_configured_proxies(monkeypatch):
+    """The pool spreads across available exit IPs instead of a fixed 5."""
+    monkeypatch.delenv("WEBSHARE_SESSION_POOL_SIZE", raising=False)
+    monkeypatch.setenv(
+        "WEBSHARE_PROXY_URLS",
+        ",".join(f"http://user{i}:secret@p.webshare.io:80" for i in range(40)),
+    )
+    client = AntiBotHttpClient()
+
+    assert client.session_pool_size == 24  # PROXY_SESSION_POOL_CEILING default
+    # Capacity must not throttle the sessions we just provisioned.
+    assert client.concurrency >= client.session_pool_size
+
+
+def test_pool_stays_small_without_proxies(monkeypatch):
+    """Extra sessions on one exit address buy blocks, not throughput."""
+    monkeypatch.delenv("WEBSHARE_SESSION_POOL_SIZE", raising=False)
+    monkeypatch.delenv("WEBSHARE_PROXY_URLS", raising=False)
+    monkeypatch.delenv("PROXY_URLS", raising=False)
+    monkeypatch.delenv("PROXY_URL", raising=False)
+    monkeypatch.delenv("HTTP_PROXY", raising=False)
+    client = AntiBotHttpClient()
+
+    assert client.session_pool_size == 5
+
+
+def test_pool_is_capped_by_the_ceiling(monkeypatch):
+    monkeypatch.delenv("WEBSHARE_SESSION_POOL_SIZE", raising=False)
+    monkeypatch.setenv("PROXY_SESSION_POOL_CEILING", "8")
+    monkeypatch.setenv(
+        "WEBSHARE_PROXY_URLS",
+        ",".join(f"http://user{i}:secret@p.webshare.io:80" for i in range(100)),
+    )
+    assert AntiBotHttpClient().session_pool_size == 8
+
+
+def test_explicit_pool_size_overrides_derivation(monkeypatch):
+    monkeypatch.setenv("WEBSHARE_SESSION_POOL_SIZE", "12")
+    monkeypatch.setenv(
+        "WEBSHARE_PROXY_URLS",
+        ",".join(f"http://user{i}:secret@p.webshare.io:80" for i in range(100)),
+    )
+    assert AntiBotHttpClient().session_pool_size == 12
+
+
+def test_adaptive_limit_recovers_proportionally_for_large_pools():
+    """A flat +1 per streak leaves a big pool crippled for the whole search."""
+    client = AntiBotHttpClient(session_pool_size=24, concurrency=24)
+    client._adaptive_limit = 12
+    client._success_streak = 20
+
+    import asyncio
+    asyncio.run(client._record_success())
+
+    assert client._adaptive_limit == 15  # +24//8, not +1

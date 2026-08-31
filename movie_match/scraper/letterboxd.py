@@ -608,8 +608,12 @@ class LetterboxdScraper:
         deadline = time.monotonic() + max(
             5.0, float(os.getenv("SEARCH_MAX_SECONDS", "180"))
         )
-        request_budget = max(25, int(os.getenv("SEARCH_MAX_UPSTREAM_REQUESTS", "1200")))
-        profile_budget = max(25, int(os.getenv("SEARCH_MAX_PROFILE_FETCHES", "750")))
+        # Sized against what the session pool can actually deliver in the time
+        # budget: ~24 concurrent requests at roughly a second each is ~20/s, so
+        # 180s is on the order of 3-4k requests. Set these below that and they,
+        # not the clock, silently become the limit.
+        request_budget = max(25, int(os.getenv("SEARCH_MAX_UPSTREAM_REQUESTS", "4000")))
+        profile_budget = max(25, int(os.getenv("SEARCH_MAX_PROFILE_FETCHES", "2500")))
         # The scan hunts for one convincing match rather than a wide pool: it
         # stops the moment a candidate clears this bar, and otherwise spends the
         # full budget looking for one, returning the best of what it found.

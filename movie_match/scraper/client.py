@@ -23,6 +23,10 @@ logger = get_logger("http")
 
 BROWSER_IMPERSONATIONS = ["chrome124", "chrome120", "safari17_0", "edge101"]
 BLOCK_STATUSES = {403, 429}
+
+# Session pool size when no proxy list is configured — every session would share
+# the one exit address, so extra parallelism buys blocks, not throughput.
+DEFAULT_POOL_SIZE = 5
 RETRYABLE_SERVER_STATUSES = {500, 502, 503, 504}
 
 DEFAULT_HEADERS = {
@@ -78,8 +82,24 @@ class AntiBotHttpClient:
 
         self.proxy_urls = proxy_urls
         self.proxy_url = proxy_urls[0] if proxy_urls else None
-        configured_pool_size = session_pool_size or int(os.getenv("WEBSHARE_SESSION_POOL_SIZE", "5"))
-        self.session_pool_size = max(1, min(configured_pool_size, self.concurrency))
+
+        # Each slot pins one proxy by index, so the pool size is really "how many
+        # exit IPs do we spread across". Scaling it with the configured proxy list
+        # is what converts a time budget into coverage — a fixed pool of 5 caps
+        # throughput at ~4 req/s no matter how long the search is allowed to run.
+        # Without proxies the pool stays small: extra sessions would just be
+        # concurrent load from a single address.
+        pool_ceiling = max(1, int(os.getenv("PROXY_SESSION_POOL_CEILING", "24")))
+        derived_pool_size = min(len(proxy_urls), pool_ceiling) if proxy_urls else DEFAULT_POOL_SIZE
+        configured_pool_size = (
+            session_pool_size
+            or int(os.getenv("WEBSHARE_SESSION_POOL_SIZE", "0"))
+            or derived_pool_size
+        )
+        self.session_pool_size = max(1, configured_pool_size)
+        # Capacity gates in-flight requests, so it must not throttle the pool
+        # below the number of sessions we just provisioned.
+        self.concurrency = max(self.concurrency, self.session_pool_size)
 
         # Compatibility alias for code/tests that used the former single session.
         self._session: Optional[AsyncSession] = None
@@ -225,7 +245,11 @@ class AntiBotHttpClient:
     async def _record_success(self) -> None:
         self._success_streak += 1
         if self._success_streak >= 20 and self._adaptive_limit < self.session_pool_size:
-            self._adaptive_limit += 1
+            # Recover proportionally. A block halves the limit, so a flat +1 per
+            # 20 successes takes a large pool minutes to climb back — longer than
+            # the search that is waiting on it. Unchanged for small pools.
+            step = max(1, self.session_pool_size // 8)
+            self._adaptive_limit = min(self.session_pool_size, self._adaptive_limit + step)
             self._success_streak = 0
             async with self._limit_condition:
                 self._limit_condition.notify_all()
