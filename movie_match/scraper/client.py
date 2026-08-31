@@ -83,14 +83,18 @@ class AntiBotHttpClient:
         self.proxy_urls = proxy_urls
         self.proxy_url = proxy_urls[0] if proxy_urls else None
 
-        # Each slot pins one proxy by index, so the pool size is really "how many
-        # exit IPs do we spread across". Scaling it with the configured proxy list
-        # is what converts a time budget into coverage — a fixed pool of 5 caps
-        # throughput at ~4 req/s no matter how long the search is allowed to run.
-        # Without proxies the pool stays small: extra sessions would just be
-        # concurrent load from a single address.
+        # Pool size is really "how many requests do we keep in flight", and the
+        # safe ceiling is set by how many exit IPs sit behind the configuration —
+        # which is NOT the length of this list. A Webshare rotating endpoint is a
+        # single URL that hands out a different address per connection, so URL
+        # count would badly understate the available diversity. Any proxy at all
+        # therefore gets the full pool; tune it with PROXY_SESSION_POOL_CEILING,
+        # and lower that below the IP count if you switch to a static list.
+        #
+        # With no proxy the pool stays small: every session would leave from the
+        # server's own address, where extra parallelism buys blocks, not speed.
         pool_ceiling = max(1, int(os.getenv("PROXY_SESSION_POOL_CEILING", "24")))
-        derived_pool_size = min(len(proxy_urls), pool_ceiling) if proxy_urls else DEFAULT_POOL_SIZE
+        derived_pool_size = pool_ceiling if proxy_urls else DEFAULT_POOL_SIZE
         configured_pool_size = (
             session_pool_size
             or int(os.getenv("WEBSHARE_SESSION_POOL_SIZE", "0"))

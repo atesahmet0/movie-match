@@ -85,18 +85,31 @@ def test_multiple_exported_webshare_endpoints_are_supported(monkeypatch):
     assert client._proxy_for_slot(2) == client.proxy_urls[0]
 
 
-def test_pool_scales_with_configured_proxies(monkeypatch):
-    """The pool spreads across available exit IPs instead of a fixed 5."""
+def test_pool_scales_when_any_proxy_is_configured(monkeypatch):
+    """The pool is not derived from URL count.
+
+    A Webshare rotating endpoint is one URL behind many exit IPs, so sizing the
+    pool by list length would pin a rotating setup to a single session.
+    """
+    monkeypatch.delenv("WEBSHARE_SESSION_POOL_SIZE", raising=False)
+    monkeypatch.setenv("PROXY_URL", "http://user-rotate:secret@p.webshare.io:80")
+    monkeypatch.delenv("WEBSHARE_PROXY_URLS", raising=False)
+    monkeypatch.delenv("PROXY_URLS", raising=False)
+    client = AntiBotHttpClient()
+
+    assert len(client.proxy_urls) == 1
+    assert client.session_pool_size == 24  # PROXY_SESSION_POOL_CEILING default
+    # Capacity must not throttle the sessions we just provisioned.
+    assert client.concurrency >= client.session_pool_size
+
+
+def test_pool_same_for_a_static_list(monkeypatch):
     monkeypatch.delenv("WEBSHARE_SESSION_POOL_SIZE", raising=False)
     monkeypatch.setenv(
         "WEBSHARE_PROXY_URLS",
         ",".join(f"http://user{i}:secret@p.webshare.io:80" for i in range(40)),
     )
-    client = AntiBotHttpClient()
-
-    assert client.session_pool_size == 24  # PROXY_SESSION_POOL_CEILING default
-    # Capacity must not throttle the sessions we just provisioned.
-    assert client.concurrency >= client.session_pool_size
+    assert AntiBotHttpClient().session_pool_size == 24
 
 
 def test_pool_stays_small_without_proxies(monkeypatch):
