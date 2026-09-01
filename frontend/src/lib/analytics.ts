@@ -8,7 +8,7 @@ export function initPostHog(): void {
 
   const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const posthogHost =
-    process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
+    process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com";
 
   if (!posthogKey) {
     if (process.env.NODE_ENV === "development") {
@@ -16,6 +16,10 @@ export function initPostHog(): void {
         "ℹ️ PostHog key not found in NEXT_PUBLIC_POSTHOG_KEY. Running in no-op mode."
       );
     }
+    return;
+  }
+
+  if (posthog.__loaded) {
     return;
   }
 
@@ -28,21 +32,98 @@ export function initPostHog(): void {
       autocapture: true,
       capture_performance: true,
       disable_session_recording: false,
+      enable_recording_console_log: true,
       session_recording: {
         maskAllInputs: false,
         maskInputOptions: {
           password: true,
         },
+        captureJsonLd: true,
       },
       loaded: (ph) => {
         if (process.env.NODE_ENV === "development") {
           ph.debug(false);
+        }
+        try {
+          ph.startSessionRecording(true);
+        } catch (err) {
+          console.debug("PostHog startSessionRecording error:", err);
         }
       },
     });
   } catch (err) {
     console.error("Failed to initialize PostHog:", err);
   }
+}
+
+/**
+ * Start or force start session recording.
+ */
+export function startSessionRecording(forceOverride = false): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (posthog.__loaded) {
+      posthog.startSessionRecording(forceOverride ? true : undefined);
+    }
+  } catch (err) {
+    console.debug("PostHog startSessionRecording error:", err);
+  }
+}
+
+/**
+ * Stop or pause session recording.
+ */
+export function stopSessionRecording(): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (posthog.__loaded) {
+      posthog.stopSessionRecording();
+    }
+  } catch (err) {
+    console.debug("PostHog stopSessionRecording error:", err);
+  }
+}
+
+/**
+ * Check if session recording is currently active.
+ */
+export function isSessionRecordingActive(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return Boolean(posthog.__loaded && posthog.sessionRecordingStarted());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Retrieve the current PostHog Session Replay URL (useful for error tracing & bug reports).
+ */
+export function getSessionReplayUrl(options?: { withTimestamp?: boolean }): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (posthog.__loaded && typeof posthog.get_session_replay_url === "function") {
+      return posthog.get_session_replay_url(options);
+    }
+  } catch (err) {
+    console.debug("PostHog getSessionReplayUrl error:", err);
+  }
+  return null;
+}
+
+/**
+ * Retrieve the current active PostHog session ID.
+ */
+export function getSessionId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (posthog.__loaded && typeof posthog.get_session_id === "function") {
+      return posthog.get_session_id();
+    }
+  } catch (err) {
+    console.debug("PostHog getSessionId error:", err);
+  }
+  return null;
 }
 
 /**
@@ -80,7 +161,7 @@ export function identifyUser(
 }
 
 /**
- * Capture an error or exception with contextual properties.
+ * Capture an error or exception with contextual properties and session replay link.
  */
 export function captureException(
   error: unknown,
@@ -94,8 +175,14 @@ export function captureException(
         : new Error(typeof error === "string" ? error : JSON.stringify(error));
 
     if (posthog.__loaded) {
+      const replayUrl = getSessionReplayUrl();
+      const sessionId = getSessionId();
       posthog.captureException(errorObj, {
-        extra: context,
+        extra: {
+          ...context,
+          ...(sessionId ? { posthog_session_id: sessionId } : {}),
+          ...(replayUrl ? { posthog_replay_url: replayUrl } : {}),
+        },
       });
     }
   } catch (err) {

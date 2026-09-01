@@ -3,7 +3,12 @@
 import React, { useEffect, Suspense } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
-import { initPostHog, captureException } from "@/lib/analytics";
+import {
+  initPostHog,
+  captureException,
+  startSessionRecording,
+  getSessionReplayUrl,
+} from "@/lib/analytics";
 
 function PostHogPageView(): null {
   const pathname = usePathname();
@@ -35,19 +40,26 @@ export function PostHogProvider({
   useEffect(() => {
     initPostHog();
 
-    // Global client-side error observation
+    // Ensure session recording is actively initiated
+    startSessionRecording(true);
+
+    // Global client-side error observation with replay URL context
     const handleGlobalError = (event: ErrorEvent) => {
+      const replayUrl = getSessionReplayUrl();
       captureException(event.error || event.message, {
         source: "window.onerror",
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
+        ...(replayUrl ? { session_replay_url: replayUrl } : {}),
       });
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const replayUrl = getSessionReplayUrl();
       captureException(event.reason, {
         source: "window.unhandledrejection",
+        ...(replayUrl ? { session_replay_url: replayUrl } : {}),
       });
     };
 
